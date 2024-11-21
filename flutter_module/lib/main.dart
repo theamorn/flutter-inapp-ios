@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_module/game_screen.dart';
+import 'package:flutter_module/shader_screen.dart';
 
 void main() => runApp(const MyApp());
 
@@ -85,13 +87,27 @@ class _MyHomePageState extends State<MyHomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
-            ),
             Text(
               '$_counter',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
+            TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const ShaderScreen()),
+                  );
+                },
+                child: const Text("Shader")),
+            TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const GameScreen()),
+                  );
+                },
+                child: const Text("Game and Effect")),
             TextButton(
                 onPressed: () {
                   print("Button pressed and send data to native: $_counter");
