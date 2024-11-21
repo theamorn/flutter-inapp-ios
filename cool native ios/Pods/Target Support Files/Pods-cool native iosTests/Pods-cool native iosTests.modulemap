@@ -1,0 +1,6 @@
+framework module Pods_cool_native_iosTests {
+  umbrella header "Pods-cool native iosTests-umbrella.h"
+
+  export *
+  module * { export * }
+}
