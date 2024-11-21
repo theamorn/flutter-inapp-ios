@@ -1,6 +1,0 @@
-framework module Pods_cool_native_ios_cool_native_iosUITests {
-  umbrella header "Pods-cool native ios-cool native iosUITests-umbrella.h"
-
-  export *
-  module * { export * }
-}
