@@ -36,13 +36,13 @@ class ViewController: UIViewController {
                 if let value = call.arguments as? Int {
                     self?.infoLabel.text = "Receive Data From Flutter: \(value)"
                     flutterViewController.dismiss(animated: true)
-
                 }
                 
             } else {
                 result(FlutterMethodNotImplemented)
             }
         }
+        flutterViewController.modalPresentationStyle = .fullScreen
         present(flutterViewController, animated: true , completion: nil)
     }
     

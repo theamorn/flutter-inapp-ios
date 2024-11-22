@@ -19,6 +19,7 @@
 		DF0D94992CEF817600E6C3B9 /* cool_iosTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF0D94982CEF817600E6C3B9 /* cool_iosTests.swift */; };
 		DF0D94A32CEF817600E6C3B9 /* cool_iosUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF0D94A22CEF817600E6C3B9 /* cool_iosUITests.swift */; };
 		DF0D94A52CEF817600E6C3B9 /* cool_iosUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF0D94A42CEF817600E6C3B9 /* cool_iosUITestsLaunchTests.swift */; };
+		DF0D94B62CF0210600E6C3B9 /* Info-Debug.plist in Resources */ = {isa = PBXBuildFile; fileRef = DF0D94B52CF0210600E6C3B9 /* Info-Debug.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -55,12 +56,13 @@
 		DF0D94882CEF817500E6C3B9 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		DF0D948A2CEF817600E6C3B9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		DF0D948D2CEF817600E6C3B9 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		DF0D948F2CEF817600E6C3B9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		DF0D94942CEF817600E6C3B9 /* cool-iosTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "cool-iosTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF0D94982CEF817600E6C3B9 /* cool_iosTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = cool_iosTests.swift; sourceTree = "<group>"; };
 		DF0D949E2CEF817600E6C3B9 /* cool-iosUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "cool-iosUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF0D94A22CEF817600E6C3B9 /* cool_iosUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = cool_iosUITests.swift; sourceTree = "<group>"; };
 		DF0D94A42CEF817600E6C3B9 /* cool_iosUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = cool_iosUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		DF0D94B52CF0210600E6C3B9 /* Info-Debug.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "Info-Debug.plist"; sourceTree = "<group>"; };
+		DF0D94B72CF0213300E6C3B9 /* Info-Release.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "Info-Release.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -145,7 +147,8 @@
 				DF0D94872CEF817500E6C3B9 /* Main.storyboard */,
 				DF0D948A2CEF817600E6C3B9 /* Assets.xcassets */,
 				DF0D948C2CEF817600E6C3B9 /* LaunchScreen.storyboard */,
-				DF0D948F2CEF817600E6C3B9 /* Info.plist */,
+				DF0D94B52CF0210600E6C3B9 /* Info-Debug.plist */,
+				DF0D94B72CF0213300E6C3B9 /* Info-Release.plist */,
 			);
 			path = "cool-ios";
 			sourceTree = "<group>";
@@ -276,6 +279,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DF0D94B62CF0210600E6C3B9 /* Info-Debug.plist in Resources */,
 				DF0D948B2CEF817600E6C3B9 /* Assets.xcassets in Resources */,
 				DF0D948E2CEF817600E6C3B9 /* Base in Resources */,
 				DF0D94892CEF817500E6C3B9 /* Base in Resources */,
@@ -579,7 +583,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "cool-ios/Info.plist";
+				INFOPLIST_FILE = "cool-ios/Info-${CONFIGURATION}.plist";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -608,7 +612,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "cool-ios/Info.plist";
+				INFOPLIST_FILE = "cool-ios/Info-${CONFIGURATION}.plist";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;

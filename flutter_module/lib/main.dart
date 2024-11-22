@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_module/app_screen.dart';
 import 'package:flutter_module/game_screen.dart';
 import 'package:flutter_module/shader_screen.dart';
 
@@ -13,10 +14,11 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
+      showPerformanceOverlay: false,
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home'),
+      home: const MyHomePage(title: 'Flutter Demo Home Page'),
     );
   }
 }
@@ -108,6 +110,14 @@ class _MyHomePageState extends State<MyHomePage> {
                   );
                 },
                 child: const Text("Game and Effect")),
+            TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const AppScreen()),
+                  );
+                },
+                child: const Text("App")),
             TextButton(
                 onPressed: () {
                   print("Button pressed and send data to native: $_counter");

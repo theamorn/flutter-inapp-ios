@@ -51,27 +51,52 @@ class _ShaderScreenState extends State<ShaderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          height = math.Random().nextDouble();
-        });
-      },
-      child: ShaderBuilder((context, shader, child) {
-        final size = MediaQuery.sizeOf(context);
-        shader.setFloat(0, size.width);
-        shader.setFloat(1, size.height);
-        shader.setFloat(2, delta);
-        shader.setFloat(3, height);
-        return CustomPaint(
-          size: const Size(double.infinity, 600),
-          painter: ShaderPainter(shader: shader),
-        );
-      },
-          assetKey: 'shaders/water.glsl',
-          child: const Center(
-            child: CircularProgressIndicator(),
-          )),
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              height = math.Random().nextDouble();
+            });
+          },
+          child: ShaderBuilder((context, shader, child) {
+            final size = MediaQuery.sizeOf(context);
+            shader.setFloat(0, size.width);
+            shader.setFloat(1, size.height);
+            shader.setFloat(2, delta);
+            shader.setFloat(3, height);
+            return CustomPaint(
+              size: const Size(double.infinity, 600),
+              painter: ShaderPainter(shader: shader),
+            );
+          },
+              assetKey: 'shaders/water.glsl',
+              child: const Center(
+                child: CircularProgressIndicator(),
+              )),
+        ),
+        // GestureDetector(
+        //   onTap: () {
+        //     setState(() {
+        //       height = math.Random().nextDouble();
+        //     });
+        //   },
+        //   child: ShaderBuilder((context, shader, child) {
+        //     final size = MediaQuery.sizeOf(context);
+        //     shader.setFloat(0, size.width);
+        //     shader.setFloat(1, size.height);
+        //     shader.setFloat(2, delta);
+        //     return CustomPaint(
+        //       size: const Size(double.infinity, 600),
+        //       painter: ShaderPainter(shader: shader),
+        //     );
+        //   },
+        //       assetKey: 'shaders/star.glsl',
+        //       child: const Center(
+        //         child: CircularProgressIndicator(),
+        //       )),
+        // ),
+      ],
     );
   }
 }
