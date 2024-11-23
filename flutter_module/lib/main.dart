@@ -95,6 +95,17 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             TextButton(
                 onPressed: () {
+                  print("Button pressed and send data to native: $_counter");
+                  _sendDataToNative(_counter);
+                },
+                child: const Text("Submit")),
+            const Divider(),
+            Text(
+              'App Screen Section',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            TextButton(
+                onPressed: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -118,12 +129,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   );
                 },
                 child: const Text("App")),
-            TextButton(
-                onPressed: () {
-                  print("Button pressed and send data to native: $_counter");
-                  _sendDataToNative(_counter);
-                },
-                child: const Text("Submit")),
+            const Divider(),
             Text('Data: $dataFromNative',
                 style: Theme.of(context).textTheme.headlineMedium)
           ],
