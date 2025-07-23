@@ -160,16 +160,15 @@ float heightMapTracing(vec3 ori, vec3 dir, out vec3 p) {
 
 vec3 getPixel(in vec2 coord, float time) {    
     vec2 uv = coord / iResolution.xy;
+    uv.y = 1.0 - uv.y; // Flip vertically
     uv = uv * 2.0 - 1.0;
-    uv.x *= iResolution.x / iResolution.y;    
+    uv.x *= iResolution.x / iResolution.y;
         
     // ray
     vec3 ang = vec3(sin(time*3.0)*0.1,sin(time)*0.2+0.3,time);    
     vec3 ori = vec3(0.0,3.5,time*5.0);
     vec3 dir = normalize(vec3(uv.xy,-2.0)); dir.z += length(uv) * 0.14;
-    dir = normalize(dir) * fromEuler(ang);
-    
-    // tracing
+    dir = normalize(dir) * fromEuler(ang);    // tracing
     vec3 p;
     heightMapTracing(ori,dir,p);
     vec3 dist = p - ori;

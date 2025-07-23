@@ -26,8 +26,6 @@
     "DEFINES_MODULE": "YES"
   },
   "dependencies": {
-    "Flutter": [
-
-    ]
+    "Flutter": []
   }
 }
