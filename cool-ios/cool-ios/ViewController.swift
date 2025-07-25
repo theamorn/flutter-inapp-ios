@@ -35,6 +35,7 @@ class ViewController: UIViewController {
         setupUI()
         setupConstraints()
         setupActions()
+        setupTapGesture()
     }
     
     private func setupUI() {
@@ -221,6 +222,16 @@ class ViewController: UIViewController {
         flutterButton.addTarget(self, action: #selector(submitRequest), for: .touchUpInside)
     }
     
+    private func setupTapGesture() {
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
+        tapGesture.cancelsTouchesInView = false
+        view.addGestureRecognizer(tapGesture)
+    }
+    
+    @objc private func dismissKeyboard() {
+        view.endEditing(true)
+    }
+    
     @objc private func loginButtonTapped() {
         // Add button animation
         UIView.animate(withDuration: 0.1, animations: {
@@ -255,6 +266,7 @@ class ViewController: UIViewController {
             }
         }
         
+        // Add This code to connect to FlutterViewController
         let flutterViewController = FlutterViewController(engine: flutterEngine, nibName: nil, bundle: nil)
         let channel = FlutterMethodChannel(name: "com.theamorn.flutter", binaryMessenger: flutterViewController.binaryMessenger)
         

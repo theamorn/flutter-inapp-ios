@@ -31,21 +31,15 @@ import UIKit
   private func openNativeCamera(result: @escaping FlutterResult, controller: FlutterViewController)
   {
     DispatchQueue.main.async {
-      // For now, let's test with a simple alert to ensure the method channel works
-      let alert = UIAlertController(
-        title: "Native Camera", message: "This would open the native camera implementation",
-        preferredStyle: .alert)
-      alert.addAction(
-        UIAlertAction(title: "OK", style: .default) { _ in
-          // Try to create the camera view controller
-          let nativeCameraVC = NativeCameraViewController()
-          nativeCameraVC.modalPresentationStyle = .fullScreen
-          controller.present(nativeCameraVC, animated: true)
-        })
-      alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-
-      controller.present(alert, animated: true)
-      result("Native camera dialog opened successfully")
+      let nativeCameraVC = NativeCameraViewController()
+      nativeCameraVC.modalPresentationStyle = .fullScreen
+      
+      // Set up completion handler to get timing data
+      nativeCameraVC.completionHandler = { [weak self] timingData in
+        result(timingData)
+      }
+      
+      controller.present(nativeCameraVC, animated: true)
     }
   }
 }

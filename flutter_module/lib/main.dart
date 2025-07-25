@@ -4,17 +4,24 @@ import 'package:flutter_module/app_screen.dart';
 import 'package:flutter_module/game_screen.dart';
 import 'package:flutter_module/shader_screen.dart';
 
-void main() => runApp(const MyApp());
+void main() => runApp(MyApp());
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  static bool _showPerformanceOverlay = false;
 
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
-      showPerformanceOverlay: false,
+      showPerformanceOverlay: _showPerformanceOverlay,
       theme: ThemeData(
         primarySwatch: Colors.blue,
         useMaterial3: true,
@@ -23,14 +30,30 @@ class MyApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
       ),
-      home: const MyHomePage(title: 'Flutter Effects Demo'),
+      home: MyHomePage(
+        title: 'Flutter Effects Demo',
+        onTogglePerformanceOverlay: () {
+          setState(() {
+            _showPerformanceOverlay = !_showPerformanceOverlay;
+          });
+        },
+        showPerformanceOverlay: _showPerformanceOverlay,
+      ),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+  const MyHomePage({
+    super.key, 
+    required this.title,
+    required this.onTogglePerformanceOverlay,
+    required this.showPerformanceOverlay,
+  });
+  
   final String title;
+  final VoidCallback onTogglePerformanceOverlay;
+  final bool showPerformanceOverlay;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -91,6 +114,22 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text(widget.title),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         elevation: 0,
+        actions: [
+          IconButton(
+            onPressed: widget.onTogglePerformanceOverlay,
+            icon: Icon(
+              widget.showPerformanceOverlay 
+                ? Icons.speed 
+                : Icons.speed_outlined,
+              color: widget.showPerformanceOverlay 
+                ? Colors.green 
+                : null,
+            ),
+            tooltip: widget.showPerformanceOverlay 
+              ? 'Hide Performance Overlay' 
+              : 'Show Performance Overlay',
+          ),
+        ],
       ),
       body: Container(
         decoration: BoxDecoration(

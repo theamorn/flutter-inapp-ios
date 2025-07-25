@@ -113,11 +113,14 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                           ]));
                 },
                 'container1': (ctx, game) {
-                  return ActionButtonWidget(
-                      Colors.blueAccent, "Sign in", Alignment.bottomCenter, () {
-                    print(
-                        "=== This is Flutter widget inside Flutter Flame ===");
-                  });
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 20),
+                    child: ActionButtonWidget(
+                        Colors.blueAccent, "Sign in", Alignment.bottomCenter, () {
+                      print(
+                          "=== This is Flutter widget inside Flutter Flame ===");
+                    }),
+                  );
                 },
               }, initialActiveOverlays: const [
                 'userArea',
@@ -146,7 +149,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   final elapsedTime =
                       DateTime.now().difference(startTime).inMilliseconds /
                           1000.0;
-
                   return ShaderBuilder(
                     (context, shader, child) {
                       final size = MediaQuery.sizeOf(context);
@@ -168,7 +170,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             ),
           ),
         // Sprite Sheet Animation - Above the rain overlay for visibility
-
         // Rain Control Buttons
         Positioned(
           top: 100,

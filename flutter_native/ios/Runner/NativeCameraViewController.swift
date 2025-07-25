@@ -14,6 +14,7 @@ import UIKit
     private var captureSession: AVCaptureSession!
     private var videoPreviewLayer: AVCaptureVideoPreviewLayer!
     private var photoOutput: AVCapturePhotoOutput!
+    private var videoDataOutput: AVCaptureVideoDataOutput!
 
     // UI Elements
     private let previewView = UIView()
@@ -23,19 +24,30 @@ import UIKit
     private let performanceLabel = UILabel()
 
     private var startTime: Date!
+    private var isFirstFrameRendered = false
+    private var firstFrameTime: Int?
+    
+    // Completion handler to return timing data
+    var completionHandler: (([String: Any]) -> Void)?
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        startTime = Date()
         setupUI()
         setupCamera()
-        updatePerformanceLabel()
+        performanceLabel.text = "Initializing camera..."
+        
+        // Start timing and camera session immediately for fastest startup
+        startTime = Date()
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.captureSession?.startRunning()
+        }
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        DispatchQueue.global(qos: .userInitiated).async {
-            self.captureSession?.startRunning()
+        // Ensure the preview layer frame is set correctly
+        DispatchQueue.main.async {
+            self.videoPreviewLayer?.frame = self.previewView.bounds
         }
     }
 
@@ -135,6 +147,7 @@ import UIKit
 
     private func setupCamera() {
         captureSession = AVCaptureSession()
+        // Use high preset for faster initialization while maintaining quality
         captureSession.sessionPreset = .photo
 
         guard let backCamera = AVCaptureDevice.default(for: .video) else {
@@ -145,10 +158,19 @@ import UIKit
         do {
             let input = try AVCaptureDeviceInput(device: backCamera)
             photoOutput = AVCapturePhotoOutput()
+            
+            // Add video data output to detect first frame
+            videoDataOutput = AVCaptureVideoDataOutput()
+            // Use a more efficient pixel format for faster processing
+            videoDataOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+            videoDataOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "camera.frame.processing.queue", qos: .userInitiated))
 
-            if captureSession.canAddInput(input) && captureSession.canAddOutput(photoOutput) {
+            if captureSession.canAddInput(input) && 
+               captureSession.canAddOutput(photoOutput) && 
+               captureSession.canAddOutput(videoDataOutput) {
                 captureSession.addInput(input)
                 captureSession.addOutput(photoOutput)
+                captureSession.addOutput(videoDataOutput)
 
                 setupLivePreview()
             }
@@ -164,24 +186,31 @@ import UIKit
 
         previewView.layer.addSublayer(videoPreviewLayer)
 
-        DispatchQueue.main.async {
-            self.videoPreviewLayer.frame = self.previewView.bounds
-        }
+        // Set frame immediately for faster display
+        videoPreviewLayer.frame = previewView.bounds
     }
 
-    private func updatePerformanceLabel() {
-        let elapsed = Date().timeIntervalSince(startTime) * 1000  // Convert to milliseconds
-        performanceLabel.text = String(format: "Native Launch: %.0fms", elapsed)
-
-        // Update every 100ms for the first 3 seconds
-        if elapsed < 3000 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                self.updatePerformanceLabel()
-            }
+    private func updatePerformanceLabelWithFirstFrame() {
+        guard !isFirstFrameRendered else { return }
+        isFirstFrameRendered = true
+        
+        let elapsed = Date().timeIntervalSince(startTime) * 1000 // Convert to milliseconds
+        firstFrameTime = Int(elapsed)
+        
+        DispatchQueue.main.async {
+            self.performanceLabel.text = String(format: "Native Camera: %.0fms (First Frame)", elapsed)
         }
     }
 
     @objc private func closeButtonTapped() {
+        // Return timing data before dismissing
+        var timingData: [String: Any] = [:]
+        if let firstFrameTime = firstFrameTime {
+            timingData["firstFrameTime"] = firstFrameTime
+        }
+        timingData["isFirstFrameRendered"] = isFirstFrameRendered
+        
+        completionHandler?(timingData)
         dismiss(animated: true)
     }
 
@@ -229,6 +258,14 @@ import UIKit
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         videoPreviewLayer?.frame = previewView.bounds
+    }
+}
+
+// MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
+extension NativeCameraViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        // Immediately detect the first frame without delay
+        updatePerformanceLabelWithFirstFrame()
     }
 }
 
