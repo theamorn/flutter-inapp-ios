@@ -16,6 +16,14 @@ final class AppEngines {
     private var engines: [String: FlutterEngine] = [:]
     private var telemetryChannels: [String: FlutterMethodChannel] = [:]
 
+    /// Spawn cost is finalised on an engine's first reported frame, not when
+    /// makeEngine returns. See `finalizeSpawnCost(for:)`.
+    private struct PendingSpawn {
+        let baselineBytes: UInt64
+        let durationMillis: Double
+    }
+    private var pendingSpawns: [String: PendingSpawn] = [:]
+
     private init() {}
 
     func engine(forRoute route: String) -> FlutterEngine {
@@ -37,18 +45,36 @@ final class AppEngines {
         options.initialRoute = route
         let engine = group.makeEngine(with: options)
 
+        // makeEngine returns as soon as the engine object exists; the Dart
+        // isolate is still spinning up behind it. Sampling phys_footprint here
+        // would miss most of the engine's cost and read differently every run.
+        // The wall time below is real, but the memory delta is deferred to the
+        // engine's first frame, where the number is both stable and defensible:
+        // what this tab actually costs once it is live and rendering.
         let spawnMillis = (CACurrentMediaTime() - start) * 1_000
-        let memoryAfter = MemoryProbe.footprintBytes()
-        let memoryDelta = Int64(memoryAfter) - Int64(memoryBefore)
+
+        pendingSpawns[route] = PendingSpawn(
+            baselineBytes: memoryBefore,
+            durationMillis: spawnMillis
+        )
 
         attachTelemetryChannel(to: engine, route: route)
         engines[route] = engine
+        return engine
+    }
+
+    /// Closes out a deferred spawn measurement on the engine's first frame.
+    /// A no-op for every frame after the first.
+    private func finalizeSpawnCost(for route: String) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard let pending = pendingSpawns.removeValue(forKey: route) else { return }
+
+        let delta = Int64(MemoryProbe.footprintBytes()) - Int64(pending.baselineBytes)
         PerformanceHUDView.shared.recordEngineSpawn(
             route: route,
-            deltaBytes: memoryDelta,
-            durationMillis: spawnMillis
+            deltaBytes: delta,
+            durationMillis: pending.durationMillis
         )
-        return engine
     }
 
     private func attachTelemetryChannel(to engine: FlutterEngine, route: String) {
@@ -73,11 +99,12 @@ final class AppEngines {
                 return
             }
 
-            let reportedRoute = payload["route"] as? String
-            let sampleRoute = reportedRoute == route ? reportedRoute! : route
+            // The engine this channel belongs to is authoritative; a mismatched
+            // 'route' in the payload would mean the Dart side is misreporting.
             DispatchQueue.main.async {
+                self.finalizeSpawnCost(for: route)
                 PerformanceHUDView.shared.recordFlutterSample(
-                    route: sampleRoute,
+                    route: route,
                     uiMillis: uiMillis,
                     rasterMillis: rasterMillis,
                     fps: fps
