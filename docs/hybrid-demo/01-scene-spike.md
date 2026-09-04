@@ -167,6 +167,26 @@ The doc conflated two separate claims, and only one of them holds:
 
 Two caveats from the capture: the skybox rendered black rather than as a sky, and the camera framing clipped both objects. Neither was investigated — the spike asked whether the GPU path works, not whether the scene was composed well. `06-island-scene.md` starts from a real camera and should not inherit the spike's.
 
+### Trap: `flutter run -t` on the module poisons the host app's build
+
+Running an alternate entrypoint in `flutter_module/` rewrites `FLUTTER_TARGET` in the module's generated config:
+
+```
+.ios/Flutter/Generated.xcconfig          FLUTTER_TARGET=lib/spike_main.dart
+.ios/Flutter/flutter_export_environment.sh
+```
+
+`cool-ios`'s Xcode build phase sources that file, so **every Flutter tab in the host app then builds that entrypoint instead of `lib/main.dart`** — tab 3 stops being Flappy Cat and silently becomes whatever you last ran. No error, no warning, and the Xcode build still reports success. This happened during the spike and was caught only because tab 3 visibly showed the 3D scene.
+
+Both files are gitignored, so nothing in version control protects you. After running any alternate entrypoint:
+
+```bash
+cd flutter_module && fvm flutter build ios --config-only
+grep FLUTTER_TARGET .ios/Flutter/Generated.xcconfig   # must be lib/main.dart
+```
+
+Worth adding to the pre-talk checklist in `08-polish.md`: a stale `FLUTTER_TARGET` is exactly the kind of failure that survives a green build and only shows up on stage.
+
 ### **Lighting API — what is actually available?**
 
 Far more than this doc feared. The contingency plan is not needed.
