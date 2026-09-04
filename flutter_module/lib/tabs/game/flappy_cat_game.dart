@@ -40,6 +40,16 @@ class FlappyCatGame extends FlameGame with HasCollisionDetection, TapCallbacks {
   double _spawnElapsed = 0;
   double _deathElapsed = 0;
   bool _contentLoaded = false;
+  double _topInset = 0;
+
+  /// Top safe-area inset, pushed down from the widget layer. The game fills the
+  /// whole screen on purpose -- the ground reaches the bottom edge and the sky
+  /// runs under the status bar -- so only the score has to clear the notch.
+  set topInset(double value) {
+    if ((value - _topInset).abs() < 0.5) return;
+    _topInset = value;
+    if (_contentLoaded) _layoutGame();
+  }
 
   @override
   Color backgroundColor() => const Color(0x00000000);
@@ -47,6 +57,15 @@ class FlappyCatGame extends FlameGame with HasCollisionDetection, TapCallbacks {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+
+    // Every component here is laid out in top-left screen coordinates --
+    // ground sits at (0, size.y - height), the score at (size.x / 2, 24).
+    // FlameGame's default viewfinder is anchored at Anchor.center, which puts
+    // world (0, 0) at the middle of the screen, so that content was drawn
+    // offset by half a screen with only part of it visible. Anchoring the
+    // viewfinder top-left maps world space 1:1 onto the widget, which is what
+    // the responsive layout in _layoutGame already assumes.
+    camera.viewfinder.anchor = Anchor.topLeft;
 
     final loadedImages = await images.loadAll([
       'cat_sprite_long.png',
@@ -109,7 +128,7 @@ class FlappyCatGame extends FlameGame with HasCollisionDetection, TapCallbacks {
   void _layoutGame() {
     ground.layoutFor(size);
     ground.scrollSpeed = max(82, size.x * 0.21);
-    _scoreLabel.position.setValues(size.x / 2, 24);
+    _scoreLabel.position.setValues(size.x / 2, _topInset + 16);
     _messagePanel.layoutFor(size);
 
     if (phase == FlappyCatPhase.ready || phase == FlappyCatPhase.gameOver) {

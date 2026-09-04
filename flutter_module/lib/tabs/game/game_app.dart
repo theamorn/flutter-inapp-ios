@@ -41,7 +41,17 @@ class _FlappyCatAppState extends State<FlappyCatApp>
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(brightness: Brightness.dark, useMaterial3: true),
-      home: Scaffold(
+      home: Builder(
+        builder: (context) {
+          _game.topInset = MediaQuery.paddingOf(context).top;
+          return _buildBody();
+        },
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    return Scaffold(
         backgroundColor: Colors.transparent,
         body: ClipRect(
           child: Stack(
@@ -59,7 +69,6 @@ class _FlappyCatAppState extends State<FlappyCatApp>
             ],
           ),
         ),
-      ),
     );
   }
 }
