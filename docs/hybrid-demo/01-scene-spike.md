@@ -101,12 +101,110 @@ Per `engine/src/flutter/shell/platform/android/io/flutter/embedding/engine/Flutt
 
 ## Findings
 
-> Fill this in when the spike completes. `06-island-scene.md` reads from here.
+> Recorded 2026-09-04. `06-island-scene.md` reads from here.
 
-- **Does `flutter_scene` render in add-to-app + engine group + release + device?** _(pending)_
-- **Lighting API — what is actually available?** _(pending)_
-- **Day/night approach for tab 5:** real directional light / ambient + shader sky _(pending — pick one)_
-- **Surprises, workarounds, version pins that mattered:** _(pending)_
+### The package moved. This doc's dependency instructions are superseded.
+
+`flutter_scene` is at **0.23.0** and the API above describes ~0.15. Two changes matter:
+
+**`flutter_scene_importer` is dead — do not use it.** It pins `hooks ^1.0.0`; `flutter_scene >= 0.16.0` needs `hooks ^2.0.0`. Version solving fails outright, and pub's own suggestion is to downgrade `flutter_scene` to `^0.15.0`. Take the other branch: drop the importer. There is no manual `.model` step and no `.model` file — the modern pipeline is a **build hook**.
+
+```bash
+cd flutter_module
+fvm dart run flutter_scene:init      # writes hook/build.dart + flutter_scene_generated/
+```
+
+Sources now live at `assets/models/*.glb` and are loaded **by source path** — `loadScene('assets/models/spike_box.glb')` — with the hook converting them to `.fsceneb` at build time. The `.glb` stays in version control; `flutter_scene_generated/` is gitignored by a `.gitignore` the hook writes itself.
+
+Resolved set: `flutter_scene 0.23.0`, `flutter_gpu 0.0.0 (sdk)`, `flutter_gpu_shaders 0.5.2`, `hooks 2.2.0`. `vector_math` must be an explicit dependency — `flutter_scene`'s API is written in its types, and using them transitively trips `depend_on_referenced_packages`.
+
+### **Does `flutter_scene` render in add-to-app + engine group + release + device?**
+
+**Build-side: yes, proven. Device-side: not yet run — no device was attached.**
+
+The real unknown was never the plist key; it was whether **Dart build hooks execute under `xcode_backend.sh`**, since the add-to-app build is driven by Xcode rather than `flutter build`. They do. From a `-configuration Release -sdk iphoneos` build of `cool-ios.xcworkspace`:
+
+```
+Running build hooks for ios_arm64.
+  ... dart .../hooks_runner/flutter_scene/.../hook.dill      ← engine shader bundle
+  ... dart .../hooks_runner/flutter_module/.../hook.dill     ← our hook/build.dart
+Running build hooks for ios_arm64 done.
+Running link hooks for ios_arm64 done.
+install_code_assets: ...
+** BUILD SUCCEEDED **
+```
+
+And the converted asset ships in the bundle:
+
+```
+cool-ios.app/Frameworks/App.framework/flutter_assets/
+  flutter_scene_generated/scene.spike_box.4eeb0a22.fsceneb
+  packages/flutter_scene/flutter_scene_generated/          ← compiled engine shaders
+```
+
+`FLTEnableFlutterGPU = true` is present in the built `cool-ios.app/Info.plist`.
+
+**Still owed, and it needs a phone:** launch the spike button, confirm the model is on screen, then run the negative control — remove `FLTEnableFlutterGPU`, rebuild, confirm it now *fails*. Until that runs, the claim is "it builds and bundles correctly", not "it renders".
+
+### **Lighting API — what is actually available?**
+
+Far more than this doc feared. The contingency plan is not needed.
+
+- **Directional light — yes, fully controllable.** `DirectionalLight` exposes `direction`, `color`, `intensity`, `castsShadow`, plus cascade count, map resolution, softness, and depth/normal bias. Point, spot, and rect-area lights exist too. Directional and spot cast shadows, with cached shadow tiles for static geometry.
+- **Ambient/environment — yes.** `Scene.environmentIntensity`, `SkyEnvironment` (image-based lighting baked live from a sky, with cross-fades), `EnvironmentVolume`, and a default procedural studio environment so an imported model looks right with zero setup.
+- **Materials.** `PhysicallyBasedMaterial` is the default and is what an imported `.glb` gets. Unlit and custom `.fmat` materials (fragment *and* vertex stages, with hot reload) are also available.
+
+Three objects wire the sun, sky, and IBL to one source:
+
+```dart
+final sky = PhysicalSkySource();
+scene.skybox        = Skybox(sky);
+scene.skyEnvironment = SkyEnvironment(sky);
+scene.sunLight       = SunLight(sky, castsShadow: true);
+sky.sunDirection = ...;   // sky, IBL, light colour and shadows all follow
+```
+
+### **Day/night approach for tab 5: real directional light.**
+
+Not ambient-plus-shader-sky. `SunLight` re-aims and recolours the directional light from the sky's sun every frame, and `PhysicalSkySource` reddens and dims the sun through atmospheric transmittance near the horizon — so sunset falls out of the physics rather than being hand-faked.
+
+Better still, **`flutter_scene` ships `DayNightCycleComponent`** (`lib/src/kit/environment/`), which is tab 5's slider almost exactly:
+
+```dart
+DayNightCycleComponent(
+  timeOfDay: 12.0,        // 0..24 — bind the slider straight to this
+  timeSpeed: 0.0,         // 0 = presenter-driven, not auto-running
+  latitude: 34.0,
+  sunLightNode: sunNode,
+  skySource: sky,
+  targetScene: scene,
+)
+```
+
+It derives sun direction from time-of-day and latitude and drives sun colour, sun intensity, `environmentIntensity`, and shadow darkness together. `06-island-scene.md` should build on it rather than reinvent a gradient.
+
+### **Surprises, workarounds, version pins that mattered**
+
+1. **The casing trap is real, and confirmed locally.** `/Users/pikmin/fvm/versions/3.47.2/packages/flutter_tools/lib/src/ios/plist_parser.dart:35` declares `kFLTEnableFlutterGpuKey = 'FLTEnableFlutterGpu'` — and *nothing else in flutter_tools references it*. It is dead code with the wrong casing. The embedder's `FLTEnableFlutterGPU` is the only spelling that does anything.
+
+2. **This repo has no `Info.plist`.** It has **`Info-Debug.plist` and `Info-Release.plist`**, selected per configuration. The key went into **both**; a release-only edit would have made the debug build silently fall back. Every later doc that says "add to `cool-ios/cool-ios/Info.plist`" means both files.
+
+3. **The Android key in this doc looks wrong.** This doc says `android:name="EnableFlutterGPU"`; flutter_scene's own README (written by Flutter GPU's author) says `android:name="io.flutter.embedding.android.EnableFlutterGPU"`. Not resolvable here — no Android embedding source is in the fvm cache and `cool-android/` does not exist yet. **`07-android-host.md` must verify against the embedding jar before trusting either.**
+
+4. **`flutter_scene` ships agent skills.** `dart run flutter_scene:skills` installs guidance for coding assistants. Not installed — offer it to the presenter before `06`.
+
+5. **Bonus capability worth knowing before designing tab 5:** built-in geometry primitives (no assets needed), skinned mesh animation, instancing, automatic LODs, a particle system, post-processing (bloom, fog, god rays, SSR, DoF, tone mapping), and interactive Flutter widgets embedded on 3D surfaces with pointer raycasting.
+
+### Spike artifacts — delete these after `06`
+
+| Path | Note |
+|---|---|
+| `flutter_module/lib/spike_scene.dart` | throwaway; imported only by the `/spike` branch |
+| `flutter_module/assets/models/spike_box.glb` | Khronos `BoxTextured` sample |
+| `/spike` branch in `flutter_module/lib/main.dart` | `02-ios-host.md` replaces this dispatch wholesale |
+| `THROWAWAY SPIKE` blocks in `cool-ios/cool-ios/ViewController.swift` | marked start/end; `02` deletes them with the file rename |
+
+**Keep** `hook/build.dart`, `flutter_scene_generated/`, the pubspec dependencies, and the two plist keys — those are production wiring, not spike leftovers.
 
 ## Acceptance criteria
 
