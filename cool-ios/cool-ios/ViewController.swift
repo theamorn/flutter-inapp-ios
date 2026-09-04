@@ -66,7 +66,7 @@ class ViewController: UIViewController {
         
         // Setup title
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        titleLabel.text = "Welcome Back"
+        titleLabel.text = "Welcome Back Google Dev Fest 2025"
         titleLabel.font = UIFont.systemFont(ofSize: 32, weight: .bold)
         titleLabel.textColor = .label
         titleLabel.textAlignment = .center
