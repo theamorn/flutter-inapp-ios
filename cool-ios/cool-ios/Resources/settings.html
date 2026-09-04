@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'">
+  <title>Settings</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --background: #f2f2f7;
+      --surface: rgba(255, 255, 255, 0.76);
+      --surface-strong: rgba(255, 255, 255, 0.91);
+      --label: #171719;
+      --secondary: #6d6d73;
+      --tertiary: #8e8e93;
+      --separator: rgba(60, 60, 67, 0.18);
+      --blue: #0a84ff;
+      --green: #30d158;
+      --orange: #ff9f0a;
+      --red: #ff453a;
+      --purple: #bf5af2;
+      --teal: #40c8e0;
+      --shadow: rgba(44, 48, 58, 0.12);
+      --hairline: 0.5px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --background: #09090b;
+        --surface: rgba(37, 37, 40, 0.72);
+        --surface-strong: rgba(44, 44, 47, 0.9);
+        --label: #f5f5f7;
+        --secondary: #aaaab0;
+        --tertiary: #85858b;
+        --separator: rgba(235, 235, 245, 0.15);
+        --shadow: rgba(0, 0, 0, 0.34);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html {
+      min-height: 100%;
+      background: var(--background);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      min-height: 100%;
+      margin: 0;
+      color: var(--label);
+      background:
+        radial-gradient(circle at 8% 6%, rgba(10, 132, 255, 0.15), transparent 27rem),
+        radial-gradient(circle at 94% 29%, rgba(191, 90, 242, 0.12), transparent 24rem),
+        var(--background);
+      overflow-x: hidden;
+    }
+
+    /* Soft fixed accents are common in branded account pages. They also make
+       translucent cards and the sticky header do meaningful compositing work. */
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      z-index: 0;
+      width: 17rem;
+      height: 17rem;
+      border-radius: 50%;
+      filter: blur(52px);
+      opacity: 0.32;
+      pointer-events: none;
+      transform: translateZ(0);
+    }
+
+    body::before {
+      top: 21vh;
+      left: -10rem;
+      background: rgba(10, 132, 255, 0.55);
+    }
+
+    body::after {
+      right: -11rem;
+      bottom: 12vh;
+      background: rgba(191, 90, 242, 0.5);
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      padding: calc(13px + env(safe-area-inset-top)) 20px 12px;
+      background: rgba(246, 246, 249, 0.68);
+      border-bottom: var(--hairline) solid var(--separator);
+      box-shadow: 0 8px 24px rgba(44, 48, 58, 0.07);
+      -webkit-backdrop-filter: saturate(180%) blur(22px);
+      backdrop-filter: saturate(180%) blur(22px);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .topbar {
+        background: rgba(16, 16, 18, 0.68);
+      }
+    }
+
+    .topbar-inner {
+      width: min(100%, 720px);
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.15;
+      letter-spacing: -0.65px;
+      font-weight: 760;
+    }
+
+    .sync-state {
+      flex: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      color: #19863a;
+      background: rgba(48, 209, 88, 0.14);
+      font-size: 12px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .sync-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 4px rgba(48, 209, 88, 0.12);
+    }
+
+    main {
+      position: relative;
+      z-index: 1;
+      width: min(100%, 720px);
+      margin: 0 auto;
+      padding: 18px 16px calc(42px + env(safe-area-inset-bottom));
+    }
+
+    .profile {
+      display: grid;
+      grid-template-columns: 64px minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      min-height: 100px;
+      padding: 18px;
+      border: var(--hairline) solid rgba(255, 255, 255, 0.48);
+      border-radius: 22px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.91), rgba(255, 255, 255, 0.61));
+      box-shadow: 0 16px 38px var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.58);
+      overflow: hidden;
+      -webkit-backdrop-filter: saturate(170%) blur(24px);
+      backdrop-filter: saturate(170%) blur(24px);
+      transform: translateZ(0);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .profile {
+        border-color: rgba(255, 255, 255, 0.1);
+        background: linear-gradient(135deg, rgba(54, 54, 58, 0.9), rgba(31, 31, 34, 0.66));
+      }
+    }
+
+    .avatar {
+      width: 64px;
+      height: 64px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: #fff;
+      background: linear-gradient(145deg, #3aa0ff, #6c5ce7);
+      box-shadow: 0 9px 20px rgba(10, 132, 255, 0.28);
+      font-size: 20px;
+      font-weight: 760;
+    }
+
+    .profile-copy {
+      min-width: 0;
+    }
+
+    .profile-name {
+      overflow: hidden;
+      margin-bottom: 3px;
+      font-size: 19px;
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .profile-detail {
+      overflow: hidden;
+      color: var(--secondary);
+      font-size: 13px;
+      line-height: 1.35;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .profile-badge {
+      padding: 6px 9px;
+      border-radius: 9px;
+      color: var(--blue);
+      background: rgba(10, 132, 255, 0.12);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .section-title {
+      margin: 27px 14px 8px;
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 650;
+      letter-spacing: 0.45px;
+      text-transform: uppercase;
+    }
+
+    .card {
+      border: var(--hairline) solid rgba(255, 255, 255, 0.48);
+      border-radius: 18px;
+      background: var(--surface);
+      box-shadow: 0 10px 28px var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.38);
+      overflow: hidden;
+      -webkit-backdrop-filter: saturate(165%) blur(20px);
+      backdrop-filter: saturate(165%) blur(20px);
+      transform: translateZ(0);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .card {
+        border-color: rgba(255, 255, 255, 0.09);
+      }
+    }
+
+    .setting-row {
+      position: relative;
+      display: grid;
+      grid-template-columns: 36px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      min-height: 66px;
+      padding: 10px 15px;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .setting-row + .setting-row::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      right: 0;
+      left: 63px;
+      height: var(--hairline);
+      background: var(--separator);
+    }
+
+    .icon {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 9px;
+      color: white;
+      background: var(--icon, var(--blue));
+      box-shadow: 0 4px 12px rgba(35, 42, 58, 0.16);
+      font-size: 16px;
+      font-weight: 760;
+    }
+
+    .row-copy {
+      min-width: 0;
+    }
+
+    .row-title {
+      overflow: hidden;
+      font-size: 16px;
+      line-height: 1.25;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .row-subtitle {
+      overflow: hidden;
+      margin-top: 2px;
+      color: var(--secondary);
+      font-size: 12px;
+      line-height: 1.3;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .accessory {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 7px;
+      color: var(--secondary);
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .chevron {
+      color: var(--tertiary);
+      font-size: 23px;
+      font-weight: 320;
+      line-height: 1;
+    }
+
+    .toggle {
+      position: relative;
+      width: 51px;
+      height: 31px;
+      border-radius: 999px;
+      background: #b8b8be;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+    }
+
+    .toggle::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 27px;
+      height: 27px;
+      border-radius: 50%;
+      background: white;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
+    }
+
+    .toggle.on {
+      background: var(--green);
+    }
+
+    .toggle.on::after {
+      left: 22px;
+    }
+
+    .segment {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+      width: 162px;
+      padding: 2px;
+      border-radius: 8px;
+      background: rgba(118, 118, 128, 0.16);
+      box-shadow: inset 0 0 0 var(--hairline) var(--separator);
+    }
+
+    .segment span {
+      padding: 5px 7px;
+      border-radius: 6px;
+      color: var(--secondary);
+      font-size: 11px;
+      font-weight: 560;
+      text-align: center;
+    }
+
+    .segment .selected {
+      color: var(--label);
+      background: var(--surface-strong);
+      box-shadow: 0 1px 5px rgba(0, 0, 0, 0.14);
+    }
+
+    .progress-wrap {
+      width: 82px;
+      color: var(--secondary);
+      font-size: 11px;
+      text-align: right;
+    }
+
+    .progress {
+      height: 5px;
+      margin-top: 5px;
+      border-radius: 99px;
+      background: rgba(118, 118, 128, 0.18);
+      overflow: hidden;
+    }
+
+    .progress > span {
+      display: block;
+      width: var(--progress, 50%);
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--purple));
+    }
+
+    .note {
+      margin: 8px 14px 0;
+      color: var(--secondary);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .storage {
+      padding: 18px;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .storage-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 13px;
+    }
+
+    .storage-heading strong {
+      font-size: 16px;
+    }
+
+    .storage-heading span {
+      color: var(--secondary);
+      font-size: 12px;
+    }
+
+    .storage-bar {
+      display: flex;
+      height: 10px;
+      border-radius: 99px;
+      background: rgba(118, 118, 128, 0.16);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+    }
+
+    .storage-bar span:nth-child(1) { width: 28%; background: var(--blue); }
+    .storage-bar span:nth-child(2) { width: 17%; background: var(--purple); }
+    .storage-bar span:nth-child(3) { width: 10%; background: var(--orange); }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+      margin-top: 13px;
+      color: var(--secondary);
+      font-size: 11px;
+    }
+
+    .legend span::before {
+      content: "";
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      margin-right: 5px;
+      border-radius: 50%;
+      background: var(--dot);
+    }
+
+    .footer {
+      padding: 30px 12px 6px;
+      color: var(--secondary);
+      font-size: 11px;
+      line-height: 1.55;
+      text-align: center;
+    }
+
+    @media (max-width: 390px) {
+      .profile {
+        grid-template-columns: 56px minmax(0, 1fr);
+      }
+
+      .avatar {
+        width: 56px;
+        height: 56px;
+      }
+
+      .profile-badge {
+        display: none;
+      }
+
+      .segment {
+        width: 138px;
+      }
+
+      .row-subtitle {
+        max-width: 175px;
+      }
+    }
+
+    @media (prefers-reduced-transparency: reduce) {
+      .topbar,
+      .profile,
+      .card {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        background: var(--surface-strong);
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <h1 class="title">Settings</h1>
+      <div class="sync-state" aria-label="Account synced">
+        <span class="sync-dot" aria-hidden="true"></span>
+        Synced
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="profile" aria-label="Account profile">
+      <div class="avatar" aria-hidden="true">AD</div>
+      <div class="profile-copy">
+        <div class="profile-name">Avery Davis</div>
+        <div class="profile-detail">avery@example.com · Pro plan</div>
+      </div>
+      <div class="profile-badge" aria-disabled="true">Manage</div>
+    </section>
+
+    <h2 class="section-title">Account</h2>
+    <section class="card" aria-label="Account settings">
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--blue)" aria-hidden="true">A</div>
+        <div class="row-copy"><div class="row-title">Personal information</div><div class="row-subtitle">Name, email, and profile photo</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--green)" aria-hidden="true">✓</div>
+        <div class="row-copy"><div class="row-title">Privacy &amp; security</div><div class="row-subtitle">Face ID, passcode, and permissions</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--purple)" aria-hidden="true">★</div>
+        <div class="row-copy"><div class="row-title">Subscription</div><div class="row-subtitle">Renews September 28</div></div>
+        <div class="accessory">Pro <span class="chevron">›</span></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--orange)" aria-hidden="true">▰</div>
+        <div class="row-copy"><div class="row-title">Payment methods</div><div class="row-subtitle">Visa ending in 4242</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+    </section>
+
+    <h2 class="section-title">Notifications</h2>
+    <section class="card" aria-label="Notification settings">
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--red)" aria-hidden="true">●</div>
+        <div class="row-copy"><div class="row-title">Push notifications</div><div class="row-subtitle">Important activity and reminders</div></div>
+        <div class="toggle on" role="switch" aria-checked="true" aria-disabled="true"></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--blue)" aria-hidden="true">✉</div>
+        <div class="row-copy"><div class="row-title">Email digest</div><div class="row-subtitle">A summary every Monday morning</div></div>
+        <div class="toggle on" role="switch" aria-checked="true" aria-disabled="true"></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--orange)" aria-hidden="true">☾</div>
+        <div class="row-copy"><div class="row-title">Quiet hours</div><div class="row-subtitle">10:00 PM to 7:00 AM</div></div>
+        <div class="accessory">On <span class="chevron">›</span></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--teal)" aria-hidden="true">@</div>
+        <div class="row-copy"><div class="row-title">Mentions &amp; replies</div><div class="row-subtitle">Everyone you follow</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+    </section>
+    <p class="note">Critical account and security notices are always delivered.</p>
+
+    <h2 class="section-title">Experience</h2>
+    <section class="card" aria-label="Experience settings">
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--purple)" aria-hidden="true">◐</div>
+        <div class="row-copy"><div class="row-title">Appearance</div><div class="row-subtitle">Match the system setting</div></div>
+        <div class="segment" role="group" aria-label="Appearance" aria-disabled="true"><span>Light</span><span class="selected">Auto</span><span>Dark</span></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--blue)" aria-hidden="true">◎</div>
+        <div class="row-copy"><div class="row-title">Focus mode</div><div class="row-subtitle">Prioritize your work dashboard</div></div>
+        <div class="toggle on" role="switch" aria-checked="true" aria-disabled="true"></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--orange)" aria-hidden="true">≈</div>
+        <div class="row-copy"><div class="row-title">Haptic feedback</div><div class="row-subtitle">Subtle feedback for actions</div></div>
+        <div class="toggle on" role="switch" aria-checked="true" aria-disabled="true"></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--green)" aria-hidden="true">文</div>
+        <div class="row-copy"><div class="row-title">Language &amp; region</div><div class="row-subtitle">English · Thailand</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+    </section>
+
+    <h2 class="section-title">Workspace</h2>
+    <section class="card" aria-label="Workspace settings">
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--blue)" aria-hidden="true">⌂</div>
+        <div class="row-copy"><div class="row-title">Default workspace</div><div class="row-subtitle">Design team</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--purple)" aria-hidden="true">◆</div>
+        <div class="row-copy"><div class="row-title">Weekly goal</div><div class="row-subtitle">4 of 5 focus sessions</div></div>
+        <div class="progress-wrap">80%<div class="progress"><span style="--progress: 80%"></span></div></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--teal)" aria-hidden="true">↻</div>
+        <div class="row-copy"><div class="row-title">Calendar sync</div><div class="row-subtitle">2 calendars connected</div></div>
+        <div class="toggle on" role="switch" aria-checked="true" aria-disabled="true"></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--red)" aria-hidden="true">⚑</div>
+        <div class="row-copy"><div class="row-title">Archived projects</div><div class="row-subtitle">7 projects</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+    </section>
+
+    <h2 class="section-title">Connected devices</h2>
+    <section class="card" aria-label="Connected device settings">
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--blue)" aria-hidden="true">▯</div>
+        <div class="row-copy"><div class="row-title">Avery's iPhone</div><div class="row-subtitle">This device · Active now</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--purple)" aria-hidden="true">▭</div>
+        <div class="row-copy"><div class="row-title">MacBook Pro</div><div class="row-subtitle">Last active 12 minutes ago</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--green)" aria-hidden="true">⌚</div>
+        <div class="row-copy"><div class="row-title">Apple Watch</div><div class="row-subtitle">Notifications mirrored</div></div>
+        <div class="toggle on" role="switch" aria-checked="true" aria-disabled="true"></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--orange)" aria-hidden="true">+</div>
+        <div class="row-copy"><div class="row-title">Connect another device</div><div class="row-subtitle">Use a secure pairing code</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+    </section>
+
+    <h2 class="section-title">Data &amp; storage</h2>
+    <section class="card" aria-label="Storage usage">
+      <div class="storage" aria-disabled="true">
+        <div class="storage-heading"><strong>1.8 GB used</strong><span>of 5 GB</span></div>
+        <div class="storage-bar" aria-label="36 percent of storage used"><span></span><span></span><span></span></div>
+        <div class="legend">
+          <span style="--dot: var(--blue)">Files</span>
+          <span style="--dot: var(--purple)">Media</span>
+          <span style="--dot: var(--orange)">Cache</span>
+          <span style="--dot: rgba(118,118,128,.3)">Available</span>
+        </div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--blue)" aria-hidden="true">☁</div>
+        <div class="row-copy"><div class="row-title">Cloud backup</div><div class="row-subtitle">Completed today at 9:42 AM</div></div>
+        <div class="toggle on" role="switch" aria-checked="true" aria-disabled="true"></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--orange)" aria-hidden="true">↓</div>
+        <div class="row-copy"><div class="row-title">Offline downloads</div><div class="row-subtitle">326 MB on this device</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--red)" aria-hidden="true">×</div>
+        <div class="row-copy"><div class="row-title">Clear cache</div><div class="row-subtitle">Free up temporary storage</div></div>
+        <div class="accessory">148 MB <span class="chevron">›</span></div>
+      </div>
+    </section>
+
+    <h2 class="section-title">Privacy</h2>
+    <section class="card" aria-label="Privacy settings">
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--green)" aria-hidden="true">⌾</div>
+        <div class="row-copy"><div class="row-title">Location</div><div class="row-subtitle">While using the app</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--blue)" aria-hidden="true">◉</div>
+        <div class="row-copy"><div class="row-title">Analytics</div><div class="row-subtitle">Share anonymous usage data</div></div>
+        <div class="toggle" role="switch" aria-checked="false" aria-disabled="true"></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--purple)" aria-hidden="true">▣</div>
+        <div class="row-copy"><div class="row-title">App permissions</div><div class="row-subtitle">Camera, photos, and contacts</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--red)" aria-hidden="true">!</div>
+        <div class="row-copy"><div class="row-title">Blocked accounts</div><div class="row-subtitle">No blocked accounts</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+    </section>
+
+    <h2 class="section-title">Help &amp; information</h2>
+    <section class="card" aria-label="Help and information">
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--blue)" aria-hidden="true">?</div>
+        <div class="row-copy"><div class="row-title">Help center</div><div class="row-subtitle">Guides and frequently asked questions</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--purple)" aria-hidden="true">✦</div>
+        <div class="row-copy"><div class="row-title">What's new</div><div class="row-subtitle">September feature update</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--orange)" aria-hidden="true">✎</div>
+        <div class="row-copy"><div class="row-title">Send feedback</div><div class="row-subtitle">Tell us what could be better</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+      <div class="setting-row" aria-disabled="true">
+        <div class="icon" style="--icon: var(--teal)" aria-hidden="true">i</div>
+        <div class="row-copy"><div class="row-title">About</div><div class="row-subtitle">Policies and acknowledgements</div></div>
+        <div class="accessory"><span class="chevron">›</span></div>
+      </div>
+    </section>
+
+    <div class="footer">
+      Hybrid Demo 1.0 (Build 42)<br>
+      This bundled settings page works entirely offline.<br>
+      Controls are intentionally disabled for the stage demo.
+    </div>
+  </main>
+</body>
+</html>

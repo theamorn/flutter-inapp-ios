@@ -1,10 +1,72 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_module/app_screen.dart';
 import 'package:flutter_module/game_screen.dart';
 import 'package:flutter_module/shader_screen.dart';
+import 'package:flutter_module/tabs/game/game_app.dart';
+import 'package:flutter_module/telemetry/frame_telemetry.dart';
 
-void main() => runApp(const MyApp());
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  final route = PlatformDispatcher.instance.defaultRouteName;
+  if (route == '/game' || route == '/glass' || route == '/scene') {
+    FrameTelemetryReporter(route).start();
+  }
+
+  runApp(switch (route) {
+    '/game' => const FlappyCatApp(),
+    '/glass' => const HybridFeaturePlaceholderApp(
+      title: 'Liquid Glass',
+      icon: Icons.water_drop,
+    ),
+    '/scene' => const HybridFeaturePlaceholderApp(
+      title: 'Island Scene',
+      icon: Icons.landscape,
+    ),
+    _ => const MyApp(),
+  });
+}
+
+class HybridFeaturePlaceholderApp extends StatelessWidget {
+  const HybridFeaturePlaceholderApp({
+    required this.title,
+    required this.icon,
+    super.key,
+  });
+
+  final String title;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.deepPurple,
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+      ),
+      home: Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 72),
+              const SizedBox(height: 20),
+              Text(title, style: Theme.of(context).textTheme.headlineMedium),
+              const SizedBox(height: 8),
+              const Text('Feature module coming next'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -45,12 +107,12 @@ class _MyAppState extends State<MyApp> {
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({
-    super.key, 
+    super.key,
     required this.title,
     required this.onTogglePerformanceOverlay,
     required this.showPerformanceOverlay,
   });
-  
+
   final String title;
   final VoidCallback onTogglePerformanceOverlay;
   final bool showPerformanceOverlay;
@@ -118,16 +180,14 @@ class _MyHomePageState extends State<MyHomePage> {
           IconButton(
             onPressed: widget.onTogglePerformanceOverlay,
             icon: Icon(
-              widget.showPerformanceOverlay 
-                ? Icons.speed 
-                : Icons.speed_outlined,
-              color: widget.showPerformanceOverlay 
-                ? Colors.green 
-                : null,
+              widget.showPerformanceOverlay
+                  ? Icons.speed
+                  : Icons.speed_outlined,
+              color: widget.showPerformanceOverlay ? Colors.green : null,
             ),
-            tooltip: widget.showPerformanceOverlay 
-              ? 'Hide Performance Overlay' 
-              : 'Show Performance Overlay',
+            tooltip: widget.showPerformanceOverlay
+                ? 'Hide Performance Overlay'
+                : 'Show Performance Overlay',
           ),
         ],
       ),
@@ -163,19 +223,13 @@ class _MyHomePageState extends State<MyHomePage> {
                         const SizedBox(height: 16),
                         Text(
                           'Counter',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           '$_counter',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineLarge
+                          style: Theme.of(context).textTheme.headlineLarge
                               ?.copyWith(
                                 color: Theme.of(context).colorScheme.primary,
                                 fontWeight: FontWeight.bold,
@@ -185,14 +239,17 @@ class _MyHomePageState extends State<MyHomePage> {
                         ElevatedButton.icon(
                           onPressed: () {
                             print(
-                                "Button pressed and send data to native: $_counter");
+                              "Button pressed and send data to native: $_counter",
+                            );
                             _sendDataToNative(_counter);
                           },
                           icon: const Icon(Icons.send),
                           label: const Text("Send to Native"),
                           style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 24, vertical: 12),
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
                           ),
                         ),
                       ],
@@ -211,12 +268,8 @@ class _MyHomePageState extends State<MyHomePage> {
                       children: [
                         Text(
                           '🎨 Visual Effects',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 20),
 
@@ -228,7 +281,8 @@ class _MyHomePageState extends State<MyHomePage> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                    builder: (context) => const ShaderScreen()),
+                                  builder: (context) => const ShaderScreen(),
+                                ),
                               );
                             },
                             icon: const Icon(Icons.water_drop),
@@ -251,7 +305,8 @@ class _MyHomePageState extends State<MyHomePage> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                    builder: (context) => const GameScreen()),
+                                  builder: (context) => const GameScreen(),
+                                ),
                               );
                             },
                             icon: const Icon(Icons.games),
@@ -274,7 +329,8 @@ class _MyHomePageState extends State<MyHomePage> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                    builder: (context) => const AppScreen()),
+                                  builder: (context) => const AppScreen(),
+                                ),
                               );
                             },
                             icon: const Icon(Icons.animation),
@@ -309,29 +365,22 @@ class _MyHomePageState extends State<MyHomePage> {
                           const SizedBox(height: 16),
                           Text(
                             'Native Communication',
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color:
-                                  Theme.of(context).colorScheme.surfaceVariant,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceVariant,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
                               dataFromNative,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyLarge
-                                  ?.copyWith(
-                                    fontFamily: 'monospace',
-                                  ),
+                              style: Theme.of(context).textTheme.bodyLarge
+                                  ?.copyWith(fontFamily: 'monospace'),
                               textAlign: TextAlign.center,
                             ),
                           ),
