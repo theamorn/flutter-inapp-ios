@@ -1,0 +1,94 @@
+# 05 — Tab 4: Liquid Glass panel
+
+## Goal
+
+A control panel rendered behind a live glass surface: a fragment shader refracts the **actual scrolling widget tree beneath it**, and dragging a finger sends a ripple across the glass. Sliders control day/night, refraction strength, and glass thickness.
+
+This is the tab that makes the development-cost argument. The same screen runs identically on Android, where the OS offers nothing comparable.
+
+## Prerequisites
+
+- `02-ios-host.md` complete (engine for route `/glass` exists).
+- Read `ARCHITECTURE.md` for the route contract.
+
+## Repo facts you need
+
+- `flutter_module/pubspec.yaml` already depends on `flutter_shaders: ^0.1.3`. `AnimatedSampler` comes from there.
+- **`flutter_module/lib/shader_screen.dart` is the reference implementation** for loading and driving a fragment shader: a `CustomPainter` holding a `ui.FragmentShader`, an `AnimationController` supplying time, `shouldRepaint` returning true for continuous animation. Read it first.
+- Existing shaders live in `flutter_module/shaders/` and **must be listed under `flutter: shaders:` in `pubspec.yaml`** — not `assets:`. There are five already listed; follow that pattern for the new one.
+- `flutter_module/lib/app_screen.dart` (1446 lines) contains the previous talk's effect gallery. Read it for technique if useful, but do not refactor it — it backs the `/` dev home.
+
+## Files to create/modify
+
+| File | Change |
+|---|---|
+| `flutter_module/shaders/liquid_glass.glsl` | **new** |
+| `flutter_module/pubspec.yaml` | list the new shader under `flutter: shaders:` |
+| `flutter_module/lib/tabs/glass/glass_app.dart` | **new** — widget for route `/glass` |
+| `flutter_module/lib/tabs/glass/liquid_glass.dart` | **new** — `AnimatedSampler` + painter |
+| `flutter_module/lib/main.dart` | wire `/glass` |
+
+## Implementation notes
+
+### The shader
+
+`liquid_glass.glsl` samples the backdrop texture and displaces the sample coordinate. Roughly:
+
+- **Refraction** — build a surface normal from the glass shape (rounded-rect SDF works well) and offset the UV along it. Thickness scales the offset.
+- **Chromatic aberration** — sample R, G, B at slightly different offsets. Keep it subtle; overdone it reads as a broken screen rather than as glass.
+- **Specular rim** — a bright edge where the normal turns away, which is what actually sells "glass" more than the refraction does.
+- **Ripple** — a radial wave from the touch point that decays with distance and age, perturbing the normal as it passes.
+
+Uniforms: resolution, time, touch position, ripple start time, refraction strength, thickness, day/night factor. Plus the backdrop `sampler2D`.
+
+### Feeding it the live widget tree
+
+The point of the tab is that the glass refracts **live, moving content** — not a static screenshot. Wrap the content subtree in `AnimatedSampler` from `flutter_shaders`, which snapshots the child each frame and hands it to the shader as `uImage`:
+
+```dart
+AnimatedSampler(
+  (image, size, canvas) {
+    shader
+      ..setImageSampler(0, image)
+      ..setFloat(...);
+    canvas.drawRect(Offset.zero & size, Paint()..shader = shader);
+  },
+  child: theContentBeneathTheGlass,
+)
+```
+
+**Put a scrolling list under the glass.** A static background makes the effect look like an image filter; visibly scrolling content under a distorting surface is what proves it is live.
+
+### Controls
+
+Day/night (drives the palette and the glass tint), refraction strength, glass thickness. Make them real-time — the presenter drags them on stage.
+
+## The talk track
+
+This is iOS 26's Liquid Glass aesthetic, in one codebase, running identically on iOS and Android — where the platform gives you nothing equivalent and you would be hand-rolling it. And it ripples under your finger, because the shader takes the live widget tree as input: impractical in UIKit, impossible in a WebView.
+
+## Gotchas
+
+- Shaders go under `flutter: shaders:` in `pubspec.yaml`, **not** `assets:`. Listed in the wrong section they will not compile and the failure message is unhelpful.
+- `AnimatedSampler` snapshots its child every frame. Keep the subtree beneath the glass reasonably sized — snapshotting the entire screen including the glass itself creates a feedback loop.
+- Do not put the glass inside its own `AnimatedSampler` subtree. It must be a sibling drawn over the content, or you get recursive sampling.
+- GLSL in Flutter has restrictions: no dynamic-length loops, no `texture()` with computed LOD. Keep loops bounded by constants.
+- Test on Android before declaring parity. Impeller's GLSL handling differs from Skia's, and a shader that works on iOS can fail to compile on Android.
+
+## Acceptance criteria
+
+- [ ] Glass panel refracts visibly scrolling content beneath it, in real time.
+- [ ] Dragging across the glass produces a ripple that propagates and decays.
+- [ ] All three sliders take effect immediately.
+- [ ] Holds the device's full refresh rate while dragging *and* scrolling simultaneously.
+- [ ] Renders identically on Android (checked once `07-android-host.md` exists, or via `flutter run` on the module standalone before then).
+- [ ] `flutter analyze` clean; `/` dev home unaffected.
+
+## How to verify
+
+Physical device, release mode.
+
+1. Scroll the list under the glass. Content visibly distorts as it passes behind.
+2. Drag continuously across the glass **while** the list is scrolling. This is the worst case: HUD must hold.
+3. Sweep each slider end to end mid-drag. No hitching.
+4. Run the same route on Android and compare screenshots side by side. Differences are bugs — parity is the claim being made.
