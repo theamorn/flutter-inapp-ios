@@ -146,6 +146,27 @@ cool-ios.app/Frameworks/App.framework/flutter_assets/
 
 **Still owed, and it needs a phone:** launch the spike button, confirm the model is on screen, then run the negative control — remove `FLTEnableFlutterGPU`, rebuild, confirm it now *fails*. Until that runs, the claim is "it builds and bundles correctly", not "it renders".
 
+### The simulator gotcha in this doc is wrong — and that is good news
+
+This doc says "the simulator has no meaningful Impeller GPU path." **It does.** Verified by running the spike on an iPhone 17 Pro simulator:
+
+```
+$ fvm flutter run -t lib/spike_main.dart -d <sim> --enable-flutter-gpu
+[IMPORTANT:...FlutterDarwinContextMetalImpeller.mm(45)]
+  Using the Impeller rendering backend (Metal).
+```
+
+Both the procedural `CuboidGeometry` and the build-hook-converted `.glb` rendered, textured and PBR-shaded.
+
+The doc conflated two separate claims, and only one of them holds:
+
+- ❌ *"3D will not render on the simulator."* False. Impeller runs on Metal there and Flutter GPU works with `--enable-flutter-gpu`.
+- ✅ *"Simulator results are not evidence for this talk."* Still entirely true. Debug-mode timings and simulator timings say nothing about the performance claims, and the HUD numbers from either are meaningless on stage.
+
+**Why this matters practically:** tab 5 can be developed and iterated in the simulator with hot reload, which is far faster than a device round-trip for every camera tweak and lighting change. Only *measurement* requires release-on-device. `lib/spike_main.dart` is kept for exactly this — a standalone entrypoint that boots the scene without Xcode or the host app.
+
+Two caveats from the capture: the skybox rendered black rather than as a sky, and the camera framing clipped both objects. Neither was investigated — the spike asked whether the GPU path works, not whether the scene was composed well. `06-island-scene.md` starts from a real camera and should not inherit the spike's.
+
 ### **Lighting API — what is actually available?**
 
 Far more than this doc feared. The contingency plan is not needed.
