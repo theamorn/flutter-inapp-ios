@@ -1,10 +1,12 @@
 package com.theamorn.hybriddemo
 
+import android.content.Context
 import android.os.Bundle
+import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
-import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -26,12 +28,12 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.dp
@@ -46,24 +48,34 @@ import io.flutter.embedding.android.TransparencyMode
  * `cool-ios/cool-ios/MainTabBarController.swift` and
  * `FlutterTabViewController.swift`.
  *
- * The view hierarchy is deliberately not "Flutter inside a Composable":
+ * ## Why the hierarchy is hand-built rather than "Flutter inside a Composable"
  *
  *     FrameLayout
- *       ├── FragmentContainerView   ← FlutterFragment; a SurfaceView underneath
- *       │                             the window, hole-punched through it
- *       └── ComposeView             ← Home, the NavigationBar and the HUD,
- *                                     drawn into the window, i.e. on top
+ *       ├── FragmentContainerView   ← FlutterFragment. A SurfaceView, so its
+ *       │                             buffer sits under the window and it
+ *       │                             hole-punches through. Bottom margin =
+ *       │                             nav bar height, so Flutter's viewport
+ *       │                             genuinely ends above the bar.
+ *       ├── ComposeView  body       ← Home. GONE on the game tab.
+ *       ├── ComposeView  chrome     ← the NavigationBar, bottom-aligned only.
+ *       └── PassThroughHost         ← the HUD, top-right, touch-transparent.
  *
- * That ordering is what keeps the Material `NavigationBar` and the HUD visible
- * over the Flutter surface while leaving Flutter on the fast SurfaceView path.
- * Putting Flutter inside an `AndroidView` would either need `RenderMode.texture`
- * — an extra GPU copy, which corrupts the very numbers the HUD exists to show —
- * or `TransparencyMode.transparent`, which z-orders the Flutter surface *above*
- * the window and hides the native chrome entirely.
+ * Three separate Compose islands rather than one full-screen `Scaffold`,
+ * because **a full-screen `ComposeView` swallows every touch.**
+ * `AndroidComposeView.dispatchTouchEvent` returns true once it has dispatched a
+ * pointer event, whether or not anything consumed it, so an "empty" Compose
+ * body over the Flutter surface silently eats taps — the game renders, animates,
+ * and never responds. Sizing each Compose island to the chrome it actually
+ * draws lets `ViewGroup` dispatch fall through to the Flutter view underneath.
  *
- * The Flutter container's bottom margin is set to the measured NavigationBar
- * height, so Flutter's viewport genuinely ends above the bar rather than merely
- * being covered by it. Same rule as iOS.
+ * This also mirrors iOS structurally: the tab bar and the HUD are separate from
+ * the content view, and the HUD has `isUserInteractionEnabled = false`.
+ *
+ * `RenderMode.surface` + `TransparencyMode.opaque` is deliberate.
+ * `RenderMode.texture` would put Flutter on a TextureView — an extra GPU copy
+ * per frame, which corrupts the very numbers the HUD exists to show — and
+ * `TransparencyMode.transparent` z-orders the Flutter surface *above* the
+ * window, hiding the native chrome entirely.
  */
 class TabsActivity : FragmentActivity() {
 
@@ -74,6 +86,7 @@ class TabsActivity : FragmentActivity() {
     }
 
     private lateinit var flutterContainer: FragmentContainerView
+    private lateinit var bodyView: ComposeView
     private var flutterFragmentAttached = false
     private var selectedTab by mutableIntStateOf(TAB_HOME)
     private var bottomBarHeightPx = 0
@@ -88,32 +101,49 @@ class TabsActivity : FragmentActivity() {
             id = View.generateViewId()
             visibility = View.GONE
         }
-        root.addView(
-            flutterContainer,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-            ),
-        )
+        root.addView(flutterContainer, matchParent())
 
-        val composeView = ComposeView(this).apply {
+        bodyView = ComposeView(this).apply {
             setContent {
                 HybridDemoTheme {
-                    TabsScaffold(
+                    if (selectedTab == TAB_HOME) HomeTab()
+                }
+            }
+        }
+        root.addView(bodyView, matchParent())
+
+        val chromeView = ComposeView(this).apply {
+            setContent {
+                HybridDemoTheme {
+                    TabBar(
                         selectedTab = selectedTab,
                         onSelectTab = ::selectTab,
-                        onBottomBarHeight = ::applyBottomBarHeight,
+                        onHeight = ::applyBottomBarHeight,
                     )
                 }
             }
         }
         root.addView(
-            composeView,
+            chromeView,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM,
             ),
         )
+
+        val hudHost = PassThroughHost(this).apply {
+            addView(
+                ComposeView(context).apply {
+                    setContent { HybridDemoTheme { HudOverlay() } }
+                },
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ),
+            )
+        }
+        root.addView(hudHost, matchParent())
 
         setContentView(root)
 
@@ -121,6 +151,11 @@ class TabsActivity : FragmentActivity() {
             supportFragmentManager.findFragmentByTag(FLUTTER_FRAGMENT_TAG) != null
         applySelection()
     }
+
+    private fun matchParent() = FrameLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.MATCH_PARENT,
+    )
 
     override fun onResume() {
         super.onResume()
@@ -162,9 +197,12 @@ class TabsActivity : FragmentActivity() {
             // incremental cost of the engine as the presenter taps into it.
             ensureFlutterFragment()
             flutterContainer.visibility = View.VISIBLE
+            // GONE, not INVISIBLE: an INVISIBLE ComposeView still takes touches.
+            bodyView.visibility = View.GONE
             PerformanceHudState.setActiveFlutterRoute(AppEngines.GAME_ROUTE)
         } else {
             flutterContainer.visibility = View.GONE
+            bodyView.visibility = View.VISIBLE
             PerformanceHudState.setActiveFlutterRoute(null)
         }
     }
@@ -190,82 +228,86 @@ class TabsActivity : FragmentActivity() {
             .commitNow()
     }
 
+    /** Keeps both the Flutter surface and Home content clear of the tab bar. */
     private fun applyBottomBarHeight(heightPx: Int) {
         if (heightPx == bottomBarHeightPx) return
         bottomBarHeightPx = heightPx
-        val params = flutterContainer.layoutParams as FrameLayout.LayoutParams
-        params.bottomMargin = heightPx
-        flutterContainer.layoutParams = params
+        listOf<View>(flutterContainer, bodyView).forEach { view ->
+            val params = view.layoutParams as FrameLayout.LayoutParams
+            params.bottomMargin = heightPx
+            view.layoutParams = params
+        }
     }
 }
 
+/**
+ * A container that never handles touches, so `ViewGroup` dispatch continues to
+ * the views beneath it. The Android equivalent of the iOS HUD's
+ * `isUserInteractionEnabled = false`.
+ */
+private class PassThroughHost(context: Context) : FrameLayout(context) {
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean = false
+    override fun onTouchEvent(event: MotionEvent): Boolean = false
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
-@androidx.compose.runtime.Composable
-private fun TabsScaffold(
-    selectedTab: Int,
-    onSelectTab: (Int) -> Unit,
-    onBottomBarHeight: (Int) -> Unit,
-) {
-    // The HUD is a sibling of the whole Scaffold, not part of its body.
-    // Material3's ScaffoldLayout places topBar and bottomBar *after* the body,
-    // so a HUD inside the body would be drawn under the app bar. iOS puts its
-    // HUD on the window, above everything; this is the same thing.
-    Box(modifier = Modifier.fillMaxSize()) {
+@Composable
+private fun HomeTab() {
     Scaffold(
-        // Transparent so the hole-punched Flutter surface below the window is
-        // visible through the Scaffold body on the game tab.
-        containerColor = Color.Transparent,
-        contentColor = MaterialTheme.colorScheme.onSurface,
         topBar = {
             // iOS wraps Home (but not the Flutter tab) in a UINavigationController
-            // with a large "Home" title. Mirror that, and only on tab 1.
-            if (selectedTab == 0) {
-                LargeTopAppBar(
-                    title = { Text("Home") },
-                    colors = TopAppBarDefaults.largeTopAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                    ),
-                )
-            }
+            // with a large "Home" title. Mirror that.
+            LargeTopAppBar(
+                title = { Text("Home") },
+                colors = TopAppBarDefaults.largeTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                ),
+            )
         },
-        bottomBar = {
-            NavigationBar(modifier = Modifier.onSizeChanged { onBottomBarHeight(it.height) }) {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { onSelectTab(0) },
-                    icon = {
-                        Icon(
-                            if (selectedTab == 0) Icons.Filled.Home else Icons.Outlined.Home,
-                            contentDescription = null,
-                        )
-                    },
-                    label = { Text("Home") },
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { onSelectTab(1) },
-                    icon = {
-                        Icon(
-                            if (selectedTab == 1) Icons.Filled.SportsEsports else Icons.Outlined.SportsEsports,
-                            contentDescription = null,
-                        )
-                    },
-                    label = { Text("Game") },
-                )
-            }
-        },
+        // The host View already stops above the tab bar, so the Scaffold must
+        // not add a bottom inset of its own on top of that.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { insets ->
-        when (selectedTab) {
-            0 -> HomeScreen(contentPadding = insets)
-            // The game tab draws nothing: Flutter is behind this window.
-            else -> Box(Modifier.fillMaxSize())
-        }
+        HomeScreen(contentPadding = insets)
     }
+}
 
-        // Pinned to the status bar, not to the Scaffold's content inset, so the
-        // HUD sits in the same place on both tabs and floats over the app bar —
-        // exactly where the iOS window-level overlay sits.
+@Composable
+private fun TabBar(
+    selectedTab: Int,
+    onSelectTab: (Int) -> Unit,
+    onHeight: (Int) -> Unit,
+) {
+    NavigationBar(modifier = Modifier.onSizeChanged { onHeight(it.height) }) {
+        NavigationBarItem(
+            selected = selectedTab == 0,
+            onClick = { onSelectTab(0) },
+            icon = {
+                Icon(
+                    if (selectedTab == 0) Icons.Filled.Home else Icons.Outlined.Home,
+                    contentDescription = null,
+                )
+            },
+            label = { Text("Home") },
+        )
+        NavigationBarItem(
+            selected = selectedTab == 1,
+            onClick = { onSelectTab(1) },
+            icon = {
+                Icon(
+                    if (selectedTab == 1) Icons.Filled.SportsEsports else Icons.Outlined.SportsEsports,
+                    contentDescription = null,
+                )
+            },
+            label = { Text("Game") },
+        )
+    }
+}
+
+@Composable
+private fun HudOverlay() {
+    Box(modifier = Modifier.fillMaxSize()) {
         PerformanceHud(
             modifier = Modifier
                 .align(Alignment.TopEnd)
