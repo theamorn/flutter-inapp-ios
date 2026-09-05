@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Flutter's debug/profile builds serve the VM service over the network. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.HybridDemo">
+
+        <!--
+          Flutter GPU (needed by flutter_scene / tab 5). Tab 5 is not built in the
+          Android host, but the key is kept so the two hosts stay symmetric.
+
+          THE KEY IS FULLY QUALIFIED. `EnableFlutterGPU` on its own does nothing.
+
+          Verified against the 3.47.2 Android embedding
+          (bin/cache/artifacts/engine/android-arm64-release/flutter.jar):
+          FlutterEngineFlags.Flag builds `metadataKey` as
+          "io.flutter.embedding.android." + suffix, and the Flutter GPU flag's
+          suffix is "EnableFlutterGPU". FlutterLoader then does
+          `metaData.containsKey(metadataKey)` and skips silently when absent —
+          so a wrong key produces no error, no warning, and no Flutter GPU.
+          See docs/hybrid-demo/07-android-host.md for the full evidence.
+        -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableFlutterGPU"
+            android:value="true" />
+
+        <activity
+            android:name=".LoginActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".TabsActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|density|smallestScreenSize|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize" />
+
+    </application>
+</manifest>
