@@ -1,0 +1,39 @@
+3D source assets for tab 5 (the island scene).
+
+All models here are by Kenney (www.kenney.nl) and are released under
+Creative Commons Zero (CC0 1.0 Universal):
+http://creativecommons.org/publicdomain/zero/1.0/
+
+  tree_palm.glb   Nature Kit 2.1 -- tree_palmTall.glb
+  tree_pine.glb   Nature Kit 2.1 -- tree_pineRoundC.glb
+  rock_large.glb  Nature Kit 2.1 -- rock_largeA.glb
+  rock_small.glb  Nature Kit 2.1 -- rock_smallB.glb
+  bush.glb        Nature Kit 2.1 -- plant_bushLarge.glb
+  campfire.glb    Nature Kit 2.1 -- campfire_stones.glb
+  character.glb   Blocky Characters 2.0 -- character-a.glb
+
+CC0 does not require attribution; Kenney is credited here anyway.
+
+The Nature Kit .glb files here have been PREPROCESSED. Kenney's exports
+carry an orphan node named "tmpParent" that is not in any glTF scene but
+lists the scene's root node as its child. flutter_scene 0.23.0 realizes
+every node in the document, so that node claims the root first and the
+loader then throws "Child already has a parent" -- loadScene fails outright
+on the stock file. The orphan node was pruned (and node indices remapped)
+before committing; the pruning script and the full diagnosis are in
+docs/hybrid-demo/06-island-scene.md.
+
+A second, separate trap in the same kit: tree_palmDetailedTall.glb and
+tree_palmDetailedShort.glb carry two sibling nodes both named "leafs",
+which fails the same way and cannot be fixed by pruning. Those two models
+are avoided; tree_palmTall.glb is used instead.
+
+The island landmass itself is not an asset -- it is generated from
+flutter_scene primitives in lib/tabs/scene/island_scene.dart, so the
+tap-to-move ground plane and the visible terrain are the same geometry by
+construction.
+
+Note: these .glb files are the SOURCES. The flutter_scene build hook
+(hook/build.dart) converts them to .fsceneb under flutter_scene_generated/
+at build time; that directory is generated and gitignored. Load them by
+their source path -- loadScene('assets/models/tree_palm.glb').
