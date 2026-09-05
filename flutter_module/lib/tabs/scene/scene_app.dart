@@ -291,7 +291,7 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
               ),
             _Readout(
               triangles: _island.triangleCount,
-              drawCalls: _island.drawCallCount,
+              meshes: _island.meshCount,
               timeOfDay: _timeOfDay,
               renderLoopActive: _renderLoopActive,
             ),
@@ -358,19 +358,19 @@ class _ErrorPanel extends StatelessWidget {
   }
 }
 
-/// Triangle count and draw calls, next to the clock. Real geometry, real
+/// Triangle count and mesh count, next to the clock. Real geometry, real
 /// numbers, still pinned at full refresh rate — that juxtaposition with the
 /// native HUD is the argument the tab exists to make.
 class _Readout extends StatelessWidget {
   const _Readout({
     required this.triangles,
-    required this.drawCalls,
+    required this.meshes,
     required this.timeOfDay,
     required this.renderLoopActive,
   });
 
   final int triangles;
-  final int drawCalls;
+  final int meshes;
   final double timeOfDay;
   final bool renderLoopActive;
 
@@ -430,7 +430,7 @@ class _Readout extends StatelessWidget {
                         color: Colors.white,
                       ),
                     ),
-                    Text('$drawCalls draw calls'),
+                    Text('$meshes meshes'),
                     Text('${_clock(timeOfDay)}  local'),
                     if (!renderLoopActive)
                       const Text(

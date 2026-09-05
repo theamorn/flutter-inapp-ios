@@ -86,9 +86,12 @@ class IslandScene {
   /// Triangles submitted by the scene graph, counted at build time.
   int triangleCount = 0;
 
-  /// Mesh primitives in the scene graph. Each is one draw call in the colour
-  /// pass; shadow, sky and post passes are extra and are NOT counted here.
-  int drawCallCount = 0;
+  /// Mesh primitives in the scene graph. Labelled "meshes" on screen, NOT
+  /// "draw calls": each is one draw in the colour pass, but the shadow, sky
+  /// and post passes issue more that flutter_scene does not expose. Calling
+  /// this a draw-call count on stage would overstate what is measured, and
+  /// every number in this demo has to survive being questioned.
+  int meshCount = 0;
 
   bool _loaded = false;
   bool get isLoaded => _loaded;
@@ -522,7 +525,7 @@ class IslandScene {
 
     visit(scene.root);
     triangleCount = triangles;
-    drawCallCount = draws;
+    meshCount = draws;
   }
 
   int _trianglesOf(Geometry geometry) {
