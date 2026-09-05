@@ -42,10 +42,10 @@ The embedder reads this from the main bundle at
 Add to the host `AndroidManifest.xml` (relevant in `07-android-host.md`):
 
 ```xml
-<meta-data android:name="EnableFlutterGPU" android:value="true" />
+<meta-data android:name="io.flutter.embedding.android.EnableFlutterGPU" android:value="true" />
 ```
 
-Per `engine/src/flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineFlags.java:232`, this flag is explicitly **allowed in release mode** and settable via the manifest.
+**The key is fully qualified.** A bare `EnableFlutterGPU` does nothing — see the Findings below, where `07-android-host.md` settled this against the embedding bytecode. The flag is explicitly **allowed in release mode** and settable via the manifest.
 
 ## Files to create/modify
 
@@ -230,7 +230,11 @@ It derives sun direction from time-of-day and latitude and drives sun colour, su
 
 2. **This repo has no `Info.plist`.** It has **`Info-Debug.plist` and `Info-Release.plist`**, selected per configuration. The key went into **both**; a release-only edit would have made the debug build silently fall back. Every later doc that says "add to `cool-ios/cool-ios/Info.plist`" means both files.
 
-3. **The Android key in this doc looks wrong.** This doc says `android:name="EnableFlutterGPU"`; flutter_scene's own README (written by Flutter GPU's author) says `android:name="io.flutter.embedding.android.EnableFlutterGPU"`. Not resolvable here — no Android embedding source is in the fvm cache and `cool-android/` does not exist yet. **`07-android-host.md` must verify against the embedding jar before trusting either.**
+3. **The Android key in this doc was wrong. SETTLED — it is `io.flutter.embedding.android.EnableFlutterGPU`.** This doc originally said a bare `EnableFlutterGPU`; flutter_scene's README said the fully-qualified name. `07-android-host.md` resolved it and the snippet above is now corrected.
+
+   Confirmed independently against `bin/cache/artifacts/engine/android-arm64-release/flutter.jar`. `javap -c` on `FlutterEngineFlags$Flag` shows the constructor loading the literal `"io.flutter.embedding.android."` and prepending it to a suffix; the GPU flag's suffix is `"EnableFlutterGPU"`. `FlutterLoader` then calls `metaData.containsKey(metadataKey)` and **skips silently when the key is absent** — no error, no warning, no Flutter GPU.
+
+   So Android has the *same silent-failure shape* as the iOS casing trap: a plausible-looking wrong key costs you a day. Two wrong spellings, two platforms, both silent. Check both against the embedder, never against the docs — including these.
 
 4. **`flutter_scene` ships agent skills.** `dart run flutter_scene:skills` installs guidance for coding assistants. Not installed — offer it to the presenter before `06`.
 
