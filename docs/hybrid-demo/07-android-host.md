@@ -28,8 +28,8 @@ A native Android app that proves the parity claim: the **same** Flutter module, 
 |---|---|
 | `cool-android/settings.gradle.kts` | **new** — include `flutter_module/.android/include_flutter.groovy` |
 | `cool-android/app/build.gradle.kts` | **new** — `implementation(project(":flutter"))`, Compose |
-| `cool-android/app/src/main/AndroidManifest.xml` | **new** — includes `EnableFlutterGPU` meta-data |
-| `cool-android/app/src/main/java/.../MainActivity.kt` | **new** — login |
+| `cool-android/app/src/main/AndroidManifest.xml` | **new** — includes the Flutter GPU meta-data (see Findings for the real key) |
+| `cool-android/app/src/main/java/.../MainActivity.kt` | **new** — login. Built as `LoginActivity.kt`, for symmetry with iOS's `LoginViewController` |
 | `cool-android/app/src/main/java/.../TabsActivity.kt` | **new** — `NavigationBar`, 2 tabs |
 | `cool-android/app/src/main/java/.../AppEngines.kt` | **new** — engine group |
 | `cool-android/app/src/main/java/.../PerformanceHud.kt` | **new** |
@@ -78,11 +78,15 @@ Same contract as iOS (`ARCHITECTURE.md`): `Choreographer.FrameCallback` for host
 
 ### Manifest
 
-Include the Flutter GPU meta-data even though tab 5 is not built here — it costs nothing and keeps the hosts symmetric:
+Include the Flutter GPU meta-data even though tab 5 is not built here — it costs nothing and keeps the hosts symmetric.
 
-```xml
-<meta-data android:name="EnableFlutterGPU" android:value="true" />
-```
+> **The key printed below is wrong.** It is `io.flutter.embedding.android.EnableFlutterGPU`.
+> See **Findings → The Flutter GPU meta-data key** for the evidence. The original text is kept
+> so the mistake is visible rather than quietly edited away:
+>
+> ```xml
+> <meta-data android:name="EnableFlutterGPU" android:value="true" />   <!-- DOES NOTHING -->
+> ```
 
 ## Gotchas
 
@@ -93,13 +97,13 @@ Include the Flutter GPU meta-data even though tab 5 is not built here — it cos
 
 ## Acceptance criteria
 
-- [ ] `cool-android` builds and installs in release mode.
-- [ ] Login → 2-tab `NavigationBar`.
-- [ ] Home tab is native Compose, mirroring the iOS layout with Material components.
-- [ ] Game tab runs the same Flutter game from the same `flutter_module`, under a still-visible `NavigationBar`.
-- [ ] Engine spawns lazily on first tab selection; HUD shows the memory delta.
-- [ ] HUD shows the same metrics as iOS, in the same visual design.
-- [ ] Nothing in `flutter_module` was forked or special-cased for Android.
+- [x] `cool-android` builds and installs in release mode. *(Emulator; no physical device available.)*
+- [x] Login → 2-tab `NavigationBar`.
+- [x] Home tab is native Compose, mirroring the iOS layout with Material components.
+- [x] Game tab runs the same Flutter game from the same `flutter_module`, under a still-visible `NavigationBar`.
+- [x] Engine spawns lazily on first tab selection; HUD shows the memory delta.
+- [x] HUD shows the same metrics as iOS, in the same visual design. *(Plus one dim `PANEL` caption — see Findings.)*
+- [x] Nothing in `flutter_module` was forked or special-cased for Android. *(Not one byte outside `cool-android/` and this file.)*
 
 ## How to verify
 
@@ -109,3 +113,222 @@ Physical Android device, release mode.
 2. Play the game. Compare HUD numbers against the iOS device running the same tab.
 3. Put both devices side by side on tab 1, then both on tab 3. Photograph both pairs — tab 1 should look clearly platform-native on each; tab 3 should look identical on both. **That pair of photos is the parity slide.**
 4. Confirm `git status` shows no generated `.android/` output staged.
+
+Steps 1 and 4 were done. Steps 2 and 3 **cannot be done yet** — no physical Android
+device and no iOS device were attached. See Findings → What is still owed.
+
+---
+
+# Findings
+
+> Recorded 2026-09-05, against Flutter 3.47.2 (engine `a804b261`).
+
+## The Flutter GPU meta-data key
+
+**The key is `io.flutter.embedding.android.EnableFlutterGPU`.**
+`flutter_scene`'s README is right. This doc and `01-scene-spike.md` are both wrong —
+the bare `EnableFlutterGPU` is read by nothing and fails silently, exactly like the
+iOS casing trap.
+
+Two independent lines of evidence.
+
+### 1. The embedding bytecode
+
+Decompiled from the artifact the host actually links, not from a web search:
+
+```
+~/fvm/versions/3.47.2/bin/cache/artifacts/engine/android-arm64-release/flutter.jar
+  → io/flutter/embedding/engine/FlutterEngineFlags.class
+  → io/flutter/embedding/engine/FlutterEngineFlags$Flag.class
+```
+
+`FlutterEngineFlags$Flag` composes the manifest key from a **prefix plus a suffix**,
+and the default prefix is baked into the 2- and 3-argument constructors:
+
+```
+private Flag(String, String, boolean):
+   3: ldc  #13   // String io.flutter.embedding.android.
+   ...
+private Flag(String, String, String, boolean):
+  17: aload_3                       // prefix
+  21: aload_2                       // suffix
+  25: StringBuilder.toString()
+  28: putfield  metadataKey         // metadataKey = prefix + suffix
+```
+
+and the Flutter GPU flag is built with the defaulted constructor, so it gets that prefix:
+
+```
+static {}:
+ 232: ldc  #170   // String --enable-flutter-gpu
+ 234: ldc  #172   // String EnableFlutterGPU        ← suffix only
+ 236: iconst_1                                      ← allowedInRelease = true
+ 238: invokespecial Flag."<init>":(Ljava/lang/String;Ljava/lang/String;Z...)
+ 241: putstatic ENABLE_FLUTTER_GPU
+```
+
+`FlutterLoader` then walks `FlutterEngineFlags.ALL_FLAGS` and, for each,
+
+```
+205: Bundle.containsKey(metadataKey)     // application metaData
+208: ifne 214 / 211: goto 172            // absent → skip, silently
+...
+624: Bundle.getBoolean(metadataKey, false)   // value-less flags are booleans
+627: ifeq 640 → adds "--enable-flutter-gpu" to the engine args
+```
+
+So: read off `<application>` meta-data, as a **boolean**, and **a key that does not
+match is skipped with no log at all.** `allowedInRelease` is `true` (`iconst_1`), which
+confirms this doc's claim that the flag survives a release build.
+
+### 2. A runtime control on the device
+
+`FlutterEngineFlags` also defines `TEST_FLAG` with suffix `TestFlag`, and `FlutterLoader`
+logs a warning when it reads it. That gives a live A/B test of the prefix, run on the
+emulator against release builds of this host:
+
+| Manifest `android:name` | logcat |
+|---|---|
+| `TestFlag` | *(nothing)* |
+| `io.flutter.embedding.android.TestFlag` | `W FlutterLoader: For testing purposes only: test flag specified in the manifest was loaded by the FlutterLoader.` |
+
+Both runs booted the engine and rendered the game, so the silent run is not a
+"Flutter never started" artefact — it is the unprefixed key being ignored.
+
+`01-scene-spike.md`'s open question #3 is therefore closed: **use the fully qualified
+name.** Its citation of `FlutterEngineFlags.java:232` is right about the *line*, but that
+line is the flag's suffix, not the manifest key.
+
+> Not verified: that Flutter GPU then actually *renders*. Tab 5 is out of scope here and
+> `flutter_scene` is not a dependency of `flutter_module`. What is proven is which key the
+> embedder reads. The negative control from `01-scene-spike.md` — remove the key, confirm
+> it now fails — still needs a device and a scene.
+
+## What the doc got wrong, or did not mention
+
+### The full-screen `ComposeView` eats every touch
+
+This is the one that would have wrecked a rehearsal. Host the Flutter surface under a
+Compose `Scaffold` whose body is empty on the game tab, and the game **renders, animates,
+and never responds to a tap.** No error, no warning.
+
+`AndroidComposeView.dispatchTouchEvent` returns `true` once it has dispatched a pointer
+event, regardless of whether any Composable consumed it — so a transparent Compose body
+over the Flutter view is not transparent to input.
+
+The fix is structural: don't put one full-screen `ComposeView` over Flutter. Use three
+Compose islands sized to the chrome they actually draw — Home body (`GONE`, not
+`INVISIBLE`, on the game tab), the bottom `NavigationBar`, and a HUD host that overrides
+`dispatchTouchEvent` to return `false`. `ViewGroup` dispatch then falls through to the
+Flutter view. This also mirrors iOS structurally: the tab bar and the HUD are separate
+from the content view, and the iOS HUD sets `isUserInteractionEnabled = false`.
+
+### `Scaffold` draws its bars *over* its body
+
+Material3's `ScaffoldLayout` places `topBar` and `bottomBar` after the body content, so a
+HUD inside the body is hidden behind the app bar. The HUD has to be a sibling of the whole
+`Scaffold` — which is what iOS does anyway by putting it on the `UIWindow`.
+
+### `RenderMode` / `TransparencyMode` are load-bearing
+
+Use `RenderMode.surface` + `TransparencyMode.opaque`. The `SurfaceView`'s buffer sits
+*under* the window and hole-punches through it, so Compose chrome drawn into the window
+lands on top — which is exactly what "the Flutter surface must not cover the native chrome"
+needs. The alternatives both break the demo:
+
+- `RenderMode.texture` puts Flutter on a `TextureView`: an extra GPU copy every frame,
+  which corrupts the very numbers the HUD exists to show.
+- `TransparencyMode.transparent` calls `setZOrderOnTop(true)`, putting the Flutter surface
+  *above* the window and hiding the `NavigationBar` entirely.
+
+### `FlutterFragment.onPostResume()` must be forwarded
+
+The host activity has to forward `onPostResume()` (and `onTrimMemory`). Miss it and the
+engine's lifecycle channel never reaches `resumed`, so Flutter renders nothing — silently.
+
+### Settings-level `repositories { }` breaks the Flutter dependency graph
+
+flutter_tools' Gradle plugin adds `https://storage.googleapis.com/download.flutter.io` as a
+**project** repository. Declaring `dependencyResolutionManagement { repositories { … } }` in
+`settings.gradle.kts` makes Gradle prefer the settings ones and ignore the project ones, and
+then the entire androidx graph is resolved against download.flutter.io and fails:
+
+```
+Could not find androidx.core:core:1.13.1.
+  Searched in: https://storage.googleapis.com/download.flutter.io/androidx/core/core/1.13.1/core-1.13.1.pom
+```
+
+Declare `allprojects { repositories { google(); mavenCentral() } }` in the root
+`build.gradle.kts` instead, where they merge with Flutter's.
+
+### The `ndkVersion` the Flutter module pins may not be installed
+
+`flutter_module/.android/Flutter/build.gradle` sets `ndkVersion = flutter.ndkVersion`, so AGP
+resolves that exact NDK at configuration time even though nothing here compiles native code.
+On this machine 28.2.13676358 was a 4 KB stub from an interrupted download, and the build died
+with
+
+```
+[CXX1101] NDK at .../ndk/28.2.13676358 did not have a source.properties file
+```
+
+which names neither Flutter nor the real cause. `flutter_module/` is not ours to edit, so the
+host's root `build.gradle.kts` overrides `ndkVersion` on the included `:flutter` project,
+picking the newest NDK that actually has a `source.properties`.
+
+### `compileSdk` caps the Compose BOM
+
+The doc says to match `compileSdk`/`minSdk` to the Flutter module — correct, and it has a
+second-order effect it does not mention. The module pins `compileSdk = 36` (also AGP 9.1.0's
+maximum), and Compose 1.11+ / BOM 2026.05.01+ *require* `compileSdk = 37`. The newest usable
+BOM is **2026.03.01**. Also: androidx froze `material-icons-*` at **1.7.8** and dropped them
+from the BOM, so those coordinates need an explicit version.
+
+Resolved toolchain: AGP 9.1.0, Kotlin 2.4.0, Gradle 9.3.1, compileSdk/targetSdk 36, minSdk 24,
+JDK 17, Compose BOM 2026.03.01. `android.newDsl=false` and `android.builtInKotlin=false` must
+be set in the host's `gradle.properties` to match the module's.
+
+### The HUD has one extra line
+
+The doc's own gotcha — "note on the HUD which device you are on and what its panel actually
+does" — conflicts with "same visual design, so the two can be photographed side by side." The
+compromise: the four iOS lines are byte-for-byte identical in format, and the panel note is a
+fifth line in a dimmer, smaller style so it reads as subordinate:
+
+```
+LIVE PERFORMANCE
+HOST      60.0 fps    104.3 MB
+FLUTTER  /game  UI 0.2 ms  raster 0.6 ms  60 fps
+ENGINES  /game +51.7 MB/91 ms
+PANEL    sdk_gphone64_arm64 · 60 Hz          ← Android only
+```
+
+Metric lines auto-shrink rather than wrap (`BasicText` + `TextAutoSize`), matching the iOS
+labels' `adjustsFontSizeToFitWidth` / `minimumScaleFactor = 0.75`. Without it the FLUTTER line
+wrapped, which changed the HUD's height and would have broken the photo.
+
+Memory is `Debug.MemoryInfo.totalPss`, sampled once a second — `Debug.getMemoryInfo` walks
+`/proc` and costs single-digit milliseconds, so sampling it per frame would make the HUD part
+of the load it is measuring.
+
+### An iOS-parity gap the doc did not anticipate
+
+iOS wraps Home (but not the Flutter tab) in a `UINavigationController` with a large "Home"
+title. Without a matching `LargeTopAppBar`, the Android layout starts ~150 dp higher than iOS
+and the two do not photograph as the same screen. Added on tab 1 only.
+
+## What is still owed
+
+- **Every number in the screenshots is an emulator number and is worth nothing on stage.**
+  `Medium_Phone_API_36` reports a 60 Hz panel and runs Impeller on OpenGLES; measured engine
+  spawn cost was +51.7 MB / 91 ms and raster times swung between 0.6 ms and 16 ms across
+  otherwise identical runs. Re-measure on a real phone before quoting anything.
+- **The parity photographs do not exist.** No physical Android device and no iOS device were
+  attached, so steps 2 and 3 of "How to verify" are untested. The Android side is ready for
+  them.
+- **Android high-refresh behaviour is unexercised.** The emulator is 60 Hz, so the `PANEL`
+  line has never displayed anything but `60 Hz`, and the "(max N)" branch for a device whose
+  current mode is below its peak has never run.
+- **Rotation and process death are untested.** `TabsActivity` declares
+  `configChanges="orientation|screenSize|…"` so it does not recreate, and it re-finds the
+  `FlutterFragment` by tag on restore, but neither path was exercised.
