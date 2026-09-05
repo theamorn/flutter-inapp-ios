@@ -64,6 +64,7 @@ flutter:
     - shaders/flame.glsl
     - shaders/sky.glsl
     - shaders/rain_droplets.glsl
+    - shaders/liquid_glass.glsl
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

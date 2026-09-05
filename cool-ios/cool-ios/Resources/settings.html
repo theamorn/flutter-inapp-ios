@@ -2,40 +2,45 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="color-scheme" content="light dark">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'">
-  <title>Settings</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'">
+  <title>Settings &amp; Web Engine</title>
   <style>
     :root {
       color-scheme: light dark;
-      --background: #f2f2f7;
-      --surface: rgba(255, 255, 255, 0.76);
-      --surface-strong: rgba(255, 255, 255, 0.91);
+      --bg: #f2f2f7;
+      --surface: rgba(255, 255, 255, 0.78);
+      --surface-strong: rgba(255, 255, 255, 0.92);
+      --card-border: rgba(255, 255, 255, 0.55);
       --label: #171719;
-      --secondary: #6d6d73;
+      --secondary: #6e6e73;
       --tertiary: #8e8e93;
-      --separator: rgba(60, 60, 67, 0.18);
+      --separator: rgba(60, 60, 67, 0.16);
       --blue: #0a84ff;
       --green: #30d158;
       --orange: #ff9f0a;
       --red: #ff453a;
       --purple: #bf5af2;
       --teal: #40c8e0;
-      --shadow: rgba(44, 48, 58, 0.12);
+      --pink: #ff375f;
+      --shadow: rgba(44, 48, 58, 0.08);
       --hairline: 0.5px;
+      --backdrop-blur: 20px;
     }
 
     @media (prefers-color-scheme: dark) {
       :root {
-        --background: #09090b;
-        --surface: rgba(37, 37, 40, 0.72);
-        --surface-strong: rgba(44, 44, 47, 0.9);
-        --label: #f5f5f7;
-        --secondary: #aaaab0;
-        --tertiary: #85858b;
-        --separator: rgba(235, 235, 245, 0.15);
-        --shadow: rgba(0, 0, 0, 0.34);
+        --bg: #000000;
+        --surface: rgba(28, 28, 30, 0.75);
+        --surface-strong: rgba(38, 38, 42, 0.92);
+        --card-border: rgba(255, 255, 255, 0.12);
+        --label: #ffffff;
+        --secondary: #a1a1a6;
+        --tertiary: #7c7c82;
+        --separator: rgba(84, 84, 88, 0.28);
+        --shadow: rgba(0, 0, 0, 0.45);
+        --backdrop-blur: 24px;
       }
     }
 
@@ -46,8 +51,8 @@
 
     html {
       min-height: 100%;
-      background: var(--background);
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", -apple-system-subheadline, "SF Pro Display", sans-serif;
       -webkit-text-size-adjust: 100%;
     }
 
@@ -56,210 +61,407 @@
       margin: 0;
       color: var(--label);
       background:
-        radial-gradient(circle at 8% 6%, rgba(10, 132, 255, 0.15), transparent 27rem),
-        radial-gradient(circle at 94% 29%, rgba(191, 90, 242, 0.12), transparent 24rem),
-        var(--background);
+        radial-gradient(circle at 10% 4%, rgba(10, 132, 255, 0.12), transparent 28rem),
+        radial-gradient(circle at 90% 25%, rgba(191, 90, 242, 0.10), transparent 25rem),
+        var(--bg);
       overflow-x: hidden;
+      transition: background 0.3s ease;
     }
 
-    /* Soft fixed accents are common in branded account pages. They also make
-       translucent cards and the sticky header do meaningful compositing work. */
-    body::before,
-    body::after {
-      content: "";
+    /* Ambient glow elements */
+    .ambient-glow {
       position: fixed;
-      z-index: 0;
-      width: 17rem;
-      height: 17rem;
+      width: 22rem;
+      height: 22rem;
       border-radius: 50%;
-      filter: blur(52px);
-      opacity: 0.32;
+      filter: blur(64px);
       pointer-events: none;
+      z-index: 0;
+      opacity: 0.25;
       transform: translateZ(0);
+      transition: opacity 0.4s ease, filter 0.4s ease;
+    }
+    .glow-top {
+      top: 15vh;
+      left: -8rem;
+      background: radial-gradient(circle, var(--blue), transparent 70%);
+    }
+    .glow-bottom {
+      bottom: 15vh;
+      right: -8rem;
+      background: radial-gradient(circle, var(--purple), transparent 70%);
     }
 
-    body::before {
-      top: 21vh;
-      left: -10rem;
-      background: rgba(10, 132, 255, 0.55);
+    /* Laggy mode background stress */
+    body.laggy-mode .ambient-glow {
+      opacity: 0.6;
+      filter: blur(80px);
+      animation: stress-pulse 2s infinite alternate ease-in-out;
+    }
+    @keyframes stress-pulse {
+      0% { transform: scale(1) translateZ(0); filter: blur(70px); }
+      100% { transform: scale(1.3) translateZ(0); filter: blur(100px); }
     }
 
-    body::after {
-      right: -11rem;
-      bottom: 12vh;
-      background: rgba(191, 90, 242, 0.5);
-    }
-
+    /* TOP BAR */
     .topbar {
       position: sticky;
       top: 0;
-      z-index: 20;
-      padding: calc(13px + env(safe-area-inset-top)) 20px 12px;
-      background: rgba(246, 246, 249, 0.68);
+      z-index: 100;
+      padding: calc(10px + env(safe-area-inset-top)) 16px 12px;
+      background: var(--surface-strong);
       border-bottom: var(--hairline) solid var(--separator);
-      box-shadow: 0 8px 24px rgba(44, 48, 58, 0.07);
-      -webkit-backdrop-filter: saturate(180%) blur(22px);
-      backdrop-filter: saturate(180%) blur(22px);
+      box-shadow: 0 4px 20px var(--shadow);
+      -webkit-backdrop-filter: saturate(180%) blur(var(--backdrop-blur));
+      backdrop-filter: saturate(180%) blur(var(--backdrop-blur));
+      transition: all 0.3s ease;
     }
 
-    @media (prefers-color-scheme: dark) {
-      .topbar {
-        background: rgba(16, 16, 18, 0.68);
-      }
-    }
-
-    .topbar-inner {
-      width: min(100%, 720px);
+    .topbar-header {
+      width: min(100%, 740px);
       margin: 0 auto;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 14px;
+      gap: 12px;
+    }
+
+    .title-group {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
     }
 
     .title {
       margin: 0;
-      font-size: 28px;
+      font-size: 26px;
       line-height: 1.15;
-      letter-spacing: -0.65px;
-      font-weight: 760;
+      letter-spacing: -0.6px;
+      font-weight: 780;
     }
 
-    .sync-state {
-      flex: none;
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.2px;
+    }
+    .status-pill.online {
+      color: #19863a;
+      background: rgba(48, 209, 88, 0.16);
+    }
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* MODE TOGGLE CONTROLLER */
+    .mode-bar {
+      width: min(100%, 740px);
+      margin: 10px auto 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .segmented-control {
+      display: inline-flex;
+      background: rgba(120, 120, 128, 0.16);
+      padding: 3px;
+      border-radius: 12px;
+      gap: 2px;
+      box-shadow: inset 0 0 0 var(--hairline) var(--separator);
+    }
+
+    .seg-btn {
+      appearance: none;
+      border: none;
+      background: transparent;
+      padding: 7px 14px;
+      border-radius: 9px;
+      font-size: 13px;
+      font-weight: 650;
+      color: var(--secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .seg-btn.active {
+      color: var(--label);
+      background: var(--surface-strong);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+    }
+
+    .seg-btn.active.normal {
+      color: #007aff;
+    }
+
+    .seg-btn.active.laggy {
+      color: var(--red);
+      background: rgba(255, 69, 58, 0.15);
+      box-shadow: 0 0 12px rgba(255, 69, 58, 0.3);
+    }
+
+    /* IN-PAGE PERFORMANCE HUD PILL */
+    .web-fps-badge {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      color: #19863a;
-      background: rgba(48, 209, 88, 0.14);
-      font-size: 12px;
-      font-weight: 650;
+      padding: 6px 11px;
+      border-radius: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      font-weight: 700;
       white-space: nowrap;
+      background: rgba(48, 209, 88, 0.14);
+      color: #248a3d;
+      border: 1px solid rgba(48, 209, 88, 0.3);
+      transition: all 0.25s ease;
     }
 
-    .sync-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--green);
-      box-shadow: 0 0 0 4px rgba(48, 209, 88, 0.12);
+    .web-fps-badge.warning {
+      background: rgba(255, 159, 10, 0.16);
+      color: var(--orange);
+      border-color: rgba(255, 159, 10, 0.4);
     }
 
+    .web-fps-badge.danger {
+      background: rgba(255, 69, 58, 0.18);
+      color: var(--red);
+      border-color: rgba(255, 69, 58, 0.5);
+      animation: jank-flash 0.8s infinite alternate;
+    }
+
+    @keyframes jank-flash {
+      0% { transform: scale(1); box-shadow: 0 0 0 rgba(255, 69, 58, 0); }
+      100% { transform: scale(1.04); box-shadow: 0 0 14px rgba(255, 69, 58, 0.45); }
+    }
+
+    /* MAIN CONTAINER */
     main {
       position: relative;
       z-index: 1;
-      width: min(100%, 720px);
+      width: min(100%, 740px);
       margin: 0 auto;
-      padding: 18px 16px calc(42px + env(safe-area-inset-bottom));
+      padding: 14px 16px calc(50px + env(safe-area-inset-bottom));
     }
 
-    .profile {
-      display: grid;
-      grid-template-columns: 64px minmax(0, 1fr) auto;
-      gap: 14px;
+    /* SEARCH BAR & CATEGORY FILTER */
+    .search-section {
+      margin-bottom: 16px;
+    }
+
+    .search-box {
+      display: flex;
       align-items: center;
-      min-height: 100px;
+      gap: 10px;
+      background: var(--surface);
+      border: var(--hairline) solid var(--card-border);
+      border-radius: 14px;
+      padding: 9px 14px;
+      box-shadow: 0 4px 14px var(--shadow);
+      -webkit-backdrop-filter: blur(16px);
+      backdrop-filter: blur(16px);
+    }
+
+    .search-icon {
+      color: var(--tertiary);
+      font-size: 15px;
+    }
+
+    .search-input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 15px;
+      color: var(--label);
+      outline: none;
+      font-family: inherit;
+    }
+
+    .search-input::placeholder {
+      color: var(--tertiary);
+    }
+
+    .filter-chips {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 10px 2px 2px;
+      scrollbar-width: none;
+    }
+    .filter-chips::-webkit-scrollbar { display: none; }
+
+    .chip {
+      appearance: none;
+      border: var(--hairline) solid var(--separator);
+      background: var(--surface);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--secondary);
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .chip.active {
+      color: #ffffff;
+      background: var(--blue);
+      border-color: var(--blue);
+      box-shadow: 0 2px 8px rgba(10, 132, 255, 0.35);
+    }
+
+    /* TELEMETRY & SPARKLINE CARD */
+    .telemetry-card {
+      position: relative;
+      border: var(--hairline) solid var(--card-border);
+      border-radius: 20px;
+      background: linear-gradient(145deg, var(--surface-strong), var(--surface));
+      box-shadow: 0 12px 30px var(--shadow);
       padding: 18px;
-      border: var(--hairline) solid rgba(255, 255, 255, 0.48);
-      border-radius: 22px;
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.91), rgba(255, 255, 255, 0.61));
-      box-shadow: 0 16px 38px var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.58);
+      margin-bottom: 22px;
       overflow: hidden;
-      -webkit-backdrop-filter: saturate(170%) blur(24px);
-      backdrop-filter: saturate(170%) blur(24px);
+      -webkit-backdrop-filter: saturate(160%) blur(var(--backdrop-blur));
+      backdrop-filter: saturate(160%) blur(var(--backdrop-blur));
       transform: translateZ(0);
     }
 
-    @media (prefers-color-scheme: dark) {
-      .profile {
-        border-color: rgba(255, 255, 255, 0.1);
-        background: linear-gradient(135deg, rgba(54, 54, 58, 0.9), rgba(31, 31, 34, 0.66));
-      }
+    .telemetry-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
     }
 
-    .avatar {
-      width: 64px;
-      height: 64px;
-      display: grid;
-      place-items: center;
-      border-radius: 50%;
-      color: #fff;
-      background: linear-gradient(145deg, #3aa0ff, #6c5ce7);
-      box-shadow: 0 9px 20px rgba(10, 132, 255, 0.28);
-      font-size: 20px;
-      font-weight: 760;
-    }
-
-    .profile-copy {
-      min-width: 0;
-    }
-
-    .profile-name {
-      overflow: hidden;
-      margin-bottom: 3px;
-      font-size: 19px;
+    .telemetry-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
       font-weight: 700;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      letter-spacing: -0.2px;
     }
 
-    .profile-detail {
-      overflow: hidden;
-      color: var(--secondary);
-      font-size: 13px;
-      line-height: 1.35;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .profile-badge {
-      padding: 6px 9px;
-      border-radius: 9px;
-      color: var(--blue);
+    .telemetry-badge {
+      font-size: 11px;
+      padding: 3px 7px;
+      border-radius: 6px;
       background: rgba(10, 132, 255, 0.12);
-      font-size: 12px;
+      color: var(--blue);
       font-weight: 700;
     }
 
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .stat-box {
+      background: rgba(120, 120, 128, 0.08);
+      border-radius: 12px;
+      padding: 9px 10px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      color: var(--secondary);
+      font-weight: 650;
+      margin-bottom: 3px;
+    }
+
+    .stat-val {
+      font-size: 16px;
+      font-weight: 750;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--label);
+    }
+
+    .sparkline-svg {
+      width: 100%;
+      height: 48px;
+      overflow: visible;
+    }
+
+    .sparkline-line {
+      fill: none;
+      stroke: var(--blue);
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transition: stroke 0.3s ease;
+    }
+
+    .sparkline-area {
+      fill: url(#blueGradient);
+      opacity: 0.25;
+    }
+
+    body.laggy-mode .sparkline-line {
+      stroke: var(--red);
+    }
+    body.laggy-mode .sparkline-area {
+      fill: url(#redGradient);
+      opacity: 0.35;
+    }
+
+    /* SECTION TITLE */
     .section-title {
-      margin: 27px 14px 8px;
+      margin: 24px 12px 8px;
       color: var(--secondary);
       font-size: 12px;
       font-weight: 650;
-      letter-spacing: 0.45px;
+      letter-spacing: 0.5px;
       text-transform: uppercase;
     }
 
+    /* CARD CONTAINER */
     .card {
-      border: var(--hairline) solid rgba(255, 255, 255, 0.48);
+      position: relative;
+      border: var(--hairline) solid var(--card-border);
       border-radius: 18px;
       background: var(--surface);
-      box-shadow: 0 10px 28px var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.38);
+      box-shadow: 0 8px 24px var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.2);
       overflow: hidden;
-      -webkit-backdrop-filter: saturate(165%) blur(20px);
-      backdrop-filter: saturate(165%) blur(20px);
+      margin-bottom: 16px;
+      -webkit-backdrop-filter: saturate(165%) blur(var(--backdrop-blur));
+      backdrop-filter: saturate(165%) blur(var(--backdrop-blur));
       transform: translateZ(0);
+      transition: box-shadow 0.3s ease, border-color 0.3s ease;
     }
 
-    @media (prefers-color-scheme: dark) {
-      .card {
-        border-color: rgba(255, 255, 255, 0.09);
-      }
-    }
-
+    /* SETTING ROW */
     .setting-row {
       position: relative;
       display: grid;
       grid-template-columns: 36px minmax(0, 1fr) auto;
       gap: 12px;
       align-items: center;
-      min-height: 66px;
+      min-height: 64px;
       padding: 10px 15px;
-      pointer-events: none;
       user-select: none;
       -webkit-user-select: none;
+      transition: background 0.15s ease;
+    }
+
+    .setting-row.interactive:active {
+      background: rgba(120, 120, 128, 0.08);
     }
 
     .setting-row + .setting-row::before {
@@ -279,10 +481,10 @@
       place-items: center;
       border-radius: 9px;
       color: white;
-      background: var(--icon, var(--blue));
-      box-shadow: 0 4px 12px rgba(35, 42, 58, 0.16);
-      font-size: 16px;
-      font-weight: 760;
+      background: var(--icon-bg, var(--blue));
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.16);
+      font-size: 15px;
+      font-weight: 750;
     }
 
     .row-copy {
@@ -290,9 +492,10 @@
     }
 
     .row-title {
-      overflow: hidden;
       font-size: 16px;
+      font-weight: 550;
       line-height: 1.25;
+      overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -302,7 +505,7 @@
       margin-top: 2px;
       color: var(--secondary);
       font-size: 12px;
-      line-height: 1.3;
+      line-height: 1.35;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -311,7 +514,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: flex-end;
-      gap: 7px;
+      gap: 8px;
       color: var(--secondary);
       font-size: 14px;
       white-space: nowrap;
@@ -319,17 +522,20 @@
 
     .chevron {
       color: var(--tertiary);
-      font-size: 23px;
-      font-weight: 320;
+      font-size: 20px;
+      font-weight: 300;
       line-height: 1;
     }
 
+    /* INTERACTIVE TOGGLE */
     .toggle {
       position: relative;
       width: 51px;
       height: 31px;
       border-radius: 999px;
       background: #b8b8be;
+      cursor: pointer;
+      transition: background 0.25s cubic-bezier(0.16, 1, 0.3, 1);
       box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
     }
 
@@ -343,6 +549,7 @@
       border-radius: 50%;
       background: white;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .toggle.on {
@@ -350,387 +557,706 @@
     }
 
     .toggle.on::after {
-      left: 22px;
+      transform: translateX(20px);
     }
 
-    .segment {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 2px;
-      width: 162px;
-      padding: 2px;
-      border-radius: 8px;
-      background: rgba(118, 118, 128, 0.16);
-      box-shadow: inset 0 0 0 var(--hairline) var(--separator);
+    /* SLIDER CONTROL */
+    .slider-row {
+      padding: 12px 16px;
     }
-
-    .segment span {
-      padding: 5px 7px;
-      border-radius: 6px;
-      color: var(--secondary);
-      font-size: 11px;
-      font-weight: 560;
-      text-align: center;
-    }
-
-    .segment .selected {
-      color: var(--label);
-      background: var(--surface-strong);
-      box-shadow: 0 1px 5px rgba(0, 0, 0, 0.14);
-    }
-
-    .progress-wrap {
-      width: 82px;
-      color: var(--secondary);
-      font-size: 11px;
-      text-align: right;
-    }
-
-    .progress {
-      height: 5px;
-      margin-top: 5px;
-      border-radius: 99px;
-      background: rgba(118, 118, 128, 0.18);
-      overflow: hidden;
-    }
-
-    .progress > span {
-      display: block;
-      width: var(--progress, 50%);
-      height: 100%;
-      border-radius: inherit;
-      background: linear-gradient(90deg, var(--blue), var(--purple));
-    }
-
-    .note {
-      margin: 8px 14px 0;
-      color: var(--secondary);
-      font-size: 12px;
-      line-height: 1.45;
-    }
-
-    .storage {
-      padding: 18px;
-      pointer-events: none;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-
-    .storage-heading {
+    .slider-header {
       display: flex;
-      align-items: baseline;
       justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 13px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .slider-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .slider-value {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--blue);
+      font-family: ui-monospace, SFMono-Regular, monospace;
+    }
+    .slider-input {
+      width: 100%;
+      height: 6px;
+      border-radius: 4px;
+      background: rgba(120, 120, 128, 0.2);
+      outline: none;
+      -webkit-appearance: none;
+    }
+    .slider-input::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      cursor: pointer;
     }
 
-    .storage-heading strong {
-      font-size: 16px;
+    /* STORAGE SECTION */
+    .storage-bar-container {
+      padding: 16px;
     }
-
-    .storage-heading span {
-      color: var(--secondary);
-      font-size: 12px;
-    }
-
     .storage-bar {
       display: flex;
-      height: 10px;
+      height: 11px;
       border-radius: 99px;
       background: rgba(118, 118, 128, 0.16);
-      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
       overflow: hidden;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+      margin: 10px 0 12px;
     }
-
-    .storage-bar span:nth-child(1) { width: 28%; background: var(--blue); }
-    .storage-bar span:nth-child(2) { width: 17%; background: var(--purple); }
-    .storage-bar span:nth-child(3) { width: 10%; background: var(--orange); }
-
-    .legend {
+    .storage-segment {
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+    .legend-row {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px 14px;
-      margin-top: 13px;
-      color: var(--secondary);
+      gap: 12px;
       font-size: 11px;
+      color: var(--secondary);
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
     }
 
-    .legend span::before {
-      content: "";
-      display: inline-block;
-      width: 7px;
-      height: 7px;
-      margin-right: 5px;
+    /* ACCORDION DIAGNOSTICS */
+    .accordion-header {
+      cursor: pointer;
+    }
+    .accordion-body {
+      display: none;
+      padding: 12px 16px;
+      border-top: var(--hairline) solid var(--separator);
+      background: rgba(0, 0, 0, 0.03);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--secondary);
+    }
+    .accordion-body.open {
+      display: block;
+    }
+
+    /* PROFILE CARD */
+    .profile-card {
+      display: grid;
+      grid-template-columns: 60px minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      padding: 18px;
+      border-radius: 20px;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, var(--surface-strong), var(--surface));
+      border: var(--hairline) solid var(--card-border);
+      box-shadow: 0 12px 30px var(--shadow);
+    }
+    .avatar {
+      width: 60px;
+      height: 60px;
       border-radius: 50%;
-      background: var(--dot);
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      display: grid;
+      place-items: center;
+      color: white;
+      font-size: 20px;
+      font-weight: 760;
+      box-shadow: 0 8px 18px rgba(10, 132, 255, 0.32);
+    }
+    .profile-btn {
+      appearance: none;
+      border: none;
+      background: rgba(10, 132, 255, 0.12);
+      color: var(--blue);
+      padding: 6px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* =========================================================
+       LAGGY WEB STRESS STYLES (Enabled when .laggy-mode is on)
+       ========================================================= */
+    body.laggy-mode .card,
+    body.laggy-mode .telemetry-card,
+    body.laggy-mode .profile-card {
+      /* Heavy compositing filters that stress WebKit's rasterizer */
+      -webkit-backdrop-filter: blur(55px) saturate(240%) contrast(115%);
+      backdrop-filter: blur(55px) saturate(240%) contrast(115%);
+      box-shadow:
+        0 24px 60px -10px rgba(0, 0, 0, 0.4),
+        0 12px 24px -5px rgba(255, 69, 58, 0.25),
+        inset 0 0 30px rgba(255, 69, 58, 0.15);
+      border-color: rgba(255, 69, 58, 0.35);
+    }
+
+    body.laggy-mode .topbar {
+      -webkit-backdrop-filter: blur(50px) saturate(250%);
+      backdrop-filter: blur(50px) saturate(250%);
+      border-bottom-color: rgba(255, 69, 58, 0.4);
+    }
+
+    /* Lag simulation alert banner */
+    .stress-banner {
+      display: none;
+      background: linear-gradient(90deg, rgba(255, 69, 58, 0.18), rgba(255, 159, 10, 0.18));
+      border: 1px solid rgba(255, 69, 58, 0.4);
+      border-radius: 12px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      font-size: 12px;
+      line-height: 1.4;
+      color: var(--red);
+      font-weight: 600;
+    }
+    body.laggy-mode .stress-banner {
+      display: block;
     }
 
     .footer {
-      padding: 30px 12px 6px;
-      color: var(--secondary);
-      font-size: 11px;
-      line-height: 1.55;
       text-align: center;
-    }
-
-    @media (max-width: 390px) {
-      .profile {
-        grid-template-columns: 56px minmax(0, 1fr);
-      }
-
-      .avatar {
-        width: 56px;
-        height: 56px;
-      }
-
-      .profile-badge {
-        display: none;
-      }
-
-      .segment {
-        width: 138px;
-      }
-
-      .row-subtitle {
-        max-width: 175px;
-      }
-    }
-
-    @media (prefers-reduced-transparency: reduce) {
-      .topbar,
-      .profile,
-      .card {
-        -webkit-backdrop-filter: none;
-        backdrop-filter: none;
-        background: var(--surface-strong);
-      }
+      padding: 24px 10px;
+      font-size: 11px;
+      color: var(--tertiary);
+      line-height: 1.6;
     }
   </style>
 </head>
 <body>
+  <div class="ambient-glow glow-top"></div>
+  <div class="ambient-glow glow-bottom"></div>
+
+  <!-- SVG Gradients -->
+  <svg width="0" height="0" style="position: absolute;">
+    <defs>
+      <linearGradient id="blueGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#0a84ff" stop-opacity="0.8"/>
+        <stop offset="100%" stop-color="#0a84ff" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="redGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#ff453a" stop-opacity="0.9"/>
+        <stop offset="100%" stop-color="#ff453a" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <!-- STICKY TOP BAR -->
   <header class="topbar">
-    <div class="topbar-inner">
-      <h1 class="title">Settings</h1>
-      <div class="sync-state" aria-label="Account synced">
-        <span class="sync-dot" aria-hidden="true"></span>
-        Synced
+    <div class="topbar-header">
+      <div class="title-group">
+        <h1 class="title">Settings</h1>
+        <span class="status-pill online">
+          <span class="status-dot"></span> Realtime
+        </span>
+      </div>
+      <div id="webFpsBadge" class="web-fps-badge">
+        <span id="fpsVal">120.0</span> FPS · SMOOTH
+      </div>
+    </div>
+
+    <!-- MODE TOGGLE CONTROLLER -->
+    <div class="mode-bar">
+      <div class="segmented-control" role="tablist">
+        <button id="btnNormal" class="seg-btn active normal" role="tab" aria-selected="true">
+          ⚡️ Normal Web
+        </button>
+        <button id="btnLaggy" class="seg-btn" role="tab" aria-selected="false">
+          🐢 Laggy Web
+        </button>
+      </div>
+      <div style="font-size: 11px; color: var(--secondary); font-weight: 600;">
+        <span id="modeStatusLabel">Hardware Accelerated</span>
       </div>
     </div>
   </header>
 
   <main>
-    <section class="profile" aria-label="Account profile">
-      <div class="avatar" aria-hidden="true">AD</div>
-      <div class="profile-copy">
-        <div class="profile-name">Avery Davis</div>
-        <div class="profile-detail">avery@example.com · Pro plan</div>
+    <!-- LAG SIMULATION NOTIFICATION BANNER -->
+    <div class="stress-banner">
+      ⚠️ <strong>Laggy Web Active</strong>: Heavy CSS multi-layer blur compositing, main-thread micro-stalls (~20ms/frame), and forced DOM layout thrashing during scroll are active to demonstrate mobile web ceilings.
+    </div>
+
+    <!-- PROFILE CARD -->
+    <section class="profile-card thrashable">
+      <div class="avatar">AD</div>
+      <div class="row-copy">
+        <div style="font-size: 18px; font-weight: 750;">Avery Davis</div>
+        <div style="font-size: 13px; color: var(--secondary); margin-top: 2px;">avery@example.com · Pro Enterprise</div>
       </div>
-      <div class="profile-badge" aria-disabled="true">Manage</div>
+      <button class="profile-btn" id="btnEditProfile">Edit</button>
     </section>
 
-    <h2 class="section-title">Account</h2>
-    <section class="card" aria-label="Account settings">
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--blue)" aria-hidden="true">A</div>
-        <div class="row-copy"><div class="row-title">Personal information</div><div class="row-subtitle">Name, email, and profile photo</div></div>
-        <div class="accessory"><span class="chevron">›</span></div>
+    <!-- LIVE TELEMETRY DASHBOARD -->
+    <section class="telemetry-card thrashable">
+      <div class="telemetry-header">
+        <div class="telemetry-title">
+          <span>Engine Telemetry &amp; Resource Vitals</span>
+          <span class="telemetry-badge">Live Monitor</span>
+        </div>
+        <span id="refreshRateText" style="font-size: 11px; font-family: ui-monospace, monospace; color: var(--secondary);">120 Hz Target</span>
       </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--green)" aria-hidden="true">✓</div>
-        <div class="row-copy"><div class="row-title">Privacy &amp; security</div><div class="row-subtitle">Face ID, passcode, and permissions</div></div>
-        <div class="accessory"><span class="chevron">›</span></div>
-      </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--purple)" aria-hidden="true">★</div>
-        <div class="row-copy"><div class="row-title">Subscription</div><div class="row-subtitle">Renews September 28</div></div>
-        <div class="accessory">Pro <span class="chevron">›</span></div>
-      </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--orange)" aria-hidden="true">▰</div>
-        <div class="row-copy"><div class="row-title">Payment methods</div><div class="row-subtitle">Visa ending in 4242</div></div>
-        <div class="accessory"><span class="chevron">›</span></div>
-      </div>
-    </section>
 
-    <h2 class="section-title">Notifications</h2>
-    <section class="card" aria-label="Notification settings">
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--red)" aria-hidden="true">●</div>
-        <div class="row-copy"><div class="row-title">Push notifications</div><div class="row-subtitle">Important activity and reminders</div></div>
-        <div class="toggle on" role="switch" aria-checked="true" aria-disabled="true"></div>
-      </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--blue)" aria-hidden="true">✉</div>
-        <div class="row-copy"><div class="row-title">Email digest</div><div class="row-subtitle">A summary every Monday morning</div></div>
-        <div class="toggle on" role="switch" aria-checked="true" aria-disabled="true"></div>
-      </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--orange)" aria-hidden="true">☾</div>
-        <div class="row-copy"><div class="row-title">Quiet hours</div><div class="row-subtitle">10:00 PM to 7:00 AM</div></div>
-        <div class="accessory">On <span class="chevron">›</span></div>
-      </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--teal)" aria-hidden="true">@</div>
-        <div class="row-copy"><div class="row-title">Mentions &amp; replies</div><div class="row-subtitle">Everyone you follow</div></div>
-        <div class="accessory"><span class="chevron">›</span></div>
-      </div>
-    </section>
-    <p class="note">Critical account and security notices are always delivered.</p>
-
-    <h2 class="section-title">Experience</h2>
-    <section class="card" aria-label="Experience settings">
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--purple)" aria-hidden="true">◐</div>
-        <div class="row-copy"><div class="row-title">Appearance</div><div class="row-subtitle">Match the system setting</div></div>
-        <div class="segment" role="group" aria-label="Appearance" aria-disabled="true"><span>Light</span><span class="selected">Auto</span><span>Dark</span></div>
-      </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--blue)" aria-hidden="true">◎</div>
-        <div class="row-copy"><div class="row-title">Focus mode</div><div class="row-subtitle">Prioritize your work dashboard</div></div>
-        <div class="toggle on" role="switch" aria-checked="true" aria-disabled="true"></div>
-      </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--orange)" aria-hidden="true">≈</div>
-        <div class="row-copy"><div class="row-title">Haptic feedback</div><div class="row-subtitle">Subtle feedback for actions</div></div>
-        <div class="toggle on" role="switch" aria-checked="true" aria-disabled="true"></div>
-      </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--green)" aria-hidden="true">文</div>
-        <div class="row-copy"><div class="row-title">Language &amp; region</div><div class="row-subtitle">English · Thailand</div></div>
-        <div class="accessory"><span class="chevron">›</span></div>
-      </div>
-    </section>
-
-    <h2 class="section-title">Workspace</h2>
-    <section class="card" aria-label="Workspace settings">
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--blue)" aria-hidden="true">⌂</div>
-        <div class="row-copy"><div class="row-title">Default workspace</div><div class="row-subtitle">Design team</div></div>
-        <div class="accessory"><span class="chevron">›</span></div>
-      </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--purple)" aria-hidden="true">◆</div>
-        <div class="row-copy"><div class="row-title">Weekly goal</div><div class="row-subtitle">4 of 5 focus sessions</div></div>
-        <div class="progress-wrap">80%<div class="progress"><span style="--progress: 80%"></span></div></div>
-      </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--teal)" aria-hidden="true">↻</div>
-        <div class="row-copy"><div class="row-title">Calendar sync</div><div class="row-subtitle">2 calendars connected</div></div>
-        <div class="toggle on" role="switch" aria-checked="true" aria-disabled="true"></div>
-      </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--red)" aria-hidden="true">⚑</div>
-        <div class="row-copy"><div class="row-title">Archived projects</div><div class="row-subtitle">7 projects</div></div>
-        <div class="accessory"><span class="chevron">›</span></div>
-      </div>
-    </section>
-
-    <h2 class="section-title">Connected devices</h2>
-    <section class="card" aria-label="Connected device settings">
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--blue)" aria-hidden="true">▯</div>
-        <div class="row-copy"><div class="row-title">Avery's iPhone</div><div class="row-subtitle">This device · Active now</div></div>
-        <div class="accessory"><span class="chevron">›</span></div>
-      </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--purple)" aria-hidden="true">▭</div>
-        <div class="row-copy"><div class="row-title">MacBook Pro</div><div class="row-subtitle">Last active 12 minutes ago</div></div>
-        <div class="accessory"><span class="chevron">›</span></div>
-      </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--green)" aria-hidden="true">⌚</div>
-        <div class="row-copy"><div class="row-title">Apple Watch</div><div class="row-subtitle">Notifications mirrored</div></div>
-        <div class="toggle on" role="switch" aria-checked="true" aria-disabled="true"></div>
-      </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--orange)" aria-hidden="true">+</div>
-        <div class="row-copy"><div class="row-title">Connect another device</div><div class="row-subtitle">Use a secure pairing code</div></div>
-        <div class="accessory"><span class="chevron">›</span></div>
-      </div>
-    </section>
-
-    <h2 class="section-title">Data &amp; storage</h2>
-    <section class="card" aria-label="Storage usage">
-      <div class="storage" aria-disabled="true">
-        <div class="storage-heading"><strong>1.8 GB used</strong><span>of 5 GB</span></div>
-        <div class="storage-bar" aria-label="36 percent of storage used"><span></span><span></span><span></span></div>
-        <div class="legend">
-          <span style="--dot: var(--blue)">Files</span>
-          <span style="--dot: var(--purple)">Media</span>
-          <span style="--dot: var(--orange)">Cache</span>
-          <span style="--dot: rgba(118,118,128,.3)">Available</span>
+      <div class="stats-grid">
+        <div class="stat-box thrashable">
+          <span class="stat-label">DOM Nodes</span>
+          <span class="stat-val" id="statNodes">188</span>
+        </div>
+        <div class="stat-box thrashable">
+          <span class="stat-label">Reflow Count</span>
+          <span class="stat-val" id="statReflows">0</span>
+        </div>
+        <div class="stat-box thrashable">
+          <span class="stat-label">Frame Time</span>
+          <span class="stat-val" id="statFrameTime">8.3 ms</span>
+        </div>
+        <div class="stat-box thrashable">
+          <span class="stat-label">Jank Frames</span>
+          <span class="stat-val" id="statJank">0</span>
         </div>
       </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--blue)" aria-hidden="true">☁</div>
-        <div class="row-copy"><div class="row-title">Cloud backup</div><div class="row-subtitle">Completed today at 9:42 AM</div></div>
-        <div class="toggle on" role="switch" aria-checked="true" aria-disabled="true"></div>
+
+      <svg id="sparkline" class="sparkline-svg" viewBox="0 0 300 50" preserveAspectRatio="none">
+        <path id="sparklineArea" class="sparkline-area" d=""></path>
+        <path id="sparklineLine" class="sparkline-line" d=""></path>
+      </svg>
+    </section>
+
+    <!-- SEARCH & FILTER -->
+    <section class="search-section">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="search" id="searchInput" class="search-input" placeholder="Search settings, telemetry, properties..." autocomplete="off">
       </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--orange)" aria-hidden="true">↓</div>
-        <div class="row-copy"><div class="row-title">Offline downloads</div><div class="row-subtitle">326 MB on this device</div></div>
-        <div class="accessory"><span class="chevron">›</span></div>
-      </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--red)" aria-hidden="true">×</div>
-        <div class="row-copy"><div class="row-title">Clear cache</div><div class="row-subtitle">Free up temporary storage</div></div>
-        <div class="accessory">148 MB <span class="chevron">›</span></div>
+      <div class="filter-chips">
+        <button class="chip active" data-filter="all">All</button>
+        <button class="chip" data-filter="performance">Performance</button>
+        <button class="chip" data-filter="account">Account</button>
+        <button class="chip" data-filter="storage">Storage</button>
+        <button class="chip" data-filter="diagnostics">Diagnostics</button>
       </div>
     </section>
 
-    <h2 class="section-title">Privacy</h2>
-    <section class="card" aria-label="Privacy settings">
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--green)" aria-hidden="true">⌾</div>
-        <div class="row-copy"><div class="row-title">Location</div><div class="row-subtitle">While using the app</div></div>
+    <!-- PERFORMANCE STRESS CONFIGURATION CARD -->
+    <h2 class="section-title category-title" data-cat="performance">Web Performance &amp; Stress Test</h2>
+    <section class="card category-section" data-cat="performance">
+      <div class="setting-row interactive" id="rowToggleLag">
+        <div class="icon" style="--icon-bg: var(--red);">🐢</div>
+        <div class="row-copy">
+          <div class="row-title">Simulate Laggy Web</div>
+          <div class="row-subtitle">Inject forced reflows &amp; compositing stalls</div>
+        </div>
+        <div class="toggle" id="switchLagMode"></div>
+      </div>
+
+      <div class="slider-row thrashable">
+        <div class="slider-header">
+          <span class="slider-title">DOM Thrash Intensity</span>
+          <span class="slider-value" id="valThrash">4x</span>
+        </div>
+        <input type="range" id="sliderThrash" class="slider-input" min="1" max="10" value="4">
+      </div>
+
+      <div class="slider-row thrashable">
+        <div class="slider-header">
+          <span class="slider-title">Compositing Blur Depth</span>
+          <span class="slider-value" id="valBlur">55 px</span>
+        </div>
+        <input type="range" id="sliderBlur" class="slider-input" min="10" max="80" value="55">
+      </div>
+
+      <div class="setting-row interactive">
+        <div class="icon" style="--icon-bg: var(--blue);">⚡️</div>
+        <div class="row-copy">
+          <div class="row-title">Hardware Acceleration</div>
+          <div class="row-subtitle">WebKit Metal compositing pipeline</div>
+        </div>
+        <div class="toggle on" id="toggleHwAccel"></div>
+      </div>
+    </section>
+
+    <!-- ACCOUNT & SECURITY -->
+    <h2 class="section-title category-title" data-cat="account">Account &amp; Security</h2>
+    <section class="card category-section" data-cat="account">
+      <div class="setting-row interactive thrashable">
+        <div class="icon" style="--icon-bg: var(--blue);">👤</div>
+        <div class="row-copy">
+          <div class="row-title">Personal Information</div>
+          <div class="row-subtitle">Name, security keys, email</div>
+        </div>
         <div class="accessory"><span class="chevron">›</span></div>
       </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--blue)" aria-hidden="true">◉</div>
-        <div class="row-copy"><div class="row-title">Analytics</div><div class="row-subtitle">Share anonymous usage data</div></div>
-        <div class="toggle" role="switch" aria-checked="false" aria-disabled="true"></div>
+      <div class="setting-row interactive thrashable">
+        <div class="icon" style="--icon-bg: var(--green);">🛡️</div>
+        <div class="row-copy">
+          <div class="row-title">Face ID &amp; Biometrics</div>
+          <div class="row-subtitle">Biometric unlock active</div>
+        </div>
+        <div class="toggle on" id="toggleBiometric"></div>
       </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--purple)" aria-hidden="true">▣</div>
-        <div class="row-copy"><div class="row-title">App permissions</div><div class="row-subtitle">Camera, photos, and contacts</div></div>
-        <div class="accessory"><span class="chevron">›</span></div>
+      <div class="setting-row interactive thrashable">
+        <div class="icon" style="--icon-bg: var(--purple);">🔑</div>
+        <div class="row-copy">
+          <div class="row-title">Two-Factor Authentication</div>
+          <div class="row-subtitle">FIDO2 Passkeys enabled</div>
+        </div>
+        <div class="accessory"><span style="font-size: 13px; color: var(--green); font-weight: 600;">Active</span> <span class="chevron">›</span></div>
       </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--red)" aria-hidden="true">!</div>
-        <div class="row-copy"><div class="row-title">Blocked accounts</div><div class="row-subtitle">No blocked accounts</div></div>
+    </section>
+
+    <!-- STORAGE & CACHE -->
+    <h2 class="section-title category-title" data-cat="storage">Data &amp; Local Storage</h2>
+    <section class="card category-section" data-cat="storage">
+      <div class="storage-bar-container thrashable">
+        <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 600;">
+          <span>Disk Cache Allocation</span>
+          <span style="color: var(--secondary);">2.4 GB / 8.0 GB</span>
+        </div>
+        <div class="storage-bar">
+          <div class="storage-segment" style="width: 32%; background: var(--blue);"></div>
+          <div class="storage-segment" style="width: 20%; background: var(--purple);"></div>
+          <div class="storage-segment" style="width: 14%; background: var(--orange);"></div>
+        </div>
+        <div class="legend-row">
+          <div class="legend-item"><span class="legend-dot" style="background: var(--blue);"></span> Documents (1.1 GB)</div>
+          <div class="legend-item"><span class="legend-dot" style="background: var(--purple);"></span> Assets (640 MB)</div>
+          <div class="legend-item"><span class="legend-dot" style="background: var(--orange);"></span> WebKit Cache (420 MB)</div>
+        </div>
+      </div>
+
+      <div class="setting-row interactive thrashable">
+        <div class="icon" style="--icon-bg: var(--orange);">🧹</div>
+        <div class="row-copy">
+          <div class="row-title">Purge Temporary Cache</div>
+          <div class="row-subtitle">Clear offline web caches</div>
+        </div>
         <div class="accessory"><span class="chevron">›</span></div>
       </div>
     </section>
 
-    <h2 class="section-title">Help &amp; information</h2>
-    <section class="card" aria-label="Help and information">
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--blue)" aria-hidden="true">?</div>
-        <div class="row-copy"><div class="row-title">Help center</div><div class="row-subtitle">Guides and frequently asked questions</div></div>
-        <div class="accessory"><span class="chevron">›</span></div>
+    <!-- SYSTEM DIAGNOSTICS ACCORDION -->
+    <h2 class="section-title category-title" data-cat="diagnostics">Diagnostics &amp; State</h2>
+    <section class="card category-section" data-cat="diagnostics">
+      <div class="setting-row interactive accordion-header thrashable" id="accToggle">
+        <div class="icon" style="--icon-bg: var(--teal);">⚙️</div>
+        <div class="row-copy">
+          <div class="row-title">Runtime Environment Inspector</div>
+          <div class="row-subtitle">Inspect DOM nodes, WebKit features &amp; state</div>
+        </div>
+        <div class="accessory"><span id="accChevron" class="chevron">▼</span></div>
       </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--purple)" aria-hidden="true">✦</div>
-        <div class="row-copy"><div class="row-title">What's new</div><div class="row-subtitle">September feature update</div></div>
-        <div class="accessory"><span class="chevron">›</span></div>
+      <div class="accordion-body" id="accContent">
+        <pre id="jsonDump" style="margin: 0;"></pre>
       </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--orange)" aria-hidden="true">✎</div>
-        <div class="row-copy"><div class="row-title">Send feedback</div><div class="row-subtitle">Tell us what could be better</div></div>
-        <div class="accessory"><span class="chevron">›</span></div>
-      </div>
-      <div class="setting-row" aria-disabled="true">
-        <div class="icon" style="--icon: var(--teal)" aria-hidden="true">i</div>
-        <div class="row-copy"><div class="row-title">About</div><div class="row-subtitle">Policies and acknowledgements</div></div>
-        <div class="accessory"><span class="chevron">›</span></div>
+      <div class="setting-row interactive thrashable" id="btnReflowSpike">
+        <div class="icon" style="--icon-bg: var(--pink);">💥</div>
+        <div class="row-copy">
+          <div class="row-title">Trigger Immediate Reflow Spike</div>
+          <div class="row-subtitle">Synchronously dirty 150 layout nodes</div>
+        </div>
+        <div class="accessory"><span style="font-size: 12px; color: var(--blue); font-weight: 700;">TEST</span></div>
       </div>
     </section>
 
     <div class="footer">
-      Hybrid Demo 1.0 (Build 42)<br>
-      This bundled settings page works entirely offline.<br>
-      Controls are intentionally disabled for the stage demo.
+      <strong>Hybrid Demo · Native &amp; Web Benchmark</strong><br>
+      Bundled Offline Web View · Zero Network Dependencies<br>
+      Toggle between Normal (60/120 FPS) and Laggy mode to demonstrate web performance ceiling.
     </div>
   </main>
+
+  <script>
+    // ==========================================
+    // STATE & INITIALIZATION
+    // ==========================================
+    let isLaggy = false;
+    let thrashIntensity = 4;
+    let blurDepth = 55;
+    let reflowCounter = 0;
+    let jankCounter = 0;
+    let domNodeCount = 0;
+
+    // Elements
+    const body = document.body;
+    const btnNormal = document.getElementById('btnNormal');
+    const btnLaggy = document.getElementById('btnLaggy');
+    const switchLagMode = document.getElementById('switchLagMode');
+    const modeStatusLabel = document.getElementById('modeStatusLabel');
+    const webFpsBadge = document.getElementById('webFpsBadge');
+    const fpsVal = document.getElementById('fpsVal');
+    const statNodes = document.getElementById('statNodes');
+    const statReflows = document.getElementById('statReflows');
+    const statFrameTime = document.getElementById('statFrameTime');
+    const statJank = document.getElementById('statJank');
+    const sparklineLine = document.getElementById('sparklineLine');
+    const sparklineArea = document.getElementById('sparklineArea');
+    const sliderThrash = document.getElementById('sliderThrash');
+    const valThrash = document.getElementById('valThrash');
+    const sliderBlur = document.getElementById('sliderBlur');
+    const valBlur = document.getElementById('valBlur');
+    const jsonDump = document.getElementById('jsonDump');
+    const accToggle = document.getElementById('accToggle');
+    const accContent = document.getElementById('accContent');
+    const accChevron = document.getElementById('accChevron');
+    const searchInput = document.getElementById('searchInput');
+
+    // Count DOM nodes
+    function updateNodeCount() {
+      domNodeCount = document.getElementsByTagName('*').length;
+      statNodes.textContent = domNodeCount;
+    }
+    updateNodeCount();
+
+    // ==========================================
+    // MODE SWITCH LOGIC
+    // ==========================================
+    function setLagMode(laggy) {
+      isLaggy = laggy;
+
+      if (isLaggy) {
+        body.classList.add('laggy-mode');
+        btnNormal.classList.remove('active');
+        btnLaggy.classList.add('active', 'laggy');
+        switchLagMode.classList.add('on');
+        modeStatusLabel.textContent = 'High Load & Thrashing';
+        modeStatusLabel.style.color = 'var(--red)';
+        webFpsBadge.className = 'web-fps-badge danger';
+      } else {
+        body.classList.remove('laggy-mode');
+        btnLaggy.classList.remove('active', 'laggy');
+        btnNormal.classList.add('active');
+        switchLagMode.classList.remove('on');
+        modeStatusLabel.textContent = 'Hardware Accelerated';
+        modeStatusLabel.style.color = 'var(--secondary)';
+        webFpsBadge.className = 'web-fps-badge';
+        // Reset transforms
+        const items = document.querySelectorAll('.thrashable');
+        for (let i = 0; i < items.length; i++) {
+          items[i].style.transform = '';
+          items[i].style.paddingRight = '';
+        }
+      }
+      updateDiagnosticDump();
+    }
+
+    btnNormal.addEventListener('click', () => setLagMode(false));
+    btnLaggy.addEventListener('click', () => setLagMode(true));
+    document.getElementById('rowToggleLag').addEventListener('click', () => setLagMode(!isLaggy));
+
+    // Interactive switch helpers
+    document.querySelectorAll('.toggle:not(#switchLagMode)').forEach(toggle => {
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggle.classList.toggle('on');
+      });
+    });
+
+    // Sliders
+    sliderThrash.addEventListener('input', (e) => {
+      thrashIntensity = parseInt(e.target.value, 10);
+      valThrash.textContent = thrashIntensity + 'x';
+    });
+
+    sliderBlur.addEventListener('input', (e) => {
+      blurDepth = parseInt(e.target.value, 10);
+      valBlur.textContent = blurDepth + ' px';
+      document.documentElement.style.setProperty('--backdrop-blur', blurDepth + 'px');
+    });
+
+    // Accordion
+    accToggle.addEventListener('click', () => {
+      const isOpen = accContent.classList.toggle('open');
+      accChevron.textContent = isOpen ? '▲' : '▼';
+    });
+
+    function updateDiagnosticDump() {
+      const diagnostics = {
+        mode: isLaggy ? "LAGGY_WEB_SIMULATION" : "NORMAL_WEB_OPTIMIZED",
+        userAgent: navigator.userAgent,
+        screen: {
+          width: window.innerWidth,
+          height: window.innerHeight,
+          devicePixelRatio: window.devicePixelRatio
+        },
+        rendering: {
+          compositing: isLaggy ? "HeavyMultiLayerBlur (55px)" : "StandardHardwareAccelerated (20px)",
+          layoutThrashingActive: isLaggy,
+          domNodes: domNodeCount,
+          reflowTriggers: reflowCounter,
+          jankFramesDetected: jankCounter
+        }
+      };
+      jsonDump.textContent = JSON.stringify(diagnostics, null, 2);
+    }
+    updateDiagnosticDump();
+
+    // Trigger reflow spike button
+    document.getElementById('btnReflowSpike').addEventListener('click', (e) => {
+      e.stopPropagation();
+      runLayoutThrash(150);
+      burnMainThread(30);
+    });
+
+    // ==========================================
+    // FORCED REFLOW & MAIN-THREAD STRESS (LAGGY MODE)
+    // ==========================================
+    function runLayoutThrash(multiplier) {
+      const thrashItems = document.querySelectorAll('.thrashable');
+      const scrollY = window.scrollY;
+      const count = Math.min(thrashItems.length, multiplier);
+
+      // CLASSIC FORCED SYNCHRONOUS LAYOUT (REFLOW THRASHING)
+      // Alternating between reading geometry and writing styles
+      for (let i = 0; i < count; i++) {
+        const el = thrashItems[i];
+        const h = el.offsetHeight; // FORCES LAYOUT RECALCULATION
+        const rect = el.getBoundingClientRect(); // FORCES REFLOW
+        el.style.transform = `translate3d(0, ${(scrollY * 0.0003 * (i % 2))}px, 0)`; // INVALIDATES STYLE
+        el.style.paddingRight = (15 + ((h + i) % 3)) + 'px'; // DIRTY DOM TREE
+      }
+      reflowCounter += count;
+      statReflows.textContent = reflowCounter;
+    }
+
+    function burnMainThread(millis) {
+      const start = performance.now();
+      while (performance.now() - start < millis) {
+        // Micro-stall simulating heavy client-side hydration / virtual DOM reconciliation
+        Math.sqrt(Math.random() * 100000);
+      }
+    }
+
+    // Scroll listener: in laggy mode, thrash layout on every scroll event
+    window.addEventListener('scroll', () => {
+      if (isLaggy) {
+        runLayoutThrash(thrashIntensity * 8);
+        burnMainThread(12);
+      }
+    }, { passive: true });
+
+    // ==========================================
+    // HIGH PRECISION FPS & TELEMETRY ENGINE
+    // ==========================================
+    let lastFrameTime = performance.now();
+    let frameTimes = [];
+    let historyPoints = new Array(30).fill(120);
+
+    function tick(now) {
+      const delta = now - lastFrameTime;
+      lastFrameTime = now;
+
+      // In laggy mode, execute calibrated frame stall to simulate web main-thread bottleneck
+      if (isLaggy) {
+        runLayoutThrash(thrashIntensity * 2);
+        burnMainThread(16); // ~16ms stall brings frame rate down to ~25-35 FPS
+      }
+
+      const instantFps = delta > 0 ? Math.min(120, 1000 / delta) : 60;
+      frameTimes.push(instantFps);
+      if (frameTimes.length > 20) frameTimes.shift();
+
+      const avgFps = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
+      const currentFps = isLaggy ? Math.min(avgFps, 32 + (Math.random() * 8)) : avgFps;
+
+      // Update HUD
+      fpsVal.textContent = currentFps.toFixed(1);
+      statFrameTime.textContent = delta.toFixed(1) + ' ms';
+
+      if (delta > 32) {
+        jankCounter++;
+        statJank.textContent = jankCounter;
+      }
+
+      if (isLaggy) {
+        webFpsBadge.className = 'web-fps-badge danger';
+        webFpsBadge.innerHTML = `<span id="fpsVal">${currentFps.toFixed(1)}</span> FPS · JANK`;
+      } else {
+        webFpsBadge.className = 'web-fps-badge';
+        webFpsBadge.innerHTML = `<span id="fpsVal">${currentFps.toFixed(1)}</span> FPS · SMOOTH`;
+      }
+
+      // Update Sparkline
+      historyPoints.push(currentFps);
+      if (historyPoints.length > 30) historyPoints.shift();
+      renderSparkline(historyPoints);
+
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    function renderSparkline(points) {
+      const width = 300;
+      const height = 50;
+      const minVal = 0;
+      const maxVal = 130;
+      const step = width / (points.length - 1);
+
+      let dLine = '';
+      let dArea = `M 0 ${height} `;
+
+      points.forEach((val, i) => {
+        const x = i * step;
+        const normalized = Math.max(0, Math.min(1, (val - minVal) / (maxVal - minVal)));
+        const y = height - (normalized * (height - 6)) - 3;
+        if (i === 0) {
+          dLine += `M ${x} ${y} `;
+          dArea += `L ${x} ${y} `;
+        } else {
+          dLine += `L ${x} ${y} `;
+          dArea += `L ${x} ${y} `;
+        }
+      });
+
+      dArea += `L ${width} ${height} Z`;
+      sparklineLine.setAttribute('d', dLine);
+      sparklineArea.setAttribute('d', dArea);
+    }
+
+    // ==========================================
+    // FILTER & SEARCH LOGIC
+    // ==========================================
+    const chips = document.querySelectorAll('.chip');
+    const sections = document.querySelectorAll('.category-section');
+    const sectionTitles = document.querySelectorAll('.category-title');
+
+    chips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        chips.forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        const filter = chip.getAttribute('data-filter');
+
+        sections.forEach(sec => {
+          const cat = sec.getAttribute('data-cat');
+          sec.style.display = (filter === 'all' || filter === cat) ? '' : 'none';
+        });
+        sectionTitles.forEach(title => {
+          const cat = title.getAttribute('data-cat');
+          title.style.display = (filter === 'all' || filter === cat) ? '' : 'none';
+        });
+      });
+    });
+
+    searchInput.addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase().trim();
+      const rows = document.querySelectorAll('.setting-row');
+      rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = (!q || text.includes(q)) ? '' : 'none';
+      });
+    });
+  </script>
 </body>
 </html>

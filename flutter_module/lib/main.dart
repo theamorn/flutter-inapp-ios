@@ -7,6 +7,7 @@ import 'package:flutter_module/game_screen.dart';
 import 'package:flutter_module/shader_screen.dart';
 import 'package:flutter_module/tabs/game/game_app.dart';
 import 'package:flutter_module/tabs/scene/scene_app.dart';
+import 'package:flutter_module/tabs/glass/glass_app.dart';
 import 'package:flutter_module/telemetry/frame_telemetry.dart';
 
 void main() {
@@ -18,10 +19,7 @@ void main() {
 
   runApp(switch (route) {
     '/game' => const FlappyCatApp(),
-    '/glass' => const HybridFeaturePlaceholderApp(
-      title: 'Liquid Glass',
-      icon: Icons.water_drop,
-    ),
+    '/glass' => const LiquidGlassApp(),
     '/scene' => const IslandSceneApp(),
     _ => const MyApp(),
   });
