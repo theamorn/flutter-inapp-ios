@@ -16,8 +16,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Landscape
+import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Landscape
+import androidx.compose.material.icons.outlined.Opacity
 import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -44,72 +50,104 @@ import io.flutter.embedding.android.RenderMode
 import io.flutter.embedding.android.TransparencyMode
 
 /**
- * Two tabs: native Home, and the Flutter game. Mirrors
- * `cool-ios/cool-ios/MainTabBarController.swift` and
- * `FlutterTabViewController.swift`.
+ * Five tabs matching the iOS host (see `cool-ios/cool-ios/MainTabBarController.swift`):
+ *   0. Home   (Native Material 3 Compose)
+ *   1. Web    (Native Android WebView hosting bundled settings.html)
+ *   2. Game   (Flutter /game, Flappy Cat)
+ *   3. Glass  (Flutter /glass, Liquid Glass panel)
+ *   4. Island (Flutter /scene, 3D Island scene with Flutter GPU)
  *
- * ## Why the hierarchy is hand-built rather than "Flutter inside a Composable"
+ * ## Hierarchy & Touch Dispatch
  *
- *     FrameLayout
- *       ├── FragmentContainerView   ← FlutterFragment. A SurfaceView, so its
- *       │                             buffer sits under the window and it
- *       │                             hole-punches through. Bottom margin =
- *       │                             nav bar height, so Flutter's viewport
- *       │                             genuinely ends above the bar.
- *       ├── ComposeView  body       ← Home. GONE on the game tab.
- *       ├── ComposeView  chrome     ← the NavigationBar, bottom-aligned only.
- *       └── PassThroughHost         ← the HUD, top-right, touch-transparent.
+ *     FrameLayout (root)
+ *       ├── FragmentContainerView (game)     ← SurfaceView, GONE when inactive
+ *       ├── FragmentContainerView (glass)    ← SurfaceView, GONE when inactive
+ *       ├── FragmentContainerView (scene)    ← SurfaceView, GONE when inactive
+ *       ├── WebTab (WebView)                 ← GONE when inactive
+ *       ├── ComposeView (bodyView / Home)    ← GONE when inactive
+ *       ├── ComposeView (chromeView)         ← Material 3 NavigationBar, bottom-aligned
+ *       └── PassThroughHost (hudHost)        ← HUD overlay, top-right, touch-transparent
  *
- * Three separate Compose islands rather than one full-screen `Scaffold`,
- * because **a full-screen `ComposeView` swallows every touch.**
- * `AndroidComposeView.dispatchTouchEvent` returns true once it has dispatched a
- * pointer event, whether or not anything consumed it, so an "empty" Compose
- * body over the Flutter surface silently eats taps — the game renders, animates,
- * and never responds. Sizing each Compose island to the chrome it actually
- * draws lets `ViewGroup` dispatch fall through to the Flutter view underneath.
+ * Distinct views rather than a single full-screen Compose view ensure touches
+ * fall through to Flutter surfaces and WebViews without being swallowed by Compose.
  *
- * This also mirrors iOS structurally: the tab bar and the HUD are separate from
- * the content view, and the HUD has `isUserInteractionEnabled = false`.
- *
- * `RenderMode.surface` + `TransparencyMode.opaque` is deliberate.
- * `RenderMode.texture` would put Flutter on a TextureView — an extra GPU copy
- * per frame, which corrupts the very numbers the HUD exists to show — and
- * `TransparencyMode.transparent` z-orders the Flutter surface *above* the
- * window, hiding the native chrome entirely.
+ * `RenderMode.surface` + `TransparencyMode.opaque` sits below the window and
+ * hole-punches through, keeping native chrome drawn cleanly on top.
  */
 class TabsActivity : FragmentActivity() {
 
     private companion object {
         const val TAB_HOME = 0
-        const val TAB_GAME = 1
-        const val FLUTTER_FRAGMENT_TAG = "flutter_game"
+        const val TAB_WEB = 1
+        const val TAB_GAME = 2
+        const val TAB_GLASS = 3
+        const val TAB_SCENE = 4
+
+        const val TAG_FLUTTER_GAME = "flutter_game"
+        const val TAG_FLUTTER_GLASS = "flutter_glass"
+        const val TAG_FLUTTER_SCENE = "flutter_scene"
+
         const val SELECTED_TAB_KEY = "selected_tab"
-        const val ENGINE_CREATED_KEY = "engine_created"
+        const val ENGINE_GAME_CREATED_KEY = "engine_game_created"
+        const val ENGINE_GLASS_CREATED_KEY = "engine_glass_created"
+        const val ENGINE_SCENE_CREATED_KEY = "engine_scene_created"
     }
 
-    private lateinit var flutterContainer: FragmentContainerView
+    private lateinit var gameContainer: FragmentContainerView
+    private lateinit var glassContainer: FragmentContainerView
+    private lateinit var sceneContainer: FragmentContainerView
+    private lateinit var webTab: WebTab
     private lateinit var bodyView: ComposeView
-    private var flutterFragmentAttached = false
+
+    private var gameFragmentAttached = false
+    private var glassFragmentAttached = false
+    private var sceneFragmentAttached = false
+
     private var selectedTab by mutableIntStateOf(TAB_HOME)
     private var bottomBarHeightPx = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         selectedTab = savedInstanceState?.getInt(SELECTED_TAB_KEY, TAB_HOME) ?: TAB_HOME
+
         // FragmentManager restores cached-engine fragments during super.onCreate.
-        // After process death the in-memory cache must be recreated first.
-        if (savedInstanceState?.getBoolean(ENGINE_CREATED_KEY) == true) {
+        // After process death the in-memory cache must be recreated first for any fragment that was attached.
+        if (savedInstanceState?.getBoolean(ENGINE_GAME_CREATED_KEY) == true) {
             AppEngines.engineForRoute(this, AppEngines.GAME_ROUTE)
         }
+        if (savedInstanceState?.getBoolean(ENGINE_GLASS_CREATED_KEY) == true) {
+            AppEngines.engineForRoute(this, AppEngines.GLASS_ROUTE)
+        }
+        if (savedInstanceState?.getBoolean(ENGINE_SCENE_CREATED_KEY) == true) {
+            AppEngines.engineForRoute(this, AppEngines.SCENE_ROUTE)
+        }
+
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         val root = FrameLayout(this)
 
-        flutterContainer = FragmentContainerView(this).apply {
-            id = R.id.flutter_container
+        gameContainer = FragmentContainerView(this).apply {
+            id = R.id.flutter_container_game
             visibility = View.GONE
         }
-        root.addView(flutterContainer, matchParent())
+        root.addView(gameContainer, matchParent())
+
+        glassContainer = FragmentContainerView(this).apply {
+            id = R.id.flutter_container_glass
+            visibility = View.GONE
+        }
+        root.addView(glassContainer, matchParent())
+
+        sceneContainer = FragmentContainerView(this).apply {
+            id = R.id.flutter_container_scene
+            visibility = View.GONE
+        }
+        root.addView(sceneContainer, matchParent())
+
+        webTab = WebTab(this).apply {
+            visibility = View.GONE
+        }
+        root.addView(webTab, matchParent())
 
         bodyView = ComposeView(this).apply {
             setContent {
@@ -155,8 +193,10 @@ class TabsActivity : FragmentActivity() {
 
         setContentView(root)
 
-        flutterFragmentAttached =
-            supportFragmentManager.findFragmentByTag(FLUTTER_FRAGMENT_TAG) != null
+        gameFragmentAttached = supportFragmentManager.findFragmentByTag(TAG_FLUTTER_GAME) != null
+        glassFragmentAttached = supportFragmentManager.findFragmentByTag(TAG_FLUTTER_GLASS) != null
+        sceneFragmentAttached = supportFragmentManager.findFragmentByTag(TAG_FLUTTER_SCENE) != null
+
         applySelection()
     }
 
@@ -177,27 +217,37 @@ class TabsActivity : FragmentActivity() {
 
     /**
      * `FlutterFragment` needs this forwarded or the engine's lifecycle channel
-     * never reaches `resumed` and Flutter renders nothing — with no error.
+     * never reaches `resumed` and Flutter renders nothing.
      */
     override fun onPostResume() {
         super.onPostResume()
-        flutterFragment()?.onPostResume()
+        flutterFragments().forEach { it.onPostResume() }
         updateFlutterVisibility()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putInt(SELECTED_TAB_KEY, selectedTab)
-        outState.putBoolean(ENGINE_CREATED_KEY, flutterFragmentAttached)
+        outState.putBoolean(ENGINE_GAME_CREATED_KEY, gameFragmentAttached)
+        outState.putBoolean(ENGINE_GLASS_CREATED_KEY, glassFragmentAttached)
+        outState.putBoolean(ENGINE_SCENE_CREATED_KEY, sceneFragmentAttached)
         super.onSaveInstanceState(outState)
     }
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        flutterFragment()?.onTrimMemory(level)
+        flutterFragments().forEach { it.onTrimMemory(level) }
     }
 
-    private fun flutterFragment(): FlutterFragment? =
-        supportFragmentManager.findFragmentByTag(FLUTTER_FRAGMENT_TAG) as? FlutterFragment
+    override fun onDestroy() {
+        webTab.onDestroy()
+        super.onDestroy()
+    }
+
+    private fun flutterFragments(): List<FlutterFragment> = listOfNotNull(
+        supportFragmentManager.findFragmentByTag(TAG_FLUTTER_GAME) as? FlutterFragment,
+        supportFragmentManager.findFragmentByTag(TAG_FLUTTER_GLASS) as? FlutterFragment,
+        supportFragmentManager.findFragmentByTag(TAG_FLUTTER_SCENE) as? FlutterFragment,
+    )
 
     private fun selectTab(index: Int) {
         if (selectedTab == index) return
@@ -206,39 +256,75 @@ class TabsActivity : FragmentActivity() {
     }
 
     private fun applySelection() {
-        if (selectedTab == TAB_GAME) {
-            // Lazy spawn: the engine is created on the tab's *first* selection,
-            // never at launch. That is what lets the HUD show the real
-            // incremental cost of the engine as the presenter taps into it.
-            ensureFlutterFragment()
-            flutterContainer.visibility = View.VISIBLE
-            // GONE, not INVISIBLE: an INVISIBLE ComposeView still takes touches.
-            bodyView.visibility = View.GONE
-            PerformanceHudState.setActiveFlutterRoute(AppEngines.GAME_ROUTE)
-        } else {
-            flutterContainer.visibility = View.GONE
-            bodyView.visibility = View.VISIBLE
-            PerformanceHudState.setActiveFlutterRoute(null)
+        // 1. Content view visibility (GONE ensures non-active views do not intercept touches)
+        bodyView.visibility = if (selectedTab == TAB_HOME) View.VISIBLE else View.GONE
+        webTab.visibility = if (selectedTab == TAB_WEB) View.VISIBLE else View.GONE
+        gameContainer.visibility = if (selectedTab == TAB_GAME) View.VISIBLE else View.GONE
+        glassContainer.visibility = if (selectedTab == TAB_GLASS) View.VISIBLE else View.GONE
+        sceneContainer.visibility = if (selectedTab == TAB_SCENE) View.VISIBLE else View.GONE
+
+        // 2. Web active synchronization (suspends RAF and stress test when tab is hidden)
+        webTab.setPageActive(selectedTab == TAB_WEB)
+
+        // 3. Lazy spawn Flutter engine and fragment on first selection
+        when (selectedTab) {
+            TAB_GAME -> {
+                ensureFlutterFragment(AppEngines.GAME_ROUTE, gameContainer.id, TAG_FLUTTER_GAME) {
+                    gameFragmentAttached = true
+                }
+                PerformanceHudState.setActiveFlutterRoute(AppEngines.GAME_ROUTE)
+            }
+            TAB_GLASS -> {
+                ensureFlutterFragment(AppEngines.GLASS_ROUTE, glassContainer.id, TAG_FLUTTER_GLASS) {
+                    glassFragmentAttached = true
+                }
+                PerformanceHudState.setActiveFlutterRoute(AppEngines.GLASS_ROUTE)
+            }
+            TAB_SCENE -> {
+                ensureFlutterFragment(AppEngines.SCENE_ROUTE, sceneContainer.id, TAG_FLUTTER_SCENE) {
+                    sceneFragmentAttached = true
+                }
+                PerformanceHudState.setActiveFlutterRoute(AppEngines.SCENE_ROUTE)
+            }
+            else -> {
+                PerformanceHudState.setActiveFlutterRoute(null)
+            }
         }
+
+        // 4. Update Flutter engine render loops (pauses inactive engines)
         updateFlutterVisibility()
     }
 
     private fun updateFlutterVisibility() {
-        if (!flutterFragmentAttached) return
-        val lifecycle = AppEngines.engineForRoute(this, AppEngines.GAME_ROUTE).lifecycleChannel
-        // View.GONE does not pause a Fragment or its Dart render loop.
-        if (selectedTab == TAB_GAME) lifecycle.appIsResumed() else lifecycle.appIsPaused()
+        val routes = listOf(
+            TAB_GAME to AppEngines.GAME_ROUTE,
+            TAB_GLASS to AppEngines.GLASS_ROUTE,
+            TAB_SCENE to AppEngines.SCENE_ROUTE,
+        )
+        for ((tabIndex, route) in routes) {
+            val engine = AppEngines.getEngine(route) ?: continue
+            val lifecycle = engine.lifecycleChannel
+            if (selectedTab == tabIndex) {
+                lifecycle.appIsResumed()
+            } else {
+                lifecycle.appIsPaused()
+            }
+        }
     }
 
-    private fun ensureFlutterFragment() {
-        if (flutterFragmentAttached) return
-        flutterFragmentAttached = true
+    private fun ensureFlutterFragment(
+        route: String,
+        containerId: Int,
+        tag: String,
+        onAttached: () -> Unit,
+    ) {
+        if (supportFragmentManager.findFragmentByTag(tag) != null) return
 
-        // Spawns the engine and starts the deferred spawn-cost measurement.
-        AppEngines.engineForRoute(this, AppEngines.GAME_ROUTE)
+        // Spawns the engine lazily and begins the deferred spawn-cost measurement.
+        AppEngines.engineForRoute(this, route)
 
         val fragment = FlutterFragment
-            .withCachedEngine(AppEngines.cacheKey(AppEngines.GAME_ROUTE))
+            .withCachedEngine(AppEngines.cacheKey(route))
             .renderMode(RenderMode.surface)
             .transparencyMode(TransparencyMode.opaque)
             .shouldAttachEngineToActivity(true)
@@ -247,15 +333,17 @@ class TabsActivity : FragmentActivity() {
 
         supportFragmentManager
             .beginTransaction()
-            .add(flutterContainer.id, fragment, FLUTTER_FRAGMENT_TAG)
+            .add(containerId, fragment, tag)
             .commitNow()
+
+        onAttached()
     }
 
-    /** Keeps both the Flutter surface and Home content clear of the tab bar. */
+    /** Keeps all tab surfaces clear of the native bottom navigation bar. */
     private fun applyBottomBarHeight(heightPx: Int) {
         if (heightPx == bottomBarHeightPx) return
         bottomBarHeightPx = heightPx
-        listOf<View>(flutterContainer, bodyView).forEach { view ->
+        listOf<View>(bodyView, webTab, gameContainer, glassContainer, sceneContainer).forEach { view ->
             val params = view.layoutParams as FrameLayout.LayoutParams
             params.bottomMargin = heightPx
             view.layoutParams = params
@@ -278,11 +366,9 @@ private class PassThroughHost(context: Context) : FrameLayout(context) {
 private fun HomeTab() {
     Scaffold(
         topBar = {
-            // iOS wraps Home (but not the Flutter tab) in a UINavigationController
-            // with a large "Home" title. Mirror that.
             LargeTopAppBar(
                 title = { Text("Home") },
-                colors = TopAppBarDefaults.largeTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
                     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
                 ),
@@ -302,7 +388,10 @@ private fun TabBar(
     onSelectTab: (Int) -> Unit,
     onHeight: (Int) -> Unit,
 ) {
-    NavigationBar(modifier = Modifier.onSizeChanged { onHeight(it.height) }) {
+    NavigationBar(
+        modifier = Modifier.onSizeChanged { onHeight(it.height) },
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
         NavigationBarItem(
             selected = selectedTab == 0,
             onClick = { onSelectTab(0) },
@@ -319,11 +408,44 @@ private fun TabBar(
             onClick = { onSelectTab(1) },
             icon = {
                 Icon(
-                    if (selectedTab == 1) Icons.Filled.SportsEsports else Icons.Outlined.SportsEsports,
+                    if (selectedTab == 1) Icons.Filled.Language else Icons.Outlined.Language,
+                    contentDescription = null,
+                )
+            },
+            label = { Text("Web") },
+        )
+        NavigationBarItem(
+            selected = selectedTab == 2,
+            onClick = { onSelectTab(2) },
+            icon = {
+                Icon(
+                    if (selectedTab == 2) Icons.Filled.SportsEsports else Icons.Outlined.SportsEsports,
                     contentDescription = null,
                 )
             },
             label = { Text("Game") },
+        )
+        NavigationBarItem(
+            selected = selectedTab == 3,
+            onClick = { onSelectTab(3) },
+            icon = {
+                Icon(
+                    if (selectedTab == 3) Icons.Filled.Opacity else Icons.Outlined.Opacity,
+                    contentDescription = null,
+                )
+            },
+            label = { Text("Glass") },
+        )
+        NavigationBarItem(
+            selected = selectedTab == 4,
+            onClick = { onSelectTab(4) },
+            icon = {
+                Icon(
+                    if (selectedTab == 4) Icons.Filled.Landscape else Icons.Outlined.Landscape,
+                    contentDescription = null,
+                )
+            },
+            label = { Text("Island") },
         )
     }
 }

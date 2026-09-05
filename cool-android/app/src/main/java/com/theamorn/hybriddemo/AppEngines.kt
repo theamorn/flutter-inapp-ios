@@ -28,11 +28,13 @@ object AppEngines {
     const val TELEMETRY_CHANNEL_NAME = "com.theamorn.hybrid/telemetry"
 
     /**
-     * The Android host builds tabs 1 and 3 only (see `07-android-host.md`).
-     * The other two routes exist in the contract and are listed so the
-     * unsupported-route check stays honest about what this host can spawn.
+     * All three Flutter routes supported by the demo contract.
+     * Engines are created lazily on the tab's first appearance.
      */
-    private val supportedRoutes = setOf(GAME_ROUTE)
+    private val supportedRoutes = setOf(GAME_ROUTE, GLASS_ROUTE, SCENE_ROUTE)
+
+    /** Returns the engine for [route] if already created, or null. */
+    fun getEngine(route: String): FlutterEngine? = engines[route]
 
     private val mainHandler = Handler(Looper.getMainLooper())
 

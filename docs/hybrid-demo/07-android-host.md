@@ -1,15 +1,22 @@
-# 07 — Android host (minimal: tabs 1 + 3)
+# 07 — Android host (5 tabs: iOS parity)
 
 ## Goal
 
-A native Android app that proves the parity claim: the **same** Flutter module, hosted under **visibly Android** native chrome, reporting the **same** performance numbers. Two tabs only — native Home and the Flutter game.
+A native Android app that proves complete platform parity: the **same** Flutter module, hosted under **visibly Android** native chrome (Material 3, Material You, dynamic color), reporting the **same** performance numbers across all five tabs:
+1. Native Home (Material 3 Compose)
+2. Native Web (Android `WebView` with bundled `settings.html`)
+3. Flutter Game (`/game`, Flappy Cat)
+4. Flutter Glass (`/glass`, Liquid Glass panel)
+5. Flutter Island (`/scene`, 3D Island with Flutter GPU)
 
 ## Prerequisites
 
 - `02-ios-host.md` complete (Dart-side routing and telemetry exist).
-- `04-flappy-cat.md` complete (there is a game to host).
-- `03-native-web.md` complete (there is an iOS Home layout to mirror).
-- Read `ARCHITECTURE.md` for engine topology, routes, and the telemetry contract.
+- `04-flappy-cat.md` complete (game tab).
+- `03-native-web.md` complete (Home layout and bundled `settings.html`).
+- `05-liquid-glass.md` complete (glass shader).
+- `06-island-scene.md` complete (3D island scene).
+- Read `ARCHITECTURE.md` for engine topology, routes, and telemetry contract.
 
 ## Repo facts you need
 
@@ -18,22 +25,25 @@ A native Android app that proves the parity claim: the **same** Flutter module, 
 - `flutter_module/pubspec.yaml` declares `module: androidPackage: com.example.flutter_module`.
 - The iOS Home tab (`cool-ios/cool-ios/HomeViewController.swift`) is the layout to mirror.
 
-## Scope discipline
+## 5-Tab Scope & Parity
 
-**Two tabs. Not five.** The Android host exists to make one point — same Flutter, different native chrome, same numbers — and that point is fully made with tabs 1 and 3. Do not build the WebView, glass, or 3D tabs here unless the presenter explicitly asks. (Tab 4's Android parity is verified separately by running route `/glass` on the module standalone; see `05-liquid-glass.md`.)
+The presenter requested all 5 tabs on Android matching iOS so the entire comparison — native controls, web engine ceilings, and multi-engine Flutter features (game, shader, 3D) — can be demonstrated side by side.
 
-## Files to create/modify
+## Files created/modified
 
 | File | Change |
 |---|---|
-| `cool-android/settings.gradle.kts` | **new** — include `flutter_module/.android/include_flutter.groovy` |
-| `cool-android/app/build.gradle.kts` | **new** — `implementation(project(":flutter"))`, Compose |
-| `cool-android/app/src/main/AndroidManifest.xml` | **new** — includes the Flutter GPU meta-data (see Findings for the real key) |
-| `cool-android/app/src/main/java/.../MainActivity.kt` | **new** — login. Built as `LoginActivity.kt`, for symmetry with iOS's `LoginViewController` |
-| `cool-android/app/src/main/java/.../TabsActivity.kt` | **new** — `NavigationBar`, 2 tabs |
-| `cool-android/app/src/main/java/.../AppEngines.kt` | **new** — engine group |
-| `cool-android/app/src/main/java/.../PerformanceHud.kt` | **new** |
-| `cool-android/.gitignore` | **new** |
+| `cool-android/settings.gradle.kts` | include `flutter_module/.android/include_flutter.groovy` |
+| `cool-android/app/build.gradle.kts` | `implementation(project(":flutter"))`, Compose |
+| `cool-android/app/src/main/AndroidManifest.xml` | includes `io.flutter.embedding.android.EnableFlutterGPU` |
+| `cool-android/app/src/main/java/.../LoginActivity.kt` | login in Material 3 |
+| `cool-android/app/src/main/java/.../TabsActivity.kt` | Material 3 `NavigationBar` with 5 tabs and lazy engine hosting |
+| `cool-android/app/src/main/java/.../WebTab.kt` | **new** — native Android `WebView` hosting bundled `settings.html` |
+| `cool-android/app/src/main/assets/settings.html` | **new** — bundled offline settings page |
+| `cool-android/app/src/main/java/.../AppEngines.kt` | engine group for `/game`, `/glass`, `/scene` |
+| `cool-android/app/src/main/java/.../PerformanceHud.kt` | telemetry overlay |
+| `cool-android/app/src/main/res/values/ids.xml` | container IDs for all 3 Flutter fragments |
+| `cool-android/.gitignore` | ignores build and local.properties |
 
 ## Implementation notes
 
