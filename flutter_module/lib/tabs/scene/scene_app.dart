@@ -31,8 +31,18 @@ class IslandSceneApp extends StatelessWidget {
       ),
       // The engine boots this app with defaultRouteName '/scene', which a
       // bare `home:` cannot satisfy — the Navigator logs "Could not navigate
-      // to initial route" and silently falls back to '/'. Generating the same
-      // screen for any route name keeps the log clean.
+      // to initial route" and silently falls back to '/'.
+      //
+      // `onGenerateRoute` alone is NOT the fix. Navigator's default initial
+      // route handling splits '/scene' into ['/', '/scene'] and pushes both
+      // when both resolve — which would mount TWO IslandSceneScreens, two
+      // Scenes and two render loops, one of them invisible underneath. On a
+      // tab whose entire purpose is an honest performance number, that is the
+      // worst possible bug. Pinning the initial stack to exactly one route is
+      // what prevents it.
+      onGenerateInitialRoutes: (_) => <Route<void>>[
+        MaterialPageRoute<void>(builder: (_) => const IslandSceneScreen()),
+      ],
       onGenerateRoute: (RouteSettings settings) =>
           MaterialPageRoute<void>(builder: (_) => const IslandSceneScreen()),
     );
@@ -129,6 +139,12 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
         state != AppLifecycleState.hidden &&
         state != AppLifecycleState.detached;
     if (active != _renderLoopActive) {
+      // Logged, not just rendered: this is the only way to confirm the tab
+      // actually stopped rendering when the host hid it, since the HUD line
+      // saying so is off-screen exactly when it is true.
+      debugPrint(
+        'island scene: render loop ${active ? "resumed" : "stopped"} ($state)',
+      );
       setState(() => _renderLoopActive = active);
     }
   }
@@ -235,16 +251,26 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
               onPointerUp: _onPointerUp,
               child: SizedBox.expand(
                 key: _viewKey,
-                child: CameraControls(
-                  controller: _island.orbit,
+                // TickerMode, NOT `SceneView(autoTick: _renderLoopActive)`.
+                // _SceneViewState is a SingleTickerProviderStateMixin and
+                // recreates its ticker when autoTick changes; that mixin never
+                // releases its one ticker slot, so the first time the tab came
+                // back it threw "multiple tickers were created" and the whole
+                // scene turned into a red error screen. Muting the ticker it
+                // already has does the same job and keeps the view alive, so
+                // returning to the tab costs nothing.
+                child: TickerMode(
                   enabled: _renderLoopActive,
-                  autofocus: false,
-                  child: SceneView(
-                    _island.scene,
-                    camera: _island.camera,
-                    autoTick: _renderLoopActive,
-                    onTick: _onTick,
-                    warmUp: true,
+                  child: CameraControls(
+                    controller: _island.orbit,
+                    enabled: _renderLoopActive,
+                    autofocus: false,
+                    child: SceneView(
+                      _island.scene,
+                      camera: _island.camera,
+                      onTick: _onTick,
+                      warmUp: true,
+                    ),
                   ),
                 ),
               ),
