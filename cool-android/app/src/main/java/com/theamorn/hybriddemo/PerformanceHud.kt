@@ -2,6 +2,7 @@ package com.theamorn.hybriddemo
 
 import android.content.Context
 import android.os.Build
+import android.os.SystemClock
 import android.view.Choreographer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -41,6 +42,7 @@ object PerformanceHudState {
         val uiMillis: Double,
         val rasterMillis: Double,
         val fps: Double,
+        val receivedAtMillis: Long,
     )
 
     private data class EngineSpawn(
@@ -58,7 +60,7 @@ object PerformanceHudState {
         private set
 
     private var activeRoute by mutableStateOf<String?>(null)
-    private var lastSelectedFlutterRoute: String? = null
+    private var sampleTimeMillis by mutableStateOf(0L)
     private var flutterSamples by mutableStateOf(mapOf<String, FlutterSample>())
     private var engineSpawns by mutableStateOf(mapOf<String, EngineSpawn>())
 
@@ -83,6 +85,9 @@ object PerformanceHudState {
             val elapsed = frameTimeNanos - start
             if (elapsed < 1_000_000_000L) return
 
+            // Advance observable time even when FPS/PSS are unchanged, so
+            // a static tab's last Flutter sample still expires in Compose.
+            sampleTimeMillis = SystemClock.elapsedRealtime()
             hostFps = frameCount * 1_000_000_000.0 / elapsed
             sampleStartNanos = frameTimeNanos
             frameCount = 0
@@ -103,6 +108,9 @@ object PerformanceHudState {
         }
         if (running) return
         running = true
+        sampleTimeMillis = SystemClock.elapsedRealtime()
+        hostFps = 0.0
+        flutterSamples = emptyMap()
         sampleStartNanos = null
         frameCount = 0
         memoryBytes = MemoryProbe.footprintBytes()
@@ -117,12 +125,13 @@ object PerformanceHudState {
     }
 
     fun setActiveFlutterRoute(route: String?) {
+        if (route != activeRoute && route != null) flutterSamples = flutterSamples - route
         activeRoute = route
-        if (route != null) lastSelectedFlutterRoute = route
     }
 
     fun recordFlutterSample(route: String, uiMillis: Double, rasterMillis: Double, fps: Double) {
-        flutterSamples = flutterSamples + (route to FlutterSample(uiMillis, rasterMillis, fps))
+        flutterSamples = flutterSamples +
+            (route to FlutterSample(uiMillis, rasterMillis, fps, SystemClock.elapsedRealtime()))
     }
 
     fun recordEngineSpawn(route: String, deltaBytes: Long, durationMillis: Double) {
@@ -131,26 +140,26 @@ object PerformanceHudState {
 
     fun hostLine(): String = String.format(
         Locale.US,
-        "HOST     %5.1f fps   %6.1f MB",
+        "HOST     %5.1f fps   %6.1f MiB PSS",
         hostFps,
         memoryBytes / 1_048_576.0,
     )
 
     fun flutterLine(): String {
-        val routeToShow = activeRoute ?: lastSelectedFlutterRoute
+        val routeToShow = activeRoute
         val sample = routeToShow?.let { flutterSamples[it] }
         return when {
-            routeToShow != null && sample != null -> String.format(
+            routeToShow != null && sample != null &&
+                sampleTimeMillis - sample.receivedAtMillis <= 2_000 -> String.format(
                 Locale.US,
-                "FLUTTER  %s%s  UI %.1f ms  raster %.1f ms  %.0f fps",
+                "FLUTTER  %s  UI %.1f ms  raster %.1f ms  %.0f fps",
                 routeToShow,
-                if (activeRoute == null) " bg" else "",
                 sample.uiMillis,
                 sample.rasterMillis,
                 sample.fps,
             )
 
-            activeRoute != null -> "FLUTTER  $activeRoute  waiting for frames…"
+            activeRoute != null -> "FLUTTER  $activeRoute  no recent frames"
             else -> "FLUTTER  —  no active Flutter engine"
         }
     }
@@ -161,7 +170,7 @@ object PerformanceHudState {
             val spawn = engineSpawns[route] ?: return@mapNotNull null
             String.format(
                 Locale.US,
-                "%s %+.1f MB/%.0f ms",
+                "%s %+.1f MiB/%.0f ms create",
                 route,
                 spawn.deltaBytes / 1_048_576.0,
                 spawn.durationMillis,

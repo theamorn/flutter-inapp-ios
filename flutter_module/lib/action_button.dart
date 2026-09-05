@@ -33,8 +33,8 @@ class _ActionButtonState extends State<ActionButtonWidget> {
             child: TextButton(
                 style: ButtonStyle(
                     backgroundColor:
-                        MaterialStateProperty.all(widget.color.shade200),
-                    foregroundColor: MaterialStateProperty.all(Colors.white)),
+                        WidgetStateProperty.all(widget.color.shade200),
+                    foregroundColor: WidgetStateProperty.all(Colors.white)),
                 onPressed: () {
                   widget.onPressed();
                 },

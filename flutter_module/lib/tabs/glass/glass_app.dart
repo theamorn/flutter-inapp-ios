@@ -9,6 +9,10 @@ class LiquidGlassApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      // Native dispatch already selected this app. Build a single home route.
+      onGenerateInitialRoutes: (_) => [
+        MaterialPageRoute<void>(builder: (_) => const _GlassDemoScreen()),
+      ],
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
@@ -19,7 +23,10 @@ class LiquidGlassApp extends StatelessWidget {
           overlayShape: RoundSliderOverlayShape(overlayRadius: 18),
         ),
       ),
-      home: const _GlassDemoScreen(),
+      onGenerateRoute: (settings) => MaterialPageRoute<void>(
+        settings: settings,
+        builder: (_) => const _GlassDemoScreen(),
+      ),
     );
   }
 }

@@ -161,7 +161,7 @@ class _MyHomePageState extends State<MyHomePage> {
     try {
       await platform.invokeMethod('getValueFromFlutter', value);
     } catch (e) {
-      print("Failed to get value: $e");
+      debugPrint("Failed to get value: $e");
     }
   }
 
@@ -193,8 +193,8 @@ class _MyHomePageState extends State<MyHomePage> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Theme.of(context).colorScheme.primary.withOpacity(0.1),
-              Theme.of(context).colorScheme.background,
+              Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+              Theme.of(context).colorScheme.surface,
             ],
           ),
         ),
@@ -234,7 +234,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         const SizedBox(height: 16),
                         ElevatedButton.icon(
                           onPressed: () {
-                            print(
+                            debugPrint(
                               "Button pressed and send data to native: $_counter",
                             );
                             _sendDataToNative(_counter);
@@ -370,7 +370,7 @@ class _MyHomePageState extends State<MyHomePage> {
                             decoration: BoxDecoration(
                               color: Theme.of(context)
                                   .colorScheme
-                                  .surfaceVariant,
+                                  .surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(

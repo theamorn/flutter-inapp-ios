@@ -6,10 +6,6 @@
 	<true/>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
-	<key>NSBonjourServices</key>
-	<array>
-		<string></string>
-	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

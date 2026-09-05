@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Flutter's debug/profile builds serve the VM service over the network. -->
-    <uses-permission android:name="android.permission.INTERNET" />
-
     <application
         android:allowBackup="false"
         android:icon="@drawable/ic_launcher"

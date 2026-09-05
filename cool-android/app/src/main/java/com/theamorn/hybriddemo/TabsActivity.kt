@@ -83,6 +83,8 @@ class TabsActivity : FragmentActivity() {
         const val TAB_HOME = 0
         const val TAB_GAME = 1
         const val FLUTTER_FRAGMENT_TAG = "flutter_game"
+        const val SELECTED_TAB_KEY = "selected_tab"
+        const val ENGINE_CREATED_KEY = "engine_created"
     }
 
     private lateinit var flutterContainer: FragmentContainerView
@@ -92,13 +94,19 @@ class TabsActivity : FragmentActivity() {
     private var bottomBarHeightPx = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        selectedTab = savedInstanceState?.getInt(SELECTED_TAB_KEY, TAB_HOME) ?: TAB_HOME
+        // FragmentManager restores cached-engine fragments during super.onCreate.
+        // After process death the in-memory cache must be recreated first.
+        if (savedInstanceState?.getBoolean(ENGINE_CREATED_KEY) == true) {
+            AppEngines.engineForRoute(this, AppEngines.GAME_ROUTE)
+        }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         val root = FrameLayout(this)
 
         flutterContainer = FragmentContainerView(this).apply {
-            id = View.generateViewId()
+            id = R.id.flutter_container
             visibility = View.GONE
         }
         root.addView(flutterContainer, matchParent())
@@ -174,6 +182,13 @@ class TabsActivity : FragmentActivity() {
     override fun onPostResume() {
         super.onPostResume()
         flutterFragment()?.onPostResume()
+        updateFlutterVisibility()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putInt(SELECTED_TAB_KEY, selectedTab)
+        outState.putBoolean(ENGINE_CREATED_KEY, flutterFragmentAttached)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onTrimMemory(level: Int) {
@@ -205,6 +220,14 @@ class TabsActivity : FragmentActivity() {
             bodyView.visibility = View.VISIBLE
             PerformanceHudState.setActiveFlutterRoute(null)
         }
+        updateFlutterVisibility()
+    }
+
+    private fun updateFlutterVisibility() {
+        if (!flutterFragmentAttached) return
+        val lifecycle = AppEngines.engineForRoute(this, AppEngines.GAME_ROUTE).lifecycleChannel
+        // View.GONE does not pause a Fragment or its Dart render loop.
+        if (selectedTab == TAB_GAME) lifecycle.appIsResumed() else lifecycle.appIsPaused()
     }
 
     private fun ensureFlutterFragment() {

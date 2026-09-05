@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- The Flutter library also declares INTERNET. Remove it after merging
+         for the offline demo; Debug/Profile retain VM-service access. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+</manifest>

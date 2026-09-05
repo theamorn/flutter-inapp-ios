@@ -1,8 +1,6 @@
 import 'package:flame/game.dart';
 import 'package:flame/sprite.dart';
 import 'package:flame/components.dart';
-import 'package:flutter_module/rain_drop.dart';
-import 'package:flutter_module/rain_particle.dart';
 
 class RainSplash extends FlameGame {
   final Vector2 location;

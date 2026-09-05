@@ -13,7 +13,7 @@ Prove that `flutter_scene` renders inside an add-to-app `FlutterEngineGroup` eng
 ## Repo facts you need
 
 - `flutter_module/` is the add-to-app module; `cool-ios/` is the host, already wired via `podhelper.rb` in `cool-ios/Podfile`.
-- The host's Info.plist is `cool-ios/cool-ios/Info.plist`. **This is the plist that matters** — the iOS embedder reads GPU/engine flags off the *main bundle*, not the Flutter module's bundle.
+- The host uses `cool-ios/cool-ios/Info-Debug.plist` and `Info-Release.plist`, selected per configuration. **Both matter** — the iOS embedder reads GPU/engine flags off the main bundle, not the Flutter module's bundle.
 - Existing shader loading patterns to crib from: `flutter_module/lib/shader_screen.dart` (`CustomPainter` + `ui.FragmentShader`).
 
 ## Flutter GPU enablement — confirmed from 3.47.2 engine source
@@ -22,7 +22,7 @@ This was the open risk in the plan. It resolves cleanly: **Flutter GPU does not 
 
 ### iOS
 
-Add to `cool-ios/cool-ios/Info.plist`:
+Both host plists now contain:
 
 ```xml
 <key>FLTEnableFlutterGPU</key>
@@ -48,6 +48,8 @@ Add to the host `AndroidManifest.xml` (relevant in `07-android-host.md`):
 **The key is fully qualified.** A bare `EnableFlutterGPU` does nothing — see the Findings below, where `07-android-host.md` settled this against the embedding bytecode. The flag is explicitly **allowed in release mode** and settable via the manifest.
 
 ## Files to create/modify
+
+The setup instructions below record the original spike plan. They are historical: the importer command was superseded by `hook/build.dart`, and the spike entrypoints have been removed. For the current pipeline and results, read **Findings** below; for current build commands, use the root README.
 
 | File | Change |
 |---|---|
@@ -242,6 +244,8 @@ It derives sun direction from time-of-day and latitude and drives sun colour, su
 
 ### Spike artifacts — delete these after `06`
 
+**Task 06 cleanup is complete:** the disposable Dart spike entrypoints and `spike_box.glb` are removed. The table below records their former purpose. Use the production `/scene` route for further verification.
+
 | Path | Note |
 |---|---|
 | `flutter_module/lib/spike_scene.dart` | throwaway; imported only by the `/spike` branch |
@@ -253,11 +257,11 @@ It derives sun direction from time-of-day and latitude and drives sun colour, su
 
 ## Acceptance criteria
 
-- [ ] A `.model` renders on screen inside `cool-ios`, from a `FlutterEngineGroup`-spawned engine, in release, on a physical device.
-- [ ] `FLTEnableFlutterGPU` is set in the host Info.plist with the correct casing.
-- [ ] The "Findings" section above is filled in, including a decision on the day/night approach.
-- [ ] Spike code is either deleted or clearly marked throwaway; it is not imported by anything else.
+- [ ] The imported scene renders inside `cool-ios`, from a group-spawned engine, in Release on a physical device. Build/simulator findings above do not complete this check.
+- [x] `FLTEnableFlutterGPU` is set in both host plists with the correct casing.
+- [x] Findings are filled in, including the build-hook pipeline and day/night approach.
+- [x] Disposable spike code/assets were removed in task 06; production wiring remains.
 
 ## How to verify
 
-Build `cool-ios` to a physical device in release. Navigate to the spike screen. You should see the model. Then confirm you are genuinely on the GPU path rather than silently falling back: remove the `FLTEnableFlutterGPU` key, rebuild, and confirm it now **fails**. If it renders identically with the key absent, the key is not what is making it work and your conclusion is wrong.
+Build `cool-ios` to a physical device in Release and open Island (tab 5, `/scene`). Confirm the scene renders and its controls work. For the GPU negative control, temporarily disable `FLTEnableFlutterGPU` in the Release plist, rebuild, and confirm failure. Restore the flag and rebuild before rehearsal. Do not recreate the removed spike entrypoint; the current scene exercises the same build-hook and group-engine path.

@@ -7,12 +7,19 @@ import UIKit
 import WebKit
 
 final class SettingsWebViewController: UIViewController {
+    private var pageVisible = false
+    private var loadErrorLabel: UILabel?
     private lazy var webView: WKWebView = {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
+        #if DEBUG
+        if #available(iOS 16.4, *) {
+            webView.isInspectable = true
+        }
+        #endif
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.navigationDelegate = self
         webView.isOpaque = false
@@ -41,12 +48,16 @@ final class SettingsWebViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        pageVisible = true
+        updatePageActivity()
         // The bundled page owns its sticky translucent title bar.
         navigationController?.setNavigationBarHidden(true, animated: animated)
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        pageVisible = false
+        updatePageActivity()
         navigationController?.setNavigationBarHidden(false, animated: animated)
     }
 
@@ -59,10 +70,16 @@ final class SettingsWebViewController: UIViewController {
         webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
     }
 
-    private func showLoadError() {
+    private func updatePageActivity() {
+        webView.evaluateJavaScript("window.setDemoActive?.(\(pageVisible))", completionHandler: nil)
+    }
+
+    private func showLoadError(_ message: String = "The bundled settings.html resource is missing.") {
+        loadErrorLabel?.removeFromSuperview()
         let errorLabel = UILabel()
+        loadErrorLabel = errorLabel
         errorLabel.translatesAutoresizingMaskIntoConstraints = false
-        errorLabel.text = "Settings couldn't be loaded.\nThe bundled settings.html resource is missing."
+        errorLabel.text = "Settings couldn't be loaded.\n\(message)"
         errorLabel.textAlignment = .center
         errorLabel.numberOfLines = 0
         errorLabel.font = .preferredFont(forTextStyle: .body)
@@ -74,8 +91,13 @@ final class SettingsWebViewController: UIViewController {
             errorLabel.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 32),
             errorLabel.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -32),
         ])
+    }
 
-        assertionFailure("settings.html must be included in the cool-ios target's Copy Bundle Resources phase")
+    static func allowsNavigation(to url: URL, bundledURL: URL?) -> Bool {
+        guard url.isFileURL, let bundledURL else { return false }
+        // Compare the actual file, so #anchors work without admitting remote
+        // URLs that happen to contain a fragment or unrelated local files.
+        return url.standardizedFileURL.path == bundledURL.standardizedFileURL.path
     }
 }
 
@@ -93,8 +115,27 @@ extension SettingsWebViewController: WKNavigationDelegate {
             return
         }
 
-        let isLocalFile = url.isFileURL
-        let isSameDocument = navigationAction.navigationType == .linkActivated && url.fragment != nil
-        decisionHandler(isLocalFile || isSameDocument ? .allow : .cancel)
+        let bundledURL = Bundle.main.url(forResource: "settings", withExtension: "html")
+        decisionHandler(Self.allowsNavigation(to: url, bundledURL: bundledURL) ? .allow : .cancel)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        loadErrorLabel?.removeFromSuperview()
+        loadErrorLabel = nil
+        updatePageActivity()
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        showLoadError(error.localizedDescription)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        guard (error as NSError).code != NSURLErrorCancelled else { return }
+        showLoadError(error.localizedDescription)
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        // Recover the local page if WebKit is reclaimed under memory pressure.
+        loadBundledSettings()
     }
 }

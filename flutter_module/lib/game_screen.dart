@@ -117,7 +117,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                     padding: const EdgeInsets.only(bottom: 20),
                     child: ActionButtonWidget(
                         Colors.blueAccent, "Sign in", Alignment.bottomCenter, () {
-                      print(
+                      debugPrint(
                           "=== This is Flutter widget inside Flutter Flame ===");
                     }),
                   );

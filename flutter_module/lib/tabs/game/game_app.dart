@@ -39,36 +39,41 @@ class _FlappyCatAppState extends State<FlappyCatApp>
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      // Native dispatch already selected this app. Build a single home route.
+      onGenerateInitialRoutes: (_) => [
+        MaterialPageRoute<void>(builder: _buildHome),
+      ],
       debugShowCheckedModeBanner: false,
       theme: ThemeData(brightness: Brightness.dark, useMaterial3: true),
-      home: Builder(
-        builder: (context) {
-          _game.topInset = MediaQuery.paddingOf(context).top;
-          return _buildBody();
-        },
-      ),
+      onGenerateRoute: (settings) =>
+          MaterialPageRoute<void>(settings: settings, builder: _buildHome),
     );
+  }
+
+  Widget _buildHome(BuildContext context) {
+    _game.topInset = MediaQuery.paddingOf(context).top;
+    return _buildBody();
   }
 
   Widget _buildBody() {
     return Scaffold(
-        backgroundColor: Colors.transparent,
-        body: ClipRect(
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              GameWidget<FlappyCatGame>(
-                game: _game,
-                backgroundBuilder: (_) => _SkyShader(clock: _skyClock),
-                loadingBuilder: (_) => const ColoredBox(
-                  color: Color(0xFF73C9F4),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
+      backgroundColor: Colors.transparent,
+      body: ClipRect(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            GameWidget<FlappyCatGame>(
+              game: _game,
+              backgroundBuilder: (_) => _SkyShader(clock: _skyClock),
+              loadingBuilder: (_) => const ColoredBox(
+                color: Color(0xFF73C9F4),
+                child: Center(child: CircularProgressIndicator()),
               ),
-              IgnorePointer(child: _DeathShader(game: _game)),
-            ],
-          ),
+            ),
+            IgnorePointer(child: _DeathShader(game: _game)),
+          ],
         ),
+      ),
     );
   }
 }

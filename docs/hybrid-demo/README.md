@@ -20,14 +20,14 @@ The predecessor talk is preserved at `flutter_module/lib/couple.md` ("The Power 
 
 | Path | What it is |
 |---|---|
-| `cool-ios/` | Native UIKit app. `ViewController.swift` = login form + a button presenting `FlutterViewController`. Storyboard entry point (`Main.storyboard` → `ViewController`). Podfile already wired to `flutter_module` via `podhelper.rb`. |
-| `flutter_module/` | Add-to-app Flutter module. Flame 1.30, `flutter_shaders`, five written GLSL shaders (`water`, `sky`, `star`, `flame`, `rain_droplets`), a rain particle system, sprite sheets, and `MethodChannel("com.theamorn.flutter")`. |
+| `cool-ios/` | Native UIKit app. `LoginViewController` opens a five-tab `MainTabBarController`; `AppEngines` lazily owns three Flutter engines and the window-level native HUD displays telemetry. Podfile integrates `flutter_module`. |
+| `flutter_module/` | Shared Flutter module: Flame game, Liquid Glass shader, `flutter_scene` island, telemetry, plus the previous standalone home at `/`. |
 | `flutter_native/` | Standalone Flutter app hosting a native camera — the reverse-direction demo from the old talk. **Not touched by this plan.** |
-| `cool-android/` | **Does not exist yet.** No native Android host app is in this repo. Built from scratch in `07-android-host.md`. |
+| `cool-android/` | Compose Home + cached-engine Flutter Game, native HUD, and a Gradle source integration of the same module. |
 
 Toolchain is **Flutter 3.47.2** (stable, Dart 3.13.2), managed by fvm. Impeller is default on both platforms.
 
-> `.fvmrc` currently pins **3.38.3, which is not installed** — `.fvm/flutter_sdk` is a dangling symlink to a directory that does not exist. The installed cache holds 3.41.1, 3.47.0, and 3.47.2. `00-toolchain.md` fixes this and must run first.
+`.fvmrc` now pins **3.47.2**. Run `fvm install` and `fvm flutter pub get` inside the module on a fresh checkout. Task `08` is the current stage: implementation and release builds exist, while physical-device measurements and full stage rehearsal still need to be recorded in [MEASUREMENTS.md](MEASUREMENTS.md).
 
 ## Decisions already taken
 
@@ -83,4 +83,4 @@ Each checkpoint leaves a demo that could be given if the calendar collapsed:
 
 ## The one rule for verification
 
-**Physical device, release mode.** Simulator results and debug-mode results do not support any claim in this talk. Debug-mode Flutter is several times slower than release and will make the demo look *worse* than it is; the simulator has no Impeller GPU path worth measuring. Every task doc's `How to verify` assumes a real device in release.
+**Physical device, release mode for stage numbers.** Use profile mode for DevTools inspection. Simulator and debug builds are useful for correctness and visual iteration, including the scene, but their performance results do not support device claims. See `ARCHITECTURE.md` for metric limitations and `08-polish.md` for outstanding rehearsal steps. The Web page's synthetic stress is an explicitly injected workload, not a universal WebView ceiling.

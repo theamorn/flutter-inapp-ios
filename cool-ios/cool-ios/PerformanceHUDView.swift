@@ -9,6 +9,7 @@ final class PerformanceHUDView: UIView {
         let uiMillis: Double
         let rasterMillis: Double
         let fps: Double
+        let receivedAt: CFTimeInterval
     }
 
     private struct EngineSpawn {
@@ -26,7 +27,6 @@ final class PerformanceHUDView: UIView {
     private var frameCount = 0
     private var hostFPS = 0.0
     private var activeFlutterRoute: String?
-    private var lastSelectedFlutterRoute: String?
     private var flutterSamples: [String: FlutterSample] = [:]
     private var engineSpawns: [String: EngineSpawn] = [:]
 
@@ -63,10 +63,10 @@ final class PerformanceHUDView: UIView {
     }
 
     func setActiveFlutterRoute(_ route: String?) {
-        activeFlutterRoute = route
-        if let route {
-            lastSelectedFlutterRoute = route
+        if route != activeFlutterRoute, let route {
+            flutterSamples.removeValue(forKey: route)
         }
+        activeFlutterRoute = route
         refreshLabels()
     }
 
@@ -79,7 +79,8 @@ final class PerformanceHUDView: UIView {
         flutterSamples[route] = FlutterSample(
             uiMillis: uiMillis,
             rasterMillis: rasterMillis,
-            fps: fps
+            fps: fps,
+            receivedAt: CACurrentMediaTime()
         )
         refreshLabels()
     }
@@ -106,6 +107,8 @@ final class PerformanceHUDView: UIView {
         titleLabel.text = "LIVE PERFORMANCE"
         titleLabel.textColor = .systemGreen
         titleLabel.font = .monospacedSystemFont(ofSize: 12, weight: .bold)
+        // Keep all three spawn measurements readable on a phone/projector.
+        enginesLabel.numberOfLines = 0
         [hostLabel, flutterLabel, enginesLabel].forEach {
             $0.textColor = .white
             $0.font = .monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
@@ -142,13 +145,13 @@ final class PerformanceHUDView: UIView {
 
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(resetFrameWindow),
+            selector: #selector(resetFrameWindow(_:)),
             name: UIApplication.willResignActiveNotification,
             object: nil
         )
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(resetFrameWindow),
+            selector: #selector(resetFrameWindow(_:)),
             name: UIApplication.didBecomeActiveNotification,
             object: nil
         )
@@ -171,28 +174,30 @@ final class PerformanceHUDView: UIView {
         refreshLabels()
     }
 
-    @objc private func resetFrameWindow() {
+    @objc private func resetFrameWindow(_ notification: Notification) {
         sampleStartTimestamp = nil
         frameCount = 0
+        hostFPS = 0
+        flutterSamples.removeAll()
+        displayLink.isPaused = notification.name == UIApplication.willResignActiveNotification
+        refreshLabels()
     }
 
     private func refreshLabels() {
         let memoryMB = Double(MemoryProbe.footprintBytes()) / 1_048_576
-        hostLabel.text = String(format: "HOST     %5.1f fps   %6.1f MB", hostFPS, memoryMB)
+        hostLabel.text = String(format: "HOST     %5.1f fps   %6.1f MiB footprint", hostFPS, memoryMB)
 
-        let routeToShow = activeFlutterRoute ?? lastSelectedFlutterRoute
-        if let route = routeToShow, let sample = flutterSamples[route] {
-            let backgroundSuffix = activeFlutterRoute == nil ? " bg" : ""
+        if let route = activeFlutterRoute, let sample = flutterSamples[route],
+           CACurrentMediaTime() - sample.receivedAt <= 2 {
             flutterLabel.text = String(
-                format: "FLUTTER  %@%@  UI %.1f ms  raster %.1f ms  %.0f fps",
+                format: "FLUTTER  %@  UI %.1f ms  raster %.1f ms  %.0f fps",
                 route,
-                backgroundSuffix,
                 sample.uiMillis,
                 sample.rasterMillis,
                 sample.fps
             )
         } else if let route = activeFlutterRoute {
-            flutterLabel.text = "FLUTTER  \(route)  waiting for frames…"
+            flutterLabel.text = "FLUTTER  \(route)  no recent frames"
         } else {
             flutterLabel.text = "FLUTTER  —  no active Flutter engine"
         }
@@ -201,10 +206,10 @@ final class PerformanceHUDView: UIView {
         let summaries = routeOrder.compactMap { route -> String? in
             guard let spawn = engineSpawns[route] else { return nil }
             let deltaMB = Double(spawn.deltaBytes) / 1_048_576
-            return String(format: "%@ %+.1f MB/%.0f ms", route, deltaMB, spawn.durationMillis)
+            return String(format: "%@ %+.1f MiB/%.0f ms create", route, deltaMB, spawn.durationMillis)
         }
         enginesLabel.text = summaries.isEmpty
             ? "ENGINES  lazy — none spawned"
-            : "ENGINES  " + summaries.joined(separator: "  ")
+            : "ENGINES  " + summaries.joined(separator: "\n         ")
     }
 }

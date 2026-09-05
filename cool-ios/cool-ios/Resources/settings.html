@@ -727,6 +727,10 @@
       display: block;
     }
 
+    body.demo-inactive * {
+      animation-play-state: paused !important;
+    }
+
     .footer {
       text-align: center;
       padding: 24px 10px;
@@ -764,7 +768,7 @@
         </span>
       </div>
       <div id="webFpsBadge" class="web-fps-badge">
-        <span id="fpsVal">120.0</span> FPS · SMOOTH
+        <span id="fpsVal">—</span> rAF fps · <span id="fpsStatus">measuring</span>
       </div>
     </div>
 
@@ -775,7 +779,7 @@
           ⚡️ Normal Web
         </button>
         <button id="btnLaggy" class="seg-btn" role="tab" aria-selected="false">
-          🐢 Laggy Web
+          🐢 Stress Test
         </button>
       </div>
       <div style="font-size: 11px; color: var(--secondary); font-weight: 600;">
@@ -787,7 +791,7 @@
   <main>
     <!-- LAG SIMULATION NOTIFICATION BANNER -->
     <div class="stress-banner">
-      ⚠️ <strong>Laggy Web Active</strong>: Heavy CSS multi-layer blur compositing, main-thread micro-stalls (~20ms/frame), and forced DOM layout thrashing during scroll are active to demonstrate mobile web ceilings.
+      ⚠️ <strong>Synthetic stress active</strong>: Extra blur, forced layout, and a deliberate 16ms JavaScript stall per callback are enabled. FPS below is measured; this workload is not a general WebView performance limit.
     </div>
 
     <!-- PROFILE CARD -->
@@ -807,24 +811,24 @@
           <span>Engine Telemetry &amp; Resource Vitals</span>
           <span class="telemetry-badge">Live Monitor</span>
         </div>
-        <span id="refreshRateText" style="font-size: 11px; font-family: ui-monospace, monospace; color: var(--secondary);">120 Hz Target</span>
+        <span id="refreshRateText" style="font-size: 11px; font-family: ui-monospace, monospace; color: var(--secondary);">Page callback cadence</span>
       </div>
 
       <div class="stats-grid">
         <div class="stat-box thrashable">
           <span class="stat-label">DOM Nodes</span>
-          <span class="stat-val" id="statNodes">188</span>
+          <span class="stat-val" id="statNodes">—</span>
         </div>
         <div class="stat-box thrashable">
-          <span class="stat-label">Reflow Count</span>
+          <span class="stat-label">Layout probes</span>
           <span class="stat-val" id="statReflows">0</span>
         </div>
         <div class="stat-box thrashable">
-          <span class="stat-label">Frame Time</span>
-          <span class="stat-val" id="statFrameTime">8.3 ms</span>
+          <span class="stat-label">rAF interval</span>
+          <span class="stat-val" id="statFrameTime">—</span>
         </div>
         <div class="stat-box thrashable">
-          <span class="stat-label">Jank Frames</span>
+          <span class="stat-label">Intervals &gt;32ms</span>
           <span class="stat-val" id="statJank">0</span>
         </div>
       </div>
@@ -856,7 +860,7 @@
       <div class="setting-row interactive" id="rowToggleLag">
         <div class="icon" style="--icon-bg: var(--red);">🐢</div>
         <div class="row-copy">
-          <div class="row-title">Simulate Laggy Web</div>
+          <div class="row-title">Synthetic Stress Test</div>
           <div class="row-subtitle">Inject forced reflows &amp; compositing stalls</div>
         </div>
         <div class="toggle" id="switchLagMode"></div>
@@ -974,7 +978,8 @@
     <div class="footer">
       <strong>Hybrid Demo · Native &amp; Web Benchmark</strong><br>
       Bundled Offline Web View · Zero Network Dependencies<br>
-      Toggle between Normal (60/120 FPS) and Laggy mode to demonstrate web performance ceiling.
+      rAF fps measures page callback cadence; the native HUD measures host cadence.<br>
+      Sample settings and storage values are illustrative. Stress mode injects artificial work.
     </div>
   </main>
 
@@ -997,6 +1002,7 @@
     const modeStatusLabel = document.getElementById('modeStatusLabel');
     const webFpsBadge = document.getElementById('webFpsBadge');
     const fpsVal = document.getElementById('fpsVal');
+    const fpsStatus = document.getElementById('fpsStatus');
     const statNodes = document.getElementById('statNodes');
     const statReflows = document.getElementById('statReflows');
     const statFrameTime = document.getElementById('statFrameTime');
@@ -1025,6 +1031,9 @@
     // ==========================================
     function setLagMode(laggy) {
       isLaggy = laggy;
+      btnNormal.setAttribute('aria-selected', String(!laggy));
+      btnLaggy.setAttribute('aria-selected', String(laggy));
+      resetFrameWindow();
 
       if (isLaggy) {
         body.classList.add('laggy-mode');
@@ -1033,7 +1042,6 @@
         switchLagMode.classList.add('on');
         modeStatusLabel.textContent = 'High Load & Thrashing';
         modeStatusLabel.style.color = 'var(--red)';
-        webFpsBadge.className = 'web-fps-badge danger';
       } else {
         body.classList.remove('laggy-mode');
         btnLaggy.classList.remove('active', 'laggy');
@@ -1041,7 +1049,6 @@
         switchLagMode.classList.remove('on');
         modeStatusLabel.textContent = 'Hardware Accelerated';
         modeStatusLabel.style.color = 'var(--secondary)';
-        webFpsBadge.className = 'web-fps-badge';
         // Reset transforms
         const items = document.querySelectorAll('.thrashable');
         for (let i = 0; i < items.length; i++) {
@@ -1150,59 +1157,86 @@
     // ==========================================
     // HIGH PRECISION FPS & TELEMETRY ENGINE
     // ==========================================
-    let lastFrameTime = performance.now();
-    let frameTimes = [];
-    let historyPoints = new Array(30).fill(120);
+    let lastFrameTime = null;
+    let intervalCount = 0;
+    let elapsedMillis = 0;
+    let historyPoints = [];
+    let animationFrame = null;
+    let hostVisible = true;
+
+    function resetFrameWindow() {
+      lastFrameTime = null;
+      intervalCount = 0;
+      elapsedMillis = 0;
+      historyPoints = [];
+      fpsVal.textContent = '—';
+      fpsStatus.textContent = 'measuring';
+      statFrameTime.textContent = '—';
+      webFpsBadge.className = 'web-fps-badge';
+      sparklineLine.setAttribute('d', '');
+      sparklineArea.setAttribute('d', '');
+    }
+
+    function updateActivity() {
+      if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+      animationFrame = null;
+      resetFrameWindow();
+      const active = hostVisible && !document.hidden;
+      body.classList.toggle('demo-inactive', !active);
+      if (active) animationFrame = requestAnimationFrame(tick);
+      else fpsStatus.textContent = 'paused';
+    }
+
+    window.setDemoActive = (active) => {
+      hostVisible = Boolean(active);
+      updateActivity();
+    };
+    document.addEventListener('visibilitychange', updateActivity);
 
     function tick(now) {
-      const delta = now - lastFrameTime;
+      animationFrame = null;
+      if (!hostVisible || document.hidden) return;
+      const delta = lastFrameTime === null ? 0 : now - lastFrameTime;
       lastFrameTime = now;
 
       // In laggy mode, execute calibrated frame stall to simulate web main-thread bottleneck
       if (isLaggy) {
         runLayoutThrash(thrashIntensity * 2);
-        burnMainThread(16); // ~16ms stall brings frame rate down to ~25-35 FPS
+        burnMainThread(16); // Inject work; never prescribe the resulting FPS.
       }
 
-      const instantFps = delta > 0 ? Math.min(120, 1000 / delta) : 60;
-      frameTimes.push(instantFps);
-      if (frameTimes.length > 20) frameTimes.shift();
+      if (delta > 0) {
+        intervalCount++;
+        elapsedMillis += delta;
+        if (delta > 32) jankCounter++;
+      }
 
-      const avgFps = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
-      const currentFps = isLaggy ? Math.min(avgFps, 32 + (Math.random() * 8)) : avgFps;
-
-      // Update HUD
-      fpsVal.textContent = currentFps.toFixed(1);
-      statFrameTime.textContent = delta.toFixed(1) + ' ms';
-
-      if (delta > 32) {
-        jankCounter++;
+      // Count intervals over elapsed time (not the biased mean of 1/delta).
+      // Refresh DOM/graph at most four times per second to limit meter overhead.
+      if (elapsedMillis >= 250) {
+        const currentFps = 1000 * intervalCount / elapsedMillis;
+        fpsVal.textContent = currentFps.toFixed(1);
+        fpsStatus.textContent = isLaggy ? 'stress' : 'normal';
+        statFrameTime.textContent = (elapsedMillis / intervalCount).toFixed(1) + ' ms';
         statJank.textContent = jankCounter;
+        webFpsBadge.className = currentFps < 45 ? 'web-fps-badge danger' : 'web-fps-badge';
+        historyPoints.push(currentFps);
+        if (historyPoints.length > 30) historyPoints.shift();
+        renderSparkline(historyPoints);
+        intervalCount = 0;
+        elapsedMillis = 0;
       }
 
-      if (isLaggy) {
-        webFpsBadge.className = 'web-fps-badge danger';
-        webFpsBadge.innerHTML = `<span id="fpsVal">${currentFps.toFixed(1)}</span> FPS · JANK`;
-      } else {
-        webFpsBadge.className = 'web-fps-badge';
-        webFpsBadge.innerHTML = `<span id="fpsVal">${currentFps.toFixed(1)}</span> FPS · SMOOTH`;
-      }
-
-      // Update Sparkline
-      historyPoints.push(currentFps);
-      if (historyPoints.length > 30) historyPoints.shift();
-      renderSparkline(historyPoints);
-
-      requestAnimationFrame(tick);
+      animationFrame = requestAnimationFrame(tick);
     }
-    requestAnimationFrame(tick);
+    updateActivity();
 
     function renderSparkline(points) {
       const width = 300;
       const height = 50;
       const minVal = 0;
-      const maxVal = 130;
-      const step = width / (points.length - 1);
+      const maxVal = Math.max(60, ...points);
+      const step = width / Math.max(1, points.length - 1);
 
       let dLine = '';
       let dArea = `M 0 ${height} `;

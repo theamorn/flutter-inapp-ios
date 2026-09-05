@@ -16,7 +16,7 @@ final class AppEngines {
     private var engines: [String: FlutterEngine] = [:]
     private var telemetryChannels: [String: FlutterMethodChannel] = [:]
 
-    /// Spawn cost is finalised on an engine's first reported frame, not when
+    /// Spawn memory is sampled on an engine's first telemetry batch, not when
     /// makeEngine returns. See `finalizeSpawnCost(for:)`.
     private struct PendingSpawn {
         let baselineBytes: UInt64
@@ -45,12 +45,10 @@ final class AppEngines {
         options.initialRoute = route
         let engine = group.makeEngine(with: options)
 
-        // makeEngine returns as soon as the engine object exists; the Dart
-        // isolate is still spinning up behind it. Sampling phys_footprint here
-        // would miss most of the engine's cost and read differently every run.
-        // The wall time below is real, but the memory delta is deferred to the
-        // engine's first frame, where the number is both stable and defensible:
-        // what this tab actually costs once it is live and rendering.
+        // This times the synchronous creation call, not time-to-first-frame.
+        // Memory is sampled at the first telemetry batch: a process-wide delta
+        // including concurrent allocations and initial assets, not isolated
+        // engine memory. Scene asset loading may still be in progress then.
         let spawnMillis = (CACurrentMediaTime() - start) * 1_000
 
         pendingSpawns[route] = PendingSpawn(
@@ -63,8 +61,8 @@ final class AppEngines {
         return engine
     }
 
-    /// Closes out a deferred spawn measurement on the engine's first frame.
-    /// A no-op for every frame after the first.
+    /// Closes out a deferred memory measurement on the first telemetry batch.
+    /// A no-op for subsequent batches.
     private func finalizeSpawnCost(for route: String) {
         dispatchPrecondition(condition: .onQueue(.main))
         guard let pending = pendingSpawns.removeValue(forKey: route) else { return }

@@ -41,7 +41,7 @@ object AppEngines {
     private val telemetryChannels = mutableMapOf<String, MethodChannel>()
 
     /**
-     * Spawn cost is finalised on an engine's first reported frame, not when
+     * Spawn memory is sampled on an engine's first telemetry batch, not when
      * [FlutterEngineGroup.createAndRunEngine] returns. See [finalizeSpawnCost].
      */
     private data class PendingSpawn(
@@ -75,13 +75,10 @@ object AppEngines {
             route,
         )
 
-        // createAndRunEngine returns as soon as the engine object exists and the
-        // entrypoint has been handed to the Dart executor; the isolate is still
-        // spinning up behind it. Sampling PSS here would miss most of the
-        // engine's cost and read differently every run. The wall time below is
-        // real, but the memory delta is deferred to the engine's first reported
-        // frame, where the number is both stable and defensible: what this tab
-        // actually costs once it is live and rendering.
+        // This times the synchronous creation call, not time-to-first-frame.
+        // Memory is sampled at the first telemetry batch: a process-wide delta
+        // including concurrent allocations and initial assets, not isolated
+        // engine memory or a settled tab footprint.
         val spawnMillis = (System.nanoTime() - start) / 1_000_000.0
 
         pendingSpawns[route] = PendingSpawn(
@@ -96,8 +93,8 @@ object AppEngines {
     }
 
     /**
-     * Closes out a deferred spawn measurement on the engine's first frame.
-     * A no-op for every frame after the first.
+     * Closes out a deferred memory measurement on the first telemetry batch.
+     * A no-op for subsequent batches.
      */
     private fun finalizeSpawnCost(route: String) {
         val pending = pendingSpawns.remove(route) ?: return
@@ -152,8 +149,8 @@ object AppEngines {
  * Process memory, measured natively. Never sourced from Flutter — if Flutter
  * measured its own footprint the audience could reasonably call the meter rigged.
  *
- * iOS quotes `task_vm_info.phys_footprint`. The closest Android equivalent, and
- * the number Android Studio's memory profiler shows, is total PSS.
+ * iOS uses physical footprint; this host uses total PSS. These are distinct
+ * accounting methods and must not be presented as an identical metric.
  */
 object MemoryProbe {
     fun footprintBytes(): Long {
