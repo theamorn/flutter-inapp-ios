@@ -6,6 +6,7 @@ import 'package:flutter_module/app_screen.dart';
 import 'package:flutter_module/game_screen.dart';
 import 'package:flutter_module/shader_screen.dart';
 import 'package:flutter_module/tabs/game/game_app.dart';
+import 'package:flutter_module/tabs/scene/scene_app.dart';
 import 'package:flutter_module/telemetry/frame_telemetry.dart';
 
 void main() {
@@ -21,10 +22,7 @@ void main() {
       title: 'Liquid Glass',
       icon: Icons.water_drop,
     ),
-    '/scene' => const HybridFeaturePlaceholderApp(
-      title: 'Island Scene',
-      icon: Icons.landscape,
-    ),
+    '/scene' => const IslandSceneApp(),
     _ => const MyApp(),
   });
 }
