@@ -6,8 +6,11 @@ import android.view.Choreographer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -243,16 +247,27 @@ fun PerformanceHud(modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * One metric line. Shrinks to fit rather than wrapping — the iOS labels set
+ * `adjustsFontSizeToFitWidth` with `minimumScaleFactor = 0.75`, and a wrapped
+ * line would change the HUD's height and break the side-by-side photo.
+ */
 @Composable
 private fun HudMetric(text: String) {
-    Text(
+    BasicText(
         text = text,
-        color = Color.White,
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 12.sp,
-        lineHeight = 15.sp,
-        modifier = Modifier.padding(top = 2.dp),
+        style = TextStyle(
+            color = Color.White,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 12.sp,
+            lineHeight = 15.sp,
+        ),
+        maxLines = 1,
+        autoSize = TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 12.sp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp),
     )
 }
 

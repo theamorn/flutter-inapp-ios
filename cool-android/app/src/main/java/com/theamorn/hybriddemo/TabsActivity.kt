@@ -7,18 +7,25 @@ import android.widget.FrameLayout
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.SportsEsports
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
@@ -192,17 +199,36 @@ class TabsActivity : FragmentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @androidx.compose.runtime.Composable
 private fun TabsScaffold(
     selectedTab: Int,
     onSelectTab: (Int) -> Unit,
     onBottomBarHeight: (Int) -> Unit,
 ) {
+    // The HUD is a sibling of the whole Scaffold, not part of its body.
+    // Material3's ScaffoldLayout places topBar and bottomBar *after* the body,
+    // so a HUD inside the body would be drawn under the app bar. iOS puts its
+    // HUD on the window, above everything; this is the same thing.
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         // Transparent so the hole-punched Flutter surface below the window is
         // visible through the Scaffold body on the game tab.
         containerColor = Color.Transparent,
-        contentColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        topBar = {
+            // iOS wraps Home (but not the Flutter tab) in a UINavigationController
+            // with a large "Home" title. Mirror that, and only on tab 1.
+            if (selectedTab == 0) {
+                LargeTopAppBar(
+                    title = { Text("Home") },
+                    colors = TopAppBarDefaults.largeTopAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                    ),
+                )
+            }
+        },
         bottomBar = {
             NavigationBar(modifier = Modifier.onSizeChanged { onBottomBarHeight(it.height) }) {
                 NavigationBarItem(
@@ -230,22 +256,24 @@ private fun TabsScaffold(
             }
         },
     ) { insets ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            when (selectedTab) {
-                0 -> HomeScreen(contentPadding = insets)
-                // The game tab draws nothing: Flutter is behind this window.
-                else -> Box(Modifier.fillMaxSize())
-            }
-
-            PerformanceHud(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(
-                        top = insets.calculateTopPadding() + 8.dp,
-                        end = 8.dp,
-                        start = 8.dp,
-                    ),
-            )
+        when (selectedTab) {
+            0 -> HomeScreen(contentPadding = insets)
+            // The game tab draws nothing: Flutter is behind this window.
+            else -> Box(Modifier.fillMaxSize())
         }
+    }
+
+        // Pinned to the status bar, not to the Scaffold's content inset, so the
+        // HUD sits in the same place on both tabs and floats over the app bar —
+        // exactly where the iOS window-level overlay sits.
+        PerformanceHud(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(
+                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp,
+                    end = 8.dp,
+                    start = 8.dp,
+                ),
+        )
     }
 }

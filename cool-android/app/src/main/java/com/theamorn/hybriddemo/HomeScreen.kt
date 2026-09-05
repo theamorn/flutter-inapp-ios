@@ -28,9 +28,9 @@ import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.Forum
-import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PhoneAndroid
@@ -40,7 +40,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TrackChanges
-import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -105,7 +105,7 @@ fun HomeScreen(
                 WeeklySummaryRow()
                 RowDivider()
                 DisclosureRow(
-                    icon = Icons.Filled.TrendingUp,
+                    icon = Icons.AutoMirrored.Filled.TrendingUp,
                     title = "Activity snapshot",
                     subtitle = "You completed 12 tasks this week",
                 )
@@ -180,7 +180,7 @@ fun HomeScreen(
                 title = "SUPPORT",
                 footer = "Hybrid Demo 1.0 (Build 42)",
             ) {
-                DisclosureRow(Icons.Filled.HelpOutline, "Help center", "Guides and frequently asked questions")
+                DisclosureRow(Icons.AutoMirrored.Filled.HelpOutline, "Help center", "Guides and frequently asked questions")
                 RowDivider()
                 DisclosureRow(Icons.Filled.AutoAwesome, "What's new", "See the latest improvements")
                 RowDivider()
@@ -323,7 +323,7 @@ private fun DisclosureRow(icon: ImageVector, title: String, subtitle: String?) {
         leadingContent = { Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
         trailingContent = {
             Icon(
-                Icons.Filled.KeyboardArrowRight,
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
