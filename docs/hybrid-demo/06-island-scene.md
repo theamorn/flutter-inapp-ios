@@ -69,7 +69,7 @@ A **2D overlay** composited over the 3D render, not 3D particles. Far cheaper, a
 
 ### Readout
 
-Triangle count and draw calls on screen, next to the HUD's framerate.
+Triangle count and mesh count on screen, next to the HUD's framerate. **Not labelled "draw calls"** — see the Findings for why that would overstate what is measured.
 
 ### Visibility
 
@@ -89,7 +89,7 @@ The engine stays alive when the host hides the tab. The render loop must stop, o
 - [x] Camera orbits and zooms smoothly, clamped sensibly. — implemented via `OrbitCameraController`; **clamping and smoothing not exercised by hand** (no way to drag a simulator programmatically).
 - [x] Tapping anywhere on the island moves the character there, facing the direction of travel, with a visible tap marker. — verified on the simulator through the auto-demo probe, including off-centre positions.
 - [x] Day→night slider works smoothly end to end and swaps the particle layer. — verified by sweeping `timeOfDay` and screenshotting day, dusk and night.
-- [x] Triangle count and draw calls are displayed.
+- [x] Triangle count and draw calls are displayed. — displayed, but the second number is labelled **meshes**, not draw calls; the criterion as written asked for a number `flutter_scene` does not expose (see Findings).
 - [ ] Full refresh rate held during simultaneous orbit + character movement + day/night sweep. — **NOT VERIFIED: needs release-on-device. Debug simulator timings are not evidence.**
 - [x] Render loop stops when the tab is not visible. — **verified on the simulator** by backgrounding the app: one `render loop stopped` log line, one `render loop resumed`, and the scene returns intact. **The add-to-app tab-switch path specifically is still unverified** (see Findings).
 
@@ -282,7 +282,9 @@ The signal driving it is `didChangeAppLifecycleState`, and it **fails open** —
 
 ### Draw calls: what the number actually counts
 
-`flutter_scene` exposes no draw-call counter. The readout counts **mesh primitives in the visible scene graph** — one per colour-pass draw. It does **not** include the shadow pass, the skybox, the IBL bake or the post stack, so the real GPU draw count is higher. On stage the honest phrasing is "36 meshes in the scene graph"; do not claim it is the total GPU draw count.
+`flutter_scene` exposes no draw-call counter, so **this acceptance criterion cannot be met as written** and the readout does not pretend otherwise: it says `36 meshes`.
+
+What it counts is mesh primitives in the visible scene graph — one draw each in the colour pass. It does **not** include the shadow pass, the skybox, the IBL bake or the post stack, so the real GPU draw count is higher. Labelling it "36 draw calls" on a slide would be a number that does not survive being questioned, on the one tab whose job is to be questioned. The field is named `meshCount` in code so it cannot quietly drift back.
 
 Triangles are exact: `Geometry.extractMeshData().triangleCount`, summed per instance and cached per geometry, counted once at build time (the scene is static in count). `Geometry.cpuMeshData` would give the same numbers without the copy, but it is `@internal` and using it trips `invalid_use_of_internal_member`.
 
