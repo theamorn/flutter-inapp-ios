@@ -22,10 +22,11 @@ This is the tab that makes the development-cost argument. The same screen runs i
 
 | File | Change |
 |---|---|
-| `flutter_module/shaders/liquid_glass.glsl` | **new** |
-| `flutter_module/pubspec.yaml` | list the new shader under `flutter: shaders:` |
-| `flutter_module/lib/tabs/glass/glass_app.dart` | **new** — widget for route `/glass` |
-| `flutter_module/lib/tabs/glass/liquid_glass.dart` | **new** — `AnimatedSampler` + painter |
+| `flutter_module/shaders/liquid_glass.glsl` | **new** — in-house custom fragment shader |
+| `flutter_module/pubspec.yaml` | list the new shader + `liquid_glass_renderer` package |
+| `flutter_module/lib/tabs/glass/glass_app.dart` | **new** — widget for route `/glass` with tab mode toggle |
+| `flutter_module/lib/tabs/glass/liquid_glass.dart` | **new** — `AnimatedSampler` + custom painter |
+| `flutter_module/lib/tabs/glass/package_liquid_glass.dart` | **new** — `liquid_glass_renderer` integration with `FakeGlass` fallback |
 | `flutter_module/lib/main.dart` | wire `/glass` |
 
 ## Implementation notes
@@ -63,9 +64,44 @@ AnimatedSampler(
 
 Day/night (drives the palette and the glass tint), refraction strength, glass thickness. Make them real-time — the presenter drags them on stage.
 
+## Inner Tab: In-House Custom Shader vs `liquid_glass_renderer` Library
+
+Tab 4 now includes a top segmented control allowing instant comparison between the custom in-house shader and the community package [`liquid_glass_renderer`](https://pub.dev/packages/liquid_glass_renderer).
+
+### Comparison Matrix
+
+| Aspect | In-House Custom Shader (`liquid_glass.glsl`) | `liquid_glass_renderer` Package (`^0.2.0-dev.4`) |
+|---|---|---|
+| **Pipeline** | Single-pass fragment shader over `AnimatedSampler` | Multi-layer compositor (`LiquidGlassLayer` + `LiquidGlass`) |
+| **Geometry** | Rounded rect SDF in GLSL | SDF geometry (`LiquidRoundedSuperellipse`, `LiquidOval`, `LiquidRoundedRectangle`) cached to offscreen textures |
+| **Multi-shape Blending** | Single bounding panel | Metaball / smooth-min blending across shapes via `LiquidGlassBlendGroup` (up to 16 shapes) |
+| **Optical Controls** | Refraction offset, subtle chromatic aberration, specular rim, day/night lerp | Refraction, blur, light angle/intensity, ambient light, saturation boost, chromatic aberration |
+| **Interactivity** | Touch-driven propagating wave ripples via continuous clock | `GlassGlow` (touch light tracking) and `LiquidStretch` (jelly squash & stretch) |
+| **Fallback** | Direct bypass | Built-in `FakeGlass` (backdrop filter based, no shader refraction) |
+
+### Limitations & Performance Trade-offs
+
+1. **Engine Requirement (Impeller Only)**:
+   - `liquid_glass_renderer` strictly requires **Impeller** because its architecture depends on synchronous scene texture capture (`scene.toImageSync`) and `ImageFilter.shader`.
+   - On **Skia**, Web, Windows, and Linux, the package automatically degrades or issues a warning, falling back to `FakeGlass`.
+2. **Animation Memory Spike (Flutter Issue #138627)**:
+   - Flutter's engine does not immediately dispose intermediate scene textures. Moving or animating glass shapes continuously causes transient memory spikes and GC churn.
+   - *Mitigation*: Keep shapes stationary where possible, or use `FakeGlass` during heavy animations.
+3. **GPU Fill-Rate & Thermal Impact**:
+   - `LiquidGlassLayer` and `LiquidGlassBlendGroup` allocate offscreen textures covering their full bounding boxes.
+   - On high-DPI (Retina @3x) devices, large glass layers demand high fill-rate and can trigger device heating or thermal throttling over prolonged usage.
+4. **Blur + Blending Artifacts (Flutter Issue #170820)**:
+   - Combining background blur with shape blending in `LiquidGlassBlendGroup` introduces visible edge artifacts.
+5. **Shape Budget**:
+   - Limit blended shapes to $\le 4-8$ per group; hard engine cap at 16 shapes.
+
 ## The talk track
 
 This is iOS 26's Liquid Glass aesthetic, in one codebase, running identically on iOS and Android — where the platform gives you nothing equivalent and you would be hand-rolling it. And it ripples under your finger, because the shader takes the live widget tree as input: impractical in UIKit, impossible in a WebView.
+
+Having both the in-house GLSL shader and the community `liquid_glass_renderer` package in the same tab lets you demonstrate the trade-offs live:
+- The in-house shader demonstrates a predictable, single-pass, low-overhead pipeline tailored for maximum 120fps responsiveness and zero GC spikes.
+- The `liquid_glass_renderer` package demonstrates complex superellipse geometries, multi-shape metaball merging, and how Impeller's new capabilities enable advanced effects with built-in `FakeGlass` fallbacks.
 
 ## Gotchas
 
@@ -73,6 +109,7 @@ This is iOS 26's Liquid Glass aesthetic, in one codebase, running identically on
 - `AnimatedSampler` snapshots its child every frame. Keep the subtree beneath the glass reasonably sized — snapshotting the entire screen including the glass itself creates a feedback loop.
 - Do not put the glass inside its own `AnimatedSampler` subtree. It must be a sibling drawn over the content, or you get recursive sampling.
 - GLSL in Flutter has restrictions: no dynamic-length loops, no `texture()` with computed LOD. Keep loops bounded by constants.
+- `liquid_glass_renderer` requires Impeller; on Skia or during headless tests without shader support, ensure `FakeGlass` fallback handles the rendering gracefully.
 - Test on Android before declaring parity. Impeller's GLSL handling differs from Skia's, and a shader that works on iOS can fail to compile on Android.
 
 ## Acceptance criteria

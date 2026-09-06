@@ -4,23 +4,34 @@ import android.content.Context
 import android.os.Build
 import android.os.SystemClock
 import android.view.Choreographer
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -37,6 +48,22 @@ import java.util.Locale
  * `CADisplayLink`) and memory from [MemoryProbe].
  */
 object PerformanceHudState {
+
+    enum class DisplayMode {
+        EXPANDED,
+        MINIMIZED,
+    }
+
+    var displayMode by mutableStateOf(DisplayMode.EXPANDED)
+    var hudBoundsInRoot by mutableStateOf<Rect?>(null)
+
+    fun toggleDisplayMode() {
+        displayMode = if (displayMode == DisplayMode.EXPANDED) {
+            DisplayMode.MINIMIZED
+        } else {
+            DisplayMode.EXPANDED
+        }
+    }
 
     private data class FlutterSample(
         val uiMillis: Double,
@@ -218,40 +245,97 @@ object PerformanceHudState {
  */
 @Composable
 fun PerformanceHud(modifier: Modifier = Modifier) {
+    val mode = PerformanceHudState.displayMode
     val hostText = PerformanceHudState.hostLine()
     val flutterText = PerformanceHudState.flutterLine()
     val enginesText = PerformanceHudState.enginesLine()
     val panelText = PerformanceHudState.panelDescription
 
-    Column(
+    Box(
         modifier = modifier
-            .widthIn(max = 520.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color.Black.copy(alpha = 0.84f))
-            .border(1.dp, HudGreen.copy(alpha = 0.75f), RoundedCornerShape(10.dp))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .onGloballyPositioned { coordinates ->
+                PerformanceHudState.hudBoundsInRoot = coordinates.boundsInRoot()
+            }
+            .animateContentSize(),
     ) {
-        Text(
-            text = "LIVE PERFORMANCE",
-            color = HudGreen,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Bold,
-            fontSize = 12.sp,
-            lineHeight = 15.sp,
-        )
-        HudMetric(hostText)
-        HudMetric(flutterText)
-        HudMetric(enginesText)
-        if (panelText.isNotEmpty()) {
-            Text(
-                text = panelText,
-                color = Color.White.copy(alpha = 0.55f),
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Normal,
-                fontSize = 10.sp,
-                lineHeight = 13.sp,
-                modifier = Modifier.padding(top = 2.dp),
-            )
+        if (mode == PerformanceHudState.DisplayMode.MINIMIZED) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.Black.copy(alpha = 0.84f))
+                    .border(1.dp, HudGreen.copy(alpha = 0.75f), RoundedCornerShape(14.dp))
+                    .clickable { PerformanceHudState.toggleDisplayMode() }
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .background(HudGreen, CircleShape),
+                )
+                Text(
+                    text = String.format(Locale.US, "%.0f FPS ▾", PerformanceHudState.hostFps),
+                    color = Color.White,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                )
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 520.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.Black.copy(alpha = 0.84f))
+                    .border(1.dp, HudGreen.copy(alpha = 0.75f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "LIVE PERFORMANCE",
+                        color = HudGreen,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        lineHeight = 15.sp,
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(HudGreen.copy(alpha = 0.18f))
+                            .border(0.5.dp, HudGreen.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                            .clickable { PerformanceHudState.toggleDisplayMode() }
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = "Hide ▴",
+                            color = HudGreen,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 10.sp,
+                        )
+                    }
+                }
+                HudMetric(hostText)
+                HudMetric(flutterText)
+                HudMetric(enginesText)
+                if (panelText.isNotEmpty()) {
+                    Text(
+                        text = panelText,
+                        color = Color.White.copy(alpha = 0.55f),
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 10.sp,
+                        lineHeight = 13.sp,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
         }
     }
 }

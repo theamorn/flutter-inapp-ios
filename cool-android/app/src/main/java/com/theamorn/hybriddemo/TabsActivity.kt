@@ -40,6 +40,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.dp
@@ -107,6 +108,7 @@ class TabsActivity : FragmentActivity() {
     private var bottomBarHeightPx = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        GameScoreManager.init(this)
         selectedTab = savedInstanceState?.getInt(SELECTED_TAB_KEY, TAB_HOME) ?: TAB_HOME
 
         // FragmentManager restores cached-engine fragments during super.onCreate.
@@ -352,12 +354,28 @@ class TabsActivity : FragmentActivity() {
 }
 
 /**
- * A container that never handles touches, so `ViewGroup` dispatch continues to
- * the views beneath it. The Android equivalent of the iOS HUD's
- * `isUserInteractionEnabled = false`.
+ * A container that routes touches to the HUD when tapping inside its bounds
+ * (allowing collapse/expand), while letting touches anywhere else fall
+ * cleanly through to the underlying tab views (game, scene, web, home).
  */
 private class PassThroughHost(context: Context) : FrameLayout(context) {
-    override fun dispatchTouchEvent(ev: MotionEvent): Boolean = false
+    private var trackingHudTouch = false
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+            val bounds = PerformanceHudState.hudBoundsInRoot
+            trackingHudTouch = bounds != null && bounds.contains(Offset(ev.x, ev.y))
+        }
+        if (trackingHudTouch) {
+            val handled = super.dispatchTouchEvent(ev)
+            if (ev.actionMasked == MotionEvent.ACTION_UP || ev.actionMasked == MotionEvent.ACTION_CANCEL) {
+                trackingHudTouch = false
+            }
+            return handled
+        }
+        return false
+    }
+
     override fun onTouchEvent(event: MotionEvent): Boolean = false
 }
 

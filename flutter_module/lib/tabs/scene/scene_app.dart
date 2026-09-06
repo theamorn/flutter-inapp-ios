@@ -5,7 +5,7 @@ import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_scene/scene.dart';
+import 'package:flutter_scene/scene.dart' hide Material;
 import 'package:flutter_module/tabs/scene/island_scene.dart';
 import 'package:flutter_module/tabs/scene/particles.dart';
 
@@ -72,6 +72,7 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
   /// base. Fails *open*: only an explicit paused/hidden/detached stops it, so
   /// an embedder that never reports `resumed` still renders.
   bool _renderLoopActive = true;
+  bool _uiVisible = true;
 
   double _timeOfDay = 10.5;
   double _nightBlend = 0;
@@ -150,7 +151,7 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
   }
 
   void _onTick(Duration elapsed, double deltaSeconds) {
-    _island.tick(deltaSeconds);
+    _island.tick(deltaSeconds, viewportSize: _viewSize);
     _particles.advance(deltaSeconds);
     _frame.value = _frame.value + 1;
 
@@ -175,6 +176,13 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
     _pointerDownStamp = _pointerClock.elapsed;
   }
 
+  void _onPointerMove(PointerMoveEvent event) {
+    if (_island.cameraMode == IslandCameraMode.overTheShoulder &&
+        _pointerDownAt != null) {
+      _island.rotateOtsCamera(event.delta.dx, event.delta.dy);
+    }
+  }
+
   void _onPointerUp(PointerUpEvent event) {
     final downAt = _pointerDownAt;
     _pointerDownAt = null;
@@ -195,6 +203,7 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
       return;
     }
     _island.tapAt(local, size);
+    setState(() {});
   }
 
   void _runAutoDemoStep() {
@@ -246,8 +255,9 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
             const _LoadingPanel()
           else ...<Widget>[
             Listener(
-              behavior: HitTestBehavior.deferToChild,
+              behavior: HitTestBehavior.translucent,
               onPointerDown: _onPointerDown,
+              onPointerMove: _onPointerMove,
               onPointerUp: _onPointerUp,
               child: SizedBox.expand(
                 key: _viewKey,
@@ -263,7 +273,8 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
                   enabled: _renderLoopActive,
                   child: CameraControls(
                     controller: _island.orbit,
-                    enabled: _renderLoopActive,
+                    enabled: _renderLoopActive &&
+                        _island.cameraMode == IslandCameraMode.orbit,
                     autofocus: false,
                     child: SceneView(
                       _island.scene,
@@ -289,16 +300,124 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
                   ),
                 ),
               ),
-            _Readout(
-              triangles: _island.triangleCount,
-              meshes: _island.meshCount,
-              timeOfDay: _timeOfDay,
-              renderLoopActive: _renderLoopActive,
+            AnimatedOpacity(
+              opacity: _uiVisible ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeInOut,
+              child: IgnorePointer(
+                ignoring: !_uiVisible,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    SafeArea(
+                      child: Align(
+                        alignment: Alignment.topLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              AnimatedBuilder(
+                                animation: _frame,
+                                builder: (context, _) {
+                                  return _Readout(
+                                    triangles: _island.triangleCount,
+                                    meshes: _island.meshCount,
+                                    timeOfDay: _timeOfDay,
+                                    renderLoopActive: _renderLoopActive,
+                                    ultraMode: _island.isUltraMode,
+                                    campfireLit: _island.campfireLit,
+                                    cameraMode: _island.cameraMode,
+                                    culledMeshes: _island.culledMeshCount,
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: <Widget>[
+                                  _ModeSelector(
+                                    ultraMode: _island.isUltraMode,
+                                    onModeChanged: (ultra) {
+                                      setState(() {
+                                        _island.setUltraMode(ultra);
+                                      });
+                                    },
+                                  ),
+                                  _CameraSelector(
+                                    cameraMode: _island.cameraMode,
+                                    onCameraChanged: (mode) {
+                                      setState(() {
+                                        _island.setCameraMode(mode);
+                                      });
+                                    },
+                                  ),
+                                  _FullscreenButton(
+                                    onTap: () {
+                                      setState(() {
+                                        _uiVisible = false;
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    _ActionButtons(
+                      cameraMode: _island.cameraMode,
+                      onToggleCamera: () {
+                        setState(() {
+                          _island.toggleCameraMode();
+                        });
+                      },
+                      onPunch: () {
+                        _island.punch();
+                        setState(() {});
+                      },
+                      onJump: () {
+                        _island.jump();
+                      },
+                      onResetBalls: () {
+                        _island.resetBalls();
+                        setState(() {});
+                      },
+                    ),
+                    _DayNightSlider(
+                      value: _timeOfDay,
+                      nightBlend: _nightBlend,
+                      onChanged: _onTimeChanged,
+                    ),
+                  ],
+                ),
+              ),
             ),
-            _DayNightSlider(
-              value: _timeOfDay,
-              nightBlend: _nightBlend,
-              onChanged: _onTimeChanged,
+            AnimatedOpacity(
+              opacity: _uiVisible ? 0.0 : 1.0,
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeInOut,
+              child: IgnorePointer(
+                ignoring: _uiVisible,
+                child: SafeArea(
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: _ExitFullscreenButton(
+                        onTap: () {
+                          setState(() {
+                            _uiVisible = true;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ],
@@ -367,12 +486,20 @@ class _Readout extends StatelessWidget {
     required this.meshes,
     required this.timeOfDay,
     required this.renderLoopActive,
+    required this.ultraMode,
+    required this.campfireLit,
+    required this.cameraMode,
+    required this.culledMeshes,
   });
 
   final int triangles;
   final int meshes;
   final double timeOfDay;
   final bool renderLoopActive;
+  final bool ultraMode;
+  final bool campfireLit;
+  final IslandCameraMode cameraMode;
+  final int culledMeshes;
 
   static String _clock(double hours) {
     final total = (hours * 60).round() % (24 * 60);
@@ -395,54 +522,408 @@ class _Readout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Align(
-        alignment: Alignment.topLeft,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.42),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 9,
-              ),
-              child: DefaultTextStyle(
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.46),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.12),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 13,
+          vertical: 10,
+        ),
+        child: DefaultTextStyle(
+          style: const TextStyle(
+            fontFamily: 'Menlo',
+            fontSize: 12,
+            height: 1.45,
+            color: Colors.white,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                '${_grouped(triangles)} tris',
                 style: const TextStyle(
                   fontFamily: 'Menlo',
-                  fontSize: 12,
-                  height: 1.45,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
                   color: Colors.white,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      '${_grouped(triangles)} tris',
-                      style: const TextStyle(
-                        fontFamily: 'Menlo',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                    Text('$meshes meshes'),
-                    Text('${_clock(timeOfDay)}  local'),
-                    if (!renderLoopActive)
-                      const Text(
-                        'render loop stopped',
-                        style: TextStyle(
-                          fontFamily: 'Menlo',
-                          fontSize: 12,
-                          color: Color(0xFFFFC46B),
-                        ),
-                      ),
-                  ],
+              ),
+              Text('$meshes meshes'),
+              Text('${_clock(timeOfDay)}  local'),
+              const SizedBox(height: 3),
+              Text(
+                campfireLit
+                    ? '🔥 Fire: ON (PointLight)'
+                    : '💨 Fire: OFF (tap center)',
+                style: TextStyle(
+                  fontFamily: 'Menlo',
+                  fontSize: 11,
+                  color: campfireLit
+                      ? const Color(0xFFFFB74D)
+                      : const Color(0xFF90A4AE),
                 ),
+              ),
+              Text(
+                ultraMode
+                    ? '🔥 Mode: Ultra (8 balls, SSR water bump)'
+                    : '⚡ Mode: Normal (1 ball)',
+                style: TextStyle(
+                  fontFamily: 'Menlo',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: ultraMode
+                      ? const Color(0xFFFF7043)
+                      : const Color(0xFF81C784),
+                ),
+              ),
+              Text(
+                cameraMode == IslandCameraMode.overTheShoulder
+                    ? '👤 Cam: Shoulder (OTS)'
+                    : '🌐 Cam: Orbit (Overview)',
+                style: TextStyle(
+                  fontFamily: 'Menlo',
+                  fontSize: 11,
+                  color: cameraMode == IslandCameraMode.overTheShoulder
+                      ? const Color(0xFFCE93D8)
+                      : const Color(0xFF90CAF9),
+                ),
+              ),
+              if (cameraMode == IslandCameraMode.overTheShoulder)
+                Text(
+                  '👁️ View culling: $culledMeshes off-screen',
+                  style: const TextStyle(
+                    fontFamily: 'Menlo',
+                    fontSize: 11,
+                    color: Color(0xFF80DEEA),
+                  ),
+                ),
+              if (!renderLoopActive)
+                const Text(
+                  'render loop stopped',
+                  style: TextStyle(
+                    fontFamily: 'Menlo',
+                    fontSize: 12,
+                    color: Color(0xFFFFC46B),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ModeSelector extends StatelessWidget {
+  const _ModeSelector({
+    required this.ultraMode,
+    required this.onModeChanged,
+  });
+
+  final bool ultraMode;
+  final ValueChanged<bool> onModeChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.14),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            _PillTab(
+              label: '⚡ Normal',
+              active: !ultraMode,
+              activeColor: const Color(0xFF2E7D32),
+              onTap: () => onModeChanged(false),
+            ),
+            const SizedBox(width: 4),
+            _PillTab(
+              label: '🔥 Ultra',
+              active: ultraMode,
+              activeColor: const Color(0xFFE65100),
+              onTap: () => onModeChanged(true),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PillTab extends StatelessWidget {
+  const _PillTab({
+    required this.label,
+    required this.active,
+    required this.activeColor,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool active;
+  final Color activeColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: active
+                ? activeColor.withValues(alpha: 0.88)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Menlo',
+              fontSize: 12,
+              fontWeight: active ? FontWeight.bold : FontWeight.w500,
+              color: active ? Colors.white : Colors.white.withValues(alpha: 0.72),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CameraSelector extends StatelessWidget {
+  const _CameraSelector({
+    required this.cameraMode,
+    required this.onCameraChanged,
+  });
+
+  final IslandCameraMode cameraMode;
+  final ValueChanged<IslandCameraMode> onCameraChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.14),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            _PillTab(
+              label: '🌐 Orbit',
+              active: cameraMode == IslandCameraMode.orbit,
+              activeColor: const Color(0xFF1565C0),
+              onTap: () => onCameraChanged(IslandCameraMode.orbit),
+            ),
+            const SizedBox(width: 4),
+            _PillTab(
+              label: '👤 Shoulder',
+              active: cameraMode == IslandCameraMode.overTheShoulder,
+              activeColor: const Color(0xFF6A1B9A),
+              onTap: () => onCameraChanged(IslandCameraMode.overTheShoulder),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FullscreenButton extends StatelessWidget {
+  const _FullscreenButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.14),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: _PillTab(
+          label: '🎬 Fullscreen',
+          active: false,
+          activeColor: const Color(0xFF37474F),
+          onTap: onTap,
+        ),
+      ),
+    );
+  }
+}
+
+class _ExitFullscreenButton extends StatelessWidget {
+  const _ExitFullscreenButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.22),
+          width: 1,
+        ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.45),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: _PillTab(
+          label: '👁️ Show UI',
+          active: true,
+          activeColor: const Color(0xFF0288D1),
+          onTap: onTap,
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionButtons extends StatelessWidget {
+  const _ActionButtons({
+    required this.cameraMode,
+    required this.onToggleCamera,
+    required this.onPunch,
+    required this.onJump,
+    required this.onResetBalls,
+  });
+
+  final IslandCameraMode cameraMode;
+  final VoidCallback onToggleCamera;
+  final VoidCallback onPunch;
+  final VoidCallback onJump;
+  final VoidCallback onResetBalls;
+
+  @override
+  Widget build(BuildContext context) {
+    final isOts = cameraMode == IslandCameraMode.overTheShoulder;
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.bottomRight,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(0, 0, 18, 76),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              _ActionButton(
+                label: isOts ? '🌐 Orbit' : '👤 Cam',
+                color: isOts
+                    ? const Color(0xFF1565C0)
+                    : const Color(0xFF6A1B9A),
+                onTap: onToggleCamera,
+              ),
+              const SizedBox(width: 8),
+              _ActionButton(
+                label: '⚽ Reset',
+                color: const Color(0xFF37474F),
+                onTap: onResetBalls,
+              ),
+              const SizedBox(width: 8),
+              _ActionButton(
+                label: '🦘 Jump',
+                color: const Color(0xFF00695C),
+                onTap: onJump,
+              ),
+              const SizedBox(width: 8),
+              _ActionButton(
+                label: '🥊 Punch',
+                color: const Color(0xFFC2185B),
+                onTap: onPunch,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.82),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.25),
+              width: 1,
+            ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.38),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontFamily: 'Menlo',
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
               ),
             ),
           ),

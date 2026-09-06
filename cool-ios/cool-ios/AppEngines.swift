@@ -9,6 +9,7 @@ final class AppEngines {
     static let glassRoute = "/glass"
     static let sceneRoute = "/scene"
     static let telemetryChannelName = "com.theamorn.hybrid/telemetry"
+    static let gameChannelName = "com.theamorn.hybrid/game"
 
     private static let supportedRoutes = [gameRoute, glassRoute, sceneRoute]
 
@@ -57,8 +58,39 @@ final class AppEngines {
         )
 
         attachTelemetryChannel(to: engine, route: route)
+        if route == Self.gameRoute {
+            attachGameChannel(to: engine)
+        }
         engines[route] = engine
         return engine
+    }
+
+    private func attachGameChannel(to engine: FlutterEngine) {
+        let channel = FlutterMethodChannel(
+            name: Self.gameChannelName,
+            binaryMessenger: engine.binaryMessenger
+        )
+        channel.setMethodCallHandler { call, result in
+            guard call.method == "reportScore" else {
+                result(FlutterMethodNotImplemented)
+                return
+            }
+            let score: Int?
+            if let payload = call.arguments as? [String: Any] {
+                score = (payload["score"] as? NSNumber)?.intValue ?? payload["score"] as? Int
+            } else if let number = call.arguments as? NSNumber {
+                score = number.intValue
+            } else {
+                score = call.arguments as? Int
+            }
+
+            if let validScore = score {
+                DispatchQueue.main.async {
+                    GameScoreManager.shared.updateScore(validScore)
+                }
+            }
+            result(nil)
+        }
     }
 
     /// Closes out a deferred memory measurement on the first telemetry batch.
@@ -138,5 +170,34 @@ enum MemoryProbe {
             }
         }
         return result == KERN_SUCCESS ? info.phys_footprint : 0
+    }
+}
+
+extension Notification.Name {
+    static let gameScoreUpdated = Notification.Name("com.theamorn.hybrid.gameScoreUpdated")
+}
+
+final class GameScoreManager {
+    static let shared = GameScoreManager()
+
+    private let userDefaultsKey = "flappy_cat_highest_score"
+
+    private(set) var highestScore: Int {
+        get {
+            UserDefaults.standard.integer(forKey: userDefaultsKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: userDefaultsKey)
+        }
+    }
+
+    private init() {}
+
+    func updateScore(_ score: Int) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        if score > highestScore {
+            highestScore = score
+            NotificationCenter.default.post(name: .gameScoreUpdated, object: nil, userInfo: ["score": score])
+        }
     }
 }

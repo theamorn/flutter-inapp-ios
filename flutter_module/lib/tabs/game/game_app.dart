@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_shaders/flutter_shaders.dart';
 
 import 'flappy_cat_game.dart';
@@ -17,17 +18,28 @@ class FlappyCatApp extends StatefulWidget {
 
 class _FlappyCatAppState extends State<FlappyCatApp>
     with SingleTickerProviderStateMixin {
+  static const _gameChannel = MethodChannel('com.theamorn.hybrid/game');
   late final FlappyCatGame _game;
   late final AnimationController _skyClock;
 
   @override
   void initState() {
     super.initState();
-    _game = FlappyCatGame();
+    _game = FlappyCatGame(onScoreChanged: _reportScore);
     _skyClock = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 60),
     )..repeat();
+  }
+
+  void _reportScore(int score) {
+    try {
+      _gameChannel.invokeMethod<void>('reportScore', {'score': score});
+    } on MissingPluginException {
+      // Expected when running standalone without host.
+    } on PlatformException {
+      // Catch platform exceptions safely.
+    }
   }
 
   @override

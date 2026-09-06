@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TrackChanges
@@ -108,6 +109,13 @@ fun HomeScreen(
                     icon = Icons.AutoMirrored.Filled.TrendingUp,
                     title = "Activity snapshot",
                     subtitle = "You completed 12 tasks this week",
+                )
+                RowDivider()
+                ValueRow(
+                    icon = Icons.Filled.SportsEsports,
+                    title = "Highest Score: ${GameScoreManager.highestScore}",
+                    subtitle = "Flappy Cat",
+                    value = "${GameScoreManager.highestScore}",
                 )
                 RowDivider()
                 QuickActionsRow()

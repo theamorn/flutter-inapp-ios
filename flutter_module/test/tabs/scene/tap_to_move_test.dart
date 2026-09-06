@@ -142,13 +142,36 @@ void main() {
       expect(walker.isMoving, isFalse);
     });
 
-    test('never leaves the ground plane', () {
+    test('never leaves the ground plane when walking', () {
       final walker = WalkerMotion(position: vm.Vector3(0, 0, 0), speed: 3);
       walker.moveTo(vm.Vector3(2, 9, 2));
       for (var i = 0; i < 200; i++) {
         walker.advance(1 / 60);
       }
       expect(walker.position.y, closeTo(0, 1e-9));
+    });
+
+    test('jumps in a ballistic arc and lands back on the ground', () {
+      final walker = WalkerMotion(position: vm.Vector3(0, 0, 0));
+      expect(walker.isJumping, isFalse);
+      final jumped = walker.jump();
+      expect(jumped, isTrue);
+      expect(walker.isJumping, isTrue);
+
+      // Mid-air
+      walker.advance(0.15);
+      expect(walker.position.y, greaterThan(0.3));
+      expect(walker.isJumping, isTrue);
+
+      // Cannot double-jump while airborne
+      expect(walker.jump(), isFalse);
+
+      // Land after arc completes
+      for (var i = 0; i < 80; i++) {
+        walker.advance(1 / 60);
+      }
+      expect(walker.position.y, closeTo(0, 1e-9));
+      expect(walker.isJumping, isFalse);
     });
   });
 
@@ -224,6 +247,143 @@ void main() {
           expect(r, lessThanOrEqualTo(3 + 1e-5));
         }
       }
+    });
+  });
+
+  group('OtsCameraRig', () {
+    const rig = OtsCameraRig(
+      followDistance: 2.0,
+      camHeight: 1.5,
+      shoulderOffset: 0.5,
+      targetHeight: 1.0,
+      lookAheadDistance: 4.0,
+      minGroundClearance: 0.5,
+    );
+
+    test('computes eye behind and over right shoulder when yaw is 0', () {
+      final (eye, target) = rig.compute(
+        characterPosition: vm.Vector3(0, 0, 0),
+        yaw: 0.0,
+      );
+
+      // With yaw=0, forward=(0,0,1), right=(1,0,0)
+      // Eye: -forward*2 + right*0.5 + up*1.5 = (0.5, 1.5, -2.0)
+      expect(eye.x, closeTo(0.5, 1e-5));
+      expect(eye.y, closeTo(1.5, 1e-5));
+      expect(eye.z, closeTo(-2.0, 1e-5));
+
+      // Target: forward*4 + up*1.0 + right*(0.5*0.25)
+      expect(target.x, closeTo(0.125, 1e-5));
+      expect(target.y, closeTo(1.0, 1e-5));
+      expect(target.z, closeTo(4.0, 1e-5));
+    });
+
+    test('tracks character turning to the right (yaw = pi/2)', () {
+      final (eye, target) = rig.compute(
+        characterPosition: vm.Vector3(1, 0, 1),
+        yaw: math.pi / 2,
+      );
+
+      // yaw=pi/2, forward=(1,0,0), right=(0,0,-1)
+      // Eye: pos + (-forward*2 + right*0.5 + up*1.5) = (1-2, 1.5, 1-0.5) = (-1.0, 1.5, 0.5)
+      expect(eye.x, closeTo(-1.0, 1e-5));
+      expect(eye.y, closeTo(1.5, 1e-5));
+      expect(eye.z, closeTo(0.5, 1e-5));
+
+      // Target: pos + (forward*4 + up*1.0 + right*(0.5*0.25)) = (1+4, 1.0, 1-0.125)
+      expect(target.x, closeTo(5.0, 1e-5));
+      expect(target.y, closeTo(1.0, 1e-5));
+      expect(target.z, closeTo(0.875, 1e-5));
+    });
+
+    test('respects min ground clearance floor', () {
+      final (eye, _) = rig.compute(
+        characterPosition: vm.Vector3(0, -2.0, 0),
+        yaw: 0.0,
+        groundY: 0.0,
+      );
+      // Even if char is down at -2.0, eye.y never dips below groundY + minGroundClearance (0.5)
+      expect(eye.y, greaterThanOrEqualTo(0.5));
+    });
+
+    test('default constructor provides tight RE4-style camera framing', () {
+      const defaultRig = OtsCameraRig();
+      expect(defaultRig.followDistance, closeTo(2.0, 1e-5));
+      expect(defaultRig.shoulderOffset, closeTo(0.25, 1e-5));
+      expect(defaultRig.camHeight, closeTo(1.15, 1e-5));
+      expect(defaultRig.lookAheadDistance, closeTo(4.0, 1e-5));
+
+      final (eye, target) = defaultRig.compute(
+        characterPosition: vm.Vector3.zero(),
+        yaw: 0.0,
+      );
+      // Eye: behind right shoulder (2.0m back, 0.25m right, 1.15m high)
+      expect(eye.x, closeTo(0.25, 1e-5));
+      expect(eye.y, closeTo(1.15, 1e-5));
+      expect(eye.z, closeTo(-2.0, 1e-5));
+
+      // Target: looking forward ahead along +Z at 4.0m distance
+      expect(target.x, closeTo(0.0625, 1e-5));
+      expect(target.y, closeTo(0.65, 1e-5));
+      expect(target.z, closeTo(4.0, 1e-5));
+    });
+  });
+
+  group('FrustumCuller', () {
+    const culler = FrustumCuller();
+    // Camera at (0, 1.8, 5.0) looking forward towards (0, 1.0, 0.0)
+    final camera = PerspectiveCamera(
+      fovRadiansY: 45 * vm.degrees2Radians,
+      position: vm.Vector3(0, 1.8, 5.0),
+      target: vm.Vector3(0, 1.0, 0.0),
+      fovNear: 0.1,
+      fovFar: 100.0,
+    );
+    final frustum = camera.getFrustum(const Size(393, 852));
+
+    test('sphere directly in front of camera is visible', () {
+      expect(
+        culler.isSphereVisible(frustum, vm.Vector3(0, 1.0, 0.0), 1.0),
+        isTrue,
+      );
+    });
+
+    test('sphere behind camera is culled', () {
+      expect(
+        culler.isSphereVisible(frustum, vm.Vector3(0, 1.8, 10.0), 1.0),
+        isFalse,
+      );
+    });
+
+    test('sphere far to the side outside FOV is culled', () {
+      expect(
+        culler.isSphereVisible(frustum, vm.Vector3(25.0, 1.0, 0.0), 1.0),
+        isFalse,
+      );
+    });
+
+    test('sphere overlapping boundary with its radius is preserved (no clipping)', () {
+      // Near frustum boundary
+      expect(
+        culler.isSphereVisible(frustum, vm.Vector3(3.5, 1.0, 0.0), 3.0),
+        isTrue,
+      );
+    });
+
+    test('AABB bounding box in front of camera is visible', () {
+      final aabb = vm.Aabb3.minMax(
+        vm.Vector3(-0.5, 0.0, -0.5),
+        vm.Vector3(0.5, 1.0, 0.5),
+      );
+      expect(culler.isAabbVisible(frustum, aabb), isTrue);
+    });
+
+    test('AABB bounding box behind camera is culled', () {
+      final aabb = vm.Aabb3.minMax(
+        vm.Vector3(-0.5, 0.0, 12.0),
+        vm.Vector3(0.5, 1.0, 15.0),
+      );
+      expect(culler.isAabbVisible(frustum, aabb), isFalse);
     });
   });
 }

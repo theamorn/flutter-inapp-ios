@@ -17,11 +17,14 @@ final class PerformanceHUDView: UIView {
         let durationMillis: Double
     }
 
+    private let headerStack = UIStackView()
     private let titleLabel = UILabel()
+    private let toggleButton = UIButton(type: .system)
     private let hostLabel = UILabel()
     private let flutterLabel = UILabel()
     private let enginesLabel = UILabel()
 
+    private var isMinimized = false
     private var displayLink: CADisplayLink!
     private var sampleStartTimestamp: CFTimeInterval?
     private var frameCount = 0
@@ -94,7 +97,7 @@ final class PerformanceHUDView: UIView {
     }
 
     private func configureView() {
-        isUserInteractionEnabled = false
+        isUserInteractionEnabled = true
         backgroundColor = UIColor.black.withAlphaComponent(0.84)
         layer.cornerRadius = 10
         layer.borderWidth = 1
@@ -107,6 +110,25 @@ final class PerformanceHUDView: UIView {
         titleLabel.text = "LIVE PERFORMANCE"
         titleLabel.textColor = .systemGreen
         titleLabel.font = .monospacedSystemFont(ofSize: 12, weight: .bold)
+
+        var config = UIButton.Configuration.plain()
+        config.contentInsets = NSDirectionalEdgeInsets(top: 2, leading: 6, bottom: 2, trailing: 6)
+        toggleButton.configuration = config
+        toggleButton.setTitle("Hide ▴", for: .normal)
+        toggleButton.setTitleColor(.systemGreen, for: .normal)
+        toggleButton.titleLabel?.font = .monospacedSystemFont(ofSize: 10, weight: .semibold)
+        toggleButton.backgroundColor = UIColor.systemGreen.withAlphaComponent(0.18)
+        toggleButton.layer.cornerRadius = 6
+        toggleButton.layer.borderWidth = 0.5
+        toggleButton.layer.borderColor = UIColor.systemGreen.withAlphaComponent(0.5).cgColor
+        toggleButton.addTarget(self, action: #selector(toggleMinimized), for: .touchUpInside)
+
+        headerStack.axis = .horizontal
+        headerStack.alignment = .center
+        headerStack.distribution = .equalSpacing
+        headerStack.addArrangedSubview(titleLabel)
+        headerStack.addArrangedSubview(toggleButton)
+
         // Keep all three spawn measurements readable on a phone/projector.
         enginesLabel.numberOfLines = 0
         [hostLabel, flutterLabel, enginesLabel].forEach {
@@ -117,7 +139,7 @@ final class PerformanceHUDView: UIView {
         }
 
         let stack = UIStackView(arrangedSubviews: [
-            titleLabel,
+            headerStack,
             hostLabel,
             flutterLabel,
             enginesLabel,
@@ -132,6 +154,9 @@ final class PerformanceHUDView: UIView {
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
         ])
+
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(hudTapped))
+        addGestureRecognizer(tapGesture)
     }
 
     private func configureDisplayLink() {
@@ -183,7 +208,46 @@ final class PerformanceHUDView: UIView {
         refreshLabels()
     }
 
+    @objc private func toggleMinimized() {
+        isMinimized.toggle()
+        updateDisplayMode(animated: true)
+    }
+
+    @objc private func hudTapped() {
+        if isMinimized {
+            toggleMinimized()
+        }
+    }
+
+    private func updateDisplayMode(animated: Bool) {
+        let updates = {
+            self.layer.cornerRadius = self.isMinimized ? 14 : 10
+            self.hostLabel.isHidden = self.isMinimized
+            self.flutterLabel.isHidden = self.isMinimized
+            self.enginesLabel.isHidden = self.isMinimized
+            self.toggleButton.isHidden = self.isMinimized
+            self.refreshLabels()
+            self.superview?.layoutIfNeeded()
+        }
+        if animated {
+            UIView.animate(withDuration: 0.25, delay: 0, options: [.curveEaseInOut], animations: updates)
+        } else {
+            updates()
+        }
+    }
+
     private func refreshLabels() {
+        if isMinimized {
+            titleLabel.text = String(format: "● %.0f FPS ▾", hostFPS)
+            titleLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .bold)
+            titleLabel.textColor = .white
+            return
+        }
+
+        titleLabel.text = "LIVE PERFORMANCE"
+        titleLabel.font = .monospacedSystemFont(ofSize: 12, weight: .bold)
+        titleLabel.textColor = .systemGreen
+
         let memoryMB = Double(MemoryProbe.footprintBytes()) / 1_048_576
         hostLabel.text = String(format: "HOST     %5.1f fps   %6.1f MiB footprint", hostFPS, memoryMB)
 

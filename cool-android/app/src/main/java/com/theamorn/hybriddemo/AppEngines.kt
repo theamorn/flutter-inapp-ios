@@ -26,6 +26,7 @@ object AppEngines {
     const val GLASS_ROUTE = "/glass"
     const val SCENE_ROUTE = "/scene"
     const val TELEMETRY_CHANNEL_NAME = "com.theamorn.hybrid/telemetry"
+    const val GAME_CHANNEL_NAME = "com.theamorn.hybrid/game"
 
     /**
      * All three Flutter routes supported by the demo contract.
@@ -89,6 +90,9 @@ object AppEngines {
         )
 
         attachTelemetryChannel(engine, route)
+        if (route == GAME_ROUTE) {
+            attachGameChannel(engine, appContext)
+        }
         FlutterEngineCache.getInstance().put(cacheKey(route), engine)
         engines[route] = engine
         return engine
@@ -106,6 +110,27 @@ object AppEngines {
             deltaBytes = delta,
             durationMillis = pending.durationMillis,
         )
+    }
+
+    private fun attachGameChannel(engine: FlutterEngine, context: Context) {
+        val channel = MethodChannel(
+            engine.dartExecutor.binaryMessenger,
+            GAME_CHANNEL_NAME,
+        )
+        channel.setMethodCallHandler { call, result ->
+            if (call.method == "reportScore") {
+                val score = call.argument<Number>("score")?.toInt()
+                    ?: (call.arguments as? Number)?.toInt()
+                if (score != null) {
+                    mainHandler.post {
+                        GameScoreManager.updateScore(context, score)
+                    }
+                }
+                result.success(null)
+            } else {
+                result.notImplemented()
+            }
+        }
     }
 
     private fun attachTelemetryChannel(engine: FlutterEngine, route: String) {

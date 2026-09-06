@@ -16,11 +16,13 @@ enum FlappyCatPhase { ready, playing, dying, gameOver }
 
 /// The Flame game used by the native `/game` engine.
 class FlappyCatGame extends FlameGame with HasCollisionDetection, TapCallbacks {
-  FlappyCatGame() {
+  FlappyCatGame({this.onScoreChanged}) {
     // Flame receives lifecycle events from GameWidget. Keeping this enabled
     // preserves the exact round while the native tab is not visible.
     pauseWhenBackgrounded = true;
   }
+
+  final void Function(int score)? onScoreChanged;
 
   static const int _poolSize = 8;
   static const double _spawnInterval = 1.58;
@@ -241,6 +243,7 @@ class FlappyCatGame extends FlameGame with HasCollisionDetection, TapCallbacks {
     }
     score += 1;
     _scoreLabel.text = '$score';
+    onScoreChanged?.call(score);
   }
 
   void _onPlayerHit() {
@@ -264,6 +267,7 @@ class FlappyCatGame extends FlameGame with HasCollisionDetection, TapCallbacks {
     _messagePanel
       ..setContent('GAME OVER', 'Score $score  •  Tap to restart')
       ..isVisible = true;
+    onScoreChanged?.call(score);
   }
 
   @override

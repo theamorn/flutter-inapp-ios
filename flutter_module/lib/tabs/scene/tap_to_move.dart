@@ -80,10 +80,10 @@ class WalkerMotion {
     this.speed = 1.9,
     this.turnRate = 9.0,
     this.arriveRadius = 0.06,
-  }) : position = position?.clone() ?? vm.Vector3.zero();
+    this.groundY = 0.0,
+  }) : position = position?.clone() ?? vm.Vector3(0, groundY, 0);
 
-  /// Current world position. `y` is left untouched by [advance]; the island's
-  /// walkable surface is flat.
+  /// Current world position.
   vm.Vector3 position;
 
   /// Heading in radians about world +Y. Zero looks along +Z.
@@ -97,6 +97,27 @@ class WalkerMotion {
 
   /// How close counts as arrived.
   double arriveRadius;
+
+  /// Ground surface level.
+  final double groundY;
+
+  /// Current vertical velocity in world units per second.
+  double verticalVelocity = 0.0;
+
+  static const double jumpVelocity = 4.8;
+  static const double gravity = -14.0;
+
+  /// Whether the character is currently airborne.
+  bool get isJumping => position.y > groundY + 1e-4 || verticalVelocity > 0;
+
+  /// Initiates a jump if the character is grounded.
+  bool jump({double launchVelocity = jumpVelocity}) {
+    if (!isJumping) {
+      verticalVelocity = launchVelocity;
+      return true;
+    }
+    return false;
+  }
 
   vm.Vector3? _target;
 
@@ -125,13 +146,13 @@ class WalkerMotion {
     if (math.sqrt(dx * dx + dz * dz) <= arriveRadius) {
       return;
     }
-    _target = vm.Vector3(target.x, position.y, target.z);
+    _target = vm.Vector3(target.x, groundY, target.z);
   }
 
   /// Stops where it stands.
   void stop() => _target = null;
 
-  /// Advances the walk by [deltaSeconds].
+  /// Advances the walk and jump by [deltaSeconds].
   ///
   /// The heading eases toward the direction of travel rather than snapping, so
   /// the character visibly turns before it sets off.
@@ -142,6 +163,16 @@ class WalkerMotion {
     // A long stall (a backgrounded tab, a paused render loop) must not
     // teleport the character across the island when it resumes.
     final dt = math.min(deltaSeconds, 0.1);
+
+    // Ballistic vertical integration
+    if (isJumping || verticalVelocity != 0.0) {
+      verticalVelocity += gravity * dt;
+      position.y += verticalVelocity * dt;
+      if (position.y <= groundY) {
+        position.y = groundY;
+        verticalVelocity = 0.0;
+      }
+    }
 
     final target = _target;
     if (target == null) {
@@ -168,5 +199,93 @@ class WalkerMotion {
       position.y,
       position.z + dz / distance * step,
     );
+  }
+}
+
+/// Computes the camera eye and look-at target for an over-the-shoulder
+/// (third-person chase) camera with tight, immersive Resident Evil 4 style framing.
+class OtsCameraRig {
+  const OtsCameraRig({
+    this.followDistance = 2.0,
+    this.camHeight = 1.15,
+    this.shoulderOffset = 0.25,
+    this.targetHeight = 0.65,
+    this.lookAheadDistance = 4.0,
+    this.minGroundClearance = 0.40,
+  });
+
+  /// Distance the camera trails behind the character along the negative forward vector.
+  final double followDistance;
+
+  /// Elevation of the camera above the character's feet.
+  final double camHeight;
+
+  /// Lateral offset along the character's right vector (placing the camera over the right shoulder).
+  final double shoulderOffset;
+
+  /// Height of the look-at target above the character's feet.
+  final double targetHeight;
+
+  /// How far in front of the character the look-at target is positioned.
+  final double lookAheadDistance;
+
+  /// Floor clamp ensuring the camera never dips below terrain or water.
+  final double minGroundClearance;
+
+  /// Computes `(eye, target)` vectors in world coordinates given the character's
+  /// [characterPosition] and total camera [yaw] (which may include a user swipe offset).
+  (vm.Vector3 eye, vm.Vector3 target) compute({
+    required vm.Vector3 characterPosition,
+    required double yaw,
+    double pitchOffset = 0.0,
+    double groundY = 0.0,
+  }) {
+    final forward = vm.Vector3(math.sin(yaw), 0.0, math.cos(yaw));
+    final right = vm.Vector3(math.cos(yaw), 0.0, -math.sin(yaw));
+
+    final height = camHeight + math.sin(pitchOffset) * 0.8;
+    final eyeY = math.max(
+      characterPosition.y + height,
+      groundY + minGroundClearance,
+    );
+
+    final eye = vm.Vector3(
+      characterPosition.x - forward.x * followDistance + right.x * shoulderOffset,
+      eyeY,
+      characterPosition.z - forward.z * followDistance + right.z * shoulderOffset,
+    );
+
+    final target = vm.Vector3(
+      characterPosition.x +
+          forward.x * lookAheadDistance +
+          right.x * (shoulderOffset * 0.25),
+      characterPosition.y + targetHeight,
+      characterPosition.z +
+          forward.z * lookAheadDistance +
+          right.z * (shoulderOffset * 0.25),
+    );
+
+    return (eye, target);
+  }
+}
+
+/// Performs view-frustum culling tests against spherical and bounding-box volumes.
+///
+/// Used to cull objects outside the camera's field of view in over-the-shoulder
+/// mode so only what the camera actually sees is processed and rendered.
+class FrustumCuller {
+  const FrustumCuller();
+
+  /// Tests whether a bounding sphere at [center] with [radius] intersects
+  /// or is inside [frustum].
+  bool isSphereVisible(vm.Frustum frustum, vm.Vector3 center, double radius) {
+    return frustum.intersectsWithSphere(
+      vm.Sphere.centerRadius(center, radius),
+    );
+  }
+
+  /// Tests whether an axis-aligned bounding box [bounds] intersects [frustum].
+  bool isAabbVisible(vm.Frustum frustum, vm.Aabb3 bounds) {
+    return frustum.intersectsWithAabb3(bounds);
   }
 }

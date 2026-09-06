@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 
 import 'liquid_glass.dart';
+import 'package_liquid_glass.dart';
+
+/// Supported glass render modes in Tab 4.
+enum GlassRenderMode {
+  customShader,
+  packageRenderer,
+}
 
 /// Route entry point for the native host's `/glass` engine.
 class LiquidGlassApp extends StatelessWidget {
@@ -39,6 +46,8 @@ class _GlassDemoScreen extends StatefulWidget {
 }
 
 class _GlassDemoScreenState extends State<_GlassDemoScreen> {
+  GlassRenderMode _renderMode = GlassRenderMode.customShader;
+  bool _showControls = true;
   double _dayNight = 0.2;
   double _refraction = 0.68;
   double _thickness = 0.58;
@@ -80,46 +89,87 @@ class _GlassDemoScreenState extends State<_GlassDemoScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Atmosphere',
-                      style: Theme.of(context).textTheme.headlineLarge
-                          ?.copyWith(
-                            color: foreground,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -1.1,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Atmosphere',
+                                style: Theme.of(context).textTheme.headlineLarge
+                                    ?.copyWith(
+                                      color: foreground,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -1.1,
+                                    ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Live widgets, sampled through a touchable glass surface',
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(color: foreground.withValues(alpha: 0.7)),
+                              ),
+                            ],
                           ),
+                        ),
+                        const SizedBox(width: 8),
+                        _ControlsVisibilityToggle(
+                          showControls: _showControls,
+                          foregroundColor: foreground,
+                          dayNight: _dayNight,
+                          key: const ValueKey('toggle-controls-visibility'),
+                          onToggle: () => setState(() => _showControls = !_showControls),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Live widgets, sampled through a touchable glass surface',
-                      style: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(color: foreground.withValues(alpha: 0.7)),
+                    const SizedBox(height: 12),
+                    _GlassModeSelector(
+                      selectedMode: _renderMode,
+                      foregroundColor: foreground,
+                      dayNight: _dayNight,
+                      onModeSelected: (mode) => setState(() => _renderMode = mode),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 12),
                     Expanded(
                       child: Center(
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 680),
-                          child: LiquidGlass(
-                            dayNight: _dayNight,
-                            refractionStrength: _refraction,
-                            thickness: _thickness,
-                            overlay: _GlassControls(
-                              dayNight: _dayNight,
-                              refraction: _refraction,
-                              thickness: _thickness,
-                              onDayNightChanged: (value) {
-                                setState(() => _dayNight = value);
-                              },
-                              onRefractionChanged: (value) {
-                                setState(() => _refraction = value);
-                              },
-                              onThicknessChanged: (value) {
-                                setState(() => _thickness = value);
-                              },
-                            ),
-                            child: _LiveBackdropFeed(dayNight: _dayNight),
-                          ),
+                          child: _renderMode == GlassRenderMode.customShader
+                              ? LiquidGlass(
+                                  dayNight: _dayNight,
+                                  refractionStrength: _refraction,
+                                  thickness: _thickness,
+                                  overlay: _showControls
+                                      ? Align(
+                                          alignment: Alignment.bottomCenter,
+                                          child: _GlassControls(
+                                            dayNight: _dayNight,
+                                            refraction: _refraction,
+                                            thickness: _thickness,
+                                            onDayNightChanged: (value) {
+                                              setState(() => _dayNight = value);
+                                            },
+                                            onRefractionChanged: (value) {
+                                              setState(() => _refraction = value);
+                                            },
+                                            onThicknessChanged: (value) {
+                                              setState(() => _thickness = value);
+                                            },
+                                          ),
+                                        )
+                                      : const SizedBox.shrink(),
+                                  child: _LiveBackdropFeed(dayNight: _dayNight),
+                                )
+                              : PackageLiquidGlassView(
+                                  dayNight: _dayNight,
+                                  showControls: _showControls,
+                                  onDayNightChanged: (value) {
+                                    setState(() => _dayNight = value);
+                                  },
+                                  child: _LiveBackdropFeed(dayNight: _dayNight),
+                                ),
                         ),
                       ),
                     ),
@@ -429,69 +479,58 @@ class _GlassControls extends StatelessWidget {
       dayNight,
     )!;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+    return Container(
+      margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Color.lerp(
+          Colors.white.withValues(alpha: 0.28),
+          const Color(0xFF0F1A30).withValues(alpha: 0.65),
+          dayNight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.25),
+        ),
+      ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Icon(Icons.blur_on_rounded, color: textColor, size: 20),
-              ),
-              const SizedBox(width: 10),
+              Icon(Icons.blur_on_rounded, color: textColor, size: 15),
+              const SizedBox(width: 5),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'LIVE GLASS',
-                      style: TextStyle(
-                        color: textColor,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.1,
-                      ),
-                    ),
-                    Text(
-                      'Scroll above · drag here for ripples',
-                      style: TextStyle(
-                        color: textColor.withValues(alpha: 0.68),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF30D985).withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Text(
-                  'LIVE',
+                child: Text(
+                  'CONTROLS',
                   style: TextStyle(
-                    color: Color(0xFF17A866),
+                    color: textColor,
                     fontSize: 10,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.8,
                   ),
                 ),
               ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF30D985).withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'RIPPLES',
+                  style: TextStyle(
+                    color: Color(0xFF17A866),
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
             ],
           ),
-          const Spacer(),
+          const SizedBox(height: 6),
           _ControlRow(
             label: 'DAY / NIGHT',
             valueLabel: dayNight < 0.5 ? 'DAY' : 'NIGHT',
@@ -547,45 +586,117 @@ class _ControlRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final clampedValue = value.clamp(0.0, 1.0);
     return SizedBox(
-      height: 58,
+      height: 38,
       child: Row(
         children: [
-          Icon(icon, color: textColor.withValues(alpha: 0.76), size: 18),
-          const SizedBox(width: 9),
+          Icon(icon, color: textColor.withValues(alpha: 0.72), size: 14),
+          const SizedBox(width: 6),
           SizedBox(
-            width: 92,
+            width: 82,
             child: Text(
               label,
               style: TextStyle(
-                color: textColor.withValues(alpha: 0.78),
-                fontSize: 10,
+                color: textColor.withValues(alpha: 0.76),
+                fontSize: 9.5,
                 fontWeight: FontWeight.w800,
-                letterSpacing: 0.6,
+                letterSpacing: 0.4,
               ),
             ),
           ),
           Expanded(
             child: Slider(
-              value: value,
+              value: clampedValue,
               onChanged: onChanged,
               activeColor: textColor,
               inactiveColor: textColor.withValues(alpha: 0.2),
             ),
           ),
           SizedBox(
-            width: 43,
+            width: 38,
             child: Text(
               valueLabel,
               textAlign: TextAlign.end,
               style: TextStyle(
                 color: textColor,
-                fontSize: 10,
+                fontSize: 9.5,
                 fontWeight: FontWeight.w900,
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ControlsVisibilityToggle extends StatelessWidget {
+  const _ControlsVisibilityToggle({
+    required this.showControls,
+    required this.foregroundColor,
+    required this.dayNight,
+    required this.onToggle,
+    super.key,
+  });
+
+  final bool showControls;
+  final Color foregroundColor;
+  final double dayNight;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeBg = Color.lerp(
+      Colors.white.withValues(alpha: 0.5),
+      const Color(0xFF283556).withValues(alpha: 0.75),
+      dayNight,
+    )!;
+
+    return InkWell(
+      onTap: onToggle,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: showControls ? activeBg : Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: showControls
+                ? Colors.white.withValues(alpha: 0.4)
+                : Colors.white.withValues(alpha: 0.2),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              showControls
+                  ? Icons.visibility_off_rounded
+                  : Icons.tune_rounded,
+              size: 15,
+              color: foregroundColor,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              showControls ? 'Hide Controls' : 'Show Controls',
+              style: TextStyle(
+                color: foregroundColor,
+                fontWeight: FontWeight.w800,
+                fontSize: 11,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -600,3 +711,188 @@ class _FeedItem {
   final String value;
   final Color color;
 }
+
+class _GlassModeSelector extends StatelessWidget {
+  const _GlassModeSelector({
+    required this.selectedMode,
+    required this.foregroundColor,
+    required this.dayNight,
+    required this.onModeSelected,
+  });
+
+  final GlassRenderMode selectedMode;
+  final Color foregroundColor;
+  final double dayNight;
+  final ValueChanged<GlassRenderMode> onModeSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final containerBg = Color.lerp(
+      Colors.white.withValues(alpha: 0.35),
+      const Color(0xFF0F182B).withValues(alpha: 0.55),
+      dayNight,
+    )!;
+
+    final borderColor = Color.lerp(
+      Colors.white.withValues(alpha: 0.6),
+      Colors.white.withValues(alpha: 0.15),
+      dayNight,
+    )!;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: containerBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ModeTabButton(
+              title: 'Custom Shader',
+              badge: 'IN-HOUSE',
+              icon: Icons.code_rounded,
+              isSelected: selectedMode == GlassRenderMode.customShader,
+              foregroundColor: foregroundColor,
+              dayNight: dayNight,
+              key: const ValueKey('tab-custom-shader'),
+              onTap: () => onModeSelected(GlassRenderMode.customShader),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _ModeTabButton(
+              title: 'liquid_glass_renderer',
+              badge: 'PACKAGE',
+              icon: Icons.layers_rounded,
+              isSelected: selectedMode == GlassRenderMode.packageRenderer,
+              foregroundColor: foregroundColor,
+              dayNight: dayNight,
+              key: const ValueKey('tab-package-renderer'),
+              onTap: () => onModeSelected(GlassRenderMode.packageRenderer),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModeTabButton extends StatelessWidget {
+  const _ModeTabButton({
+    required this.title,
+    required this.badge,
+    required this.icon,
+    required this.isSelected,
+    required this.foregroundColor,
+    required this.dayNight,
+    required this.onTap,
+    super.key,
+  });
+
+  final String title;
+  final String badge;
+  final IconData icon;
+  final bool isSelected;
+  final Color foregroundColor;
+  final double dayNight;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeBg = Color.lerp(
+      Colors.white.withValues(alpha: 0.85),
+      const Color(0xFF283556).withValues(alpha: 0.95),
+      dayNight,
+    )!;
+
+    final badgeColor = isSelected
+        ? (dayNight < 0.5 ? const Color(0xFF0C5686) : const Color(0xFF75B8FF))
+        : foregroundColor.withValues(alpha: 0.5);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? activeBg : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: isSelected
+              ? Border.all(
+                  color: Colors.white.withValues(alpha: 0.35),
+                  width: 1,
+                )
+              : null,
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected
+                  ? foregroundColor
+                  : foregroundColor.withValues(alpha: 0.6),
+            ),
+            const SizedBox(width: 7),
+            Flexible(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: isSelected
+                      ? foregroundColor
+                      : foregroundColor.withValues(alpha: 0.65),
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  fontSize: 12,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? badgeColor.withValues(alpha: 0.15)
+                    : Colors.white.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                badge,
+                style: TextStyle(
+                  color: badgeColor,
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

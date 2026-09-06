@@ -48,6 +48,17 @@ final class HomeViewController: UIViewController {
         .focusMode: 1,
     ]
 
+    private var highestScoreRow: Row {
+        let score = GameScoreManager.shared.highestScore
+        return Row(
+            title: "Highest Score: \(score)",
+            subtitle: "Flappy Cat",
+            symbol: "gamecontroller.fill",
+            tint: .systemPurple,
+            kind: .value("\(score)")
+        )
+    }
+
     private lazy var sections: [Section] = [
         Section(
             title: "YOUR WEEK",
@@ -61,6 +72,7 @@ final class HomeViewController: UIViewController {
                     tint: .systemGreen,
                     kind: .disclosure
                 ),
+                highestScoreRow,
                 Row(title: "Quick actions", subtitle: nil, symbol: nil, tint: .systemBlue, kind: .quickActions),
             ]
         ),
@@ -132,6 +144,34 @@ final class HomeViewController: UIViewController {
         configureTableView()
         configureProfileHeader()
         configureFooter()
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(onGameScoreUpdated),
+            name: .gameScoreUpdated,
+            object: nil
+        )
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        updateHighestScoreRow()
+    }
+
+    @objc private func onGameScoreUpdated() {
+        updateHighestScoreRow()
+    }
+
+    private func updateHighestScoreRow() {
+        guard !sections.isEmpty, sections[0].rows.count > 2 else { return }
+        var updatedRows = sections[0].rows
+        updatedRows[2] = highestScoreRow
+        sections[0] = Section(title: sections[0].title, footer: sections[0].footer, rows: updatedRows)
+        tableView.reloadRows(at: [IndexPath(row: 2, section: 0)], with: .none)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     override func viewDidLayoutSubviews() {

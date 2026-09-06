@@ -33,6 +33,7 @@ dependencies:
   flutter_gpu:
     sdk: flutter
   vector_math: ^2.4.2
+  liquid_glass_renderer: ^0.2.0-dev.4
 
 dev_dependencies:
   flutter_test:
