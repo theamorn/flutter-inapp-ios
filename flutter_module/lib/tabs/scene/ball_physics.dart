@@ -27,22 +27,42 @@ class IslandObstacle {
   /// Default obstacle layout matching the fixed prop placements in `island_scene.dart`.
   static List<IslandObstacle> defaultObstacles() {
     return const <IslandObstacle>[
-      IslandObstacle(name: 'palm_1', x: 2.05, z: -1.25, radius: 0.35),
-      IslandObstacle(name: 'palm_2', x: -2.25, z: 0.85, radius: 0.35),
-      IslandObstacle(name: 'palm_3', x: 0.45, z: -2.45, radius: 0.35),
-      IslandObstacle(name: 'pine_1', x: -1.55, z: -1.95, radius: 0.35),
-      IslandObstacle(name: 'pine_2', x: -0.55, z: -2.55, radius: 0.35),
-      IslandObstacle(name: 'pine_3', x: 2.35, z: 1.35, radius: 0.35),
-      IslandObstacle(name: 'rock_large_1', x: 1.1, z: 1.95, radius: 0.65),
-      IslandObstacle(name: 'rock_large_2', x: -2.6, z: -0.35, radius: 0.55),
-      IslandObstacle(name: 'rock_small_1', x: 1.75, z: 0.55, radius: 0.40),
-      IslandObstacle(name: 'rock_small_2', x: -1.15, z: 1.15, radius: 0.45),
-      IslandObstacle(name: 'rock_small_3', x: 0.95, z: -0.75, radius: 0.40),
-      IslandObstacle(name: 'campfire', x: 0.0, z: -0.15, radius: 0.55),
-      IslandObstacle(name: 'bush_1', x: 1.35, z: 2.35, radius: 0.35),
-      IslandObstacle(name: 'bush_2', x: -2.05, z: 1.85, radius: 0.35),
-      IslandObstacle(name: 'bush_3', x: 2.75, z: -0.45, radius: 0.35),
-      IslandObstacle(name: 'bush_4', x: -0.85, z: -1.05, radius: 0.35),
+      IslandObstacle(name: 'palm_1', x: 6.15, z: -3.75, radius: 0.35),
+      IslandObstacle(name: 'palm_2', x: -6.75, z: 2.55, radius: 0.35),
+      IslandObstacle(name: 'palm_3', x: 1.35, z: -7.35, radius: 0.35),
+      IslandObstacle(name: 'pine_1', x: -4.65, z: -5.85, radius: 0.35),
+      IslandObstacle(name: 'pine_2', x: -1.65, z: -7.65, radius: 0.35),
+      IslandObstacle(name: 'pine_3', x: 7.05, z: 4.05, radius: 0.35),
+      IslandObstacle(name: 'rock_large_1', x: 3.3, z: 5.85, radius: 0.65),
+      IslandObstacle(name: 'rock_large_2', x: -7.8, z: -1.05, radius: 0.55),
+      IslandObstacle(name: 'rock_small_1', x: 5.25, z: 1.65, radius: 0.40),
+      IslandObstacle(name: 'rock_small_2', x: -3.45, z: 3.45, radius: 0.45),
+      IslandObstacle(name: 'rock_small_3', x: 2.85, z: -2.25, radius: 0.40),
+      IslandObstacle(name: 'campfire', x: 0.0, z: -0.45, radius: 0.55),
+      IslandObstacle(name: 'bush_1', x: 4.05, z: 7.05, radius: 0.35),
+      IslandObstacle(name: 'bush_2', x: -6.15, z: 5.55, radius: 0.35),
+      IslandObstacle(name: 'bush_3', x: 8.25, z: -1.35, radius: 0.35),
+      IslandObstacle(name: 'bush_4', x: -2.55, z: -3.15, radius: 0.35),
+    ];
+  }
+
+  /// Extra Ultra-only trunks and rocks on the outer ring of the larger island.
+  static List<IslandObstacle> ultraObstacles() {
+    return const <IslandObstacle>[
+      IslandObstacle(name: 'ultra_palm_1', x: 8.2, z: 2.4, radius: 0.35),
+      IslandObstacle(name: 'ultra_palm_2', x: -8.0, z: -3.2, radius: 0.35),
+      IslandObstacle(name: 'ultra_palm_3', x: 3.8, z: 8.1, radius: 0.35),
+      IslandObstacle(name: 'ultra_pine_1', x: -3.2, z: 7.8, radius: 0.35),
+      IslandObstacle(name: 'ultra_pine_2', x: 7.6, z: -5.4, radius: 0.35),
+      IslandObstacle(name: 'ultra_pine_3', x: -7.4, z: 6.2, radius: 0.35),
+      IslandObstacle(name: 'ultra_rock_large_1', x: 0.8, z: 7.4, radius: 0.65),
+      IslandObstacle(name: 'ultra_rock_large_2', x: -5.6, z: -7.0, radius: 0.55),
+      IslandObstacle(name: 'ultra_rock_small_1', x: 6.4, z: 6.6, radius: 0.40),
+      IslandObstacle(name: 'ultra_rock_small_2', x: -8.4, z: 0.6, radius: 0.40),
+      IslandObstacle(name: 'ultra_bush_1', x: 8.6, z: -0.2, radius: 0.35),
+      IslandObstacle(name: 'ultra_bush_2', x: -1.2, z: 8.4, radius: 0.35),
+      IslandObstacle(name: 'ultra_bush_3', x: 4.8, z: -8.0, radius: 0.35),
+      IslandObstacle(name: 'ultra_bush_4', x: -6.8, z: -6.4, radius: 0.35),
     ];
   }
 }
@@ -196,7 +216,7 @@ class PhysicsBall {
 /// and character interactions (kicking and punching).
 class BallPhysicsWorld {
   BallPhysicsWorld({
-    this.islandRimRadius = 3.3,
+    this.islandRimRadius = 9.9,
     this.groundY = 0.0,
     List<IslandObstacle>? obstacles,
   }) : obstacles = obstacles ?? IslandObstacle.defaultObstacles();
@@ -218,15 +238,24 @@ class BallPhysicsWorld {
   ];
 
   static final List<vm.Vector3> spawnPositions = <vm.Vector3>[
-    vm.Vector3(0.85, 0.6, 0.7),
-    vm.Vector3(-0.95, 0.8, 0.65),
-    vm.Vector3(1.2, 0.5, -0.9),
-    vm.Vector3(-1.1, 0.7, -0.85),
-    vm.Vector3(0.2, 0.9, 1.7),
-    vm.Vector3(-0.35, 0.5, -1.75),
-    vm.Vector3(1.75, 0.7, 0.2),
-    vm.Vector3(-1.75, 0.4, 0.15),
+    vm.Vector3(2.55, 0.6, 2.1),
+    vm.Vector3(-2.85, 0.8, 1.95),
+    vm.Vector3(3.6, 0.5, -2.7),
+    vm.Vector3(-3.3, 0.7, -2.55),
+    vm.Vector3(0.6, 0.9, 5.1),
+    vm.Vector3(-1.05, 0.5, -5.25),
+    vm.Vector3(5.25, 0.7, 0.6),
+    vm.Vector3(-5.25, 0.4, 0.45),
   ];
+
+  /// Adds or removes the Ultra-only obstacle hulls so balls bounce off the
+  /// extra trees and rocks that exist only in that mode.
+  void setUltraObstaclesEnabled(bool enabled) {
+    obstacles.removeWhere((obstacle) => obstacle.name.startsWith('ultra_'));
+    if (enabled) {
+      obstacles.addAll(IslandObstacle.ultraObstacles());
+    }
+  }
 
   /// Configures the world with [count] balls (e.g. 1 in Normal mode, 8 in Ultra mode).
   void setupBalls(int count) {

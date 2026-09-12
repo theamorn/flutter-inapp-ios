@@ -386,4 +386,43 @@ void main() {
       expect(culler.isAabbVisible(frustum, aabb), isFalse);
     });
   });
+
+  group('pickWanderTarget', () {
+    test('stays on the walkable disc and clear of the campfire', () {
+      final random = math.Random(7);
+      const walkableRadius = 9.0;
+      const avoidRadius = 1.4;
+      final avoid = vm.Vector3(0, 0, -0.45);
+
+      for (var i = 0; i < 80; i++) {
+        final point = pickWanderTarget(
+          random: random,
+          walkableRadius: walkableRadius,
+          avoid: avoid,
+          avoidRadius: avoidRadius,
+        );
+        final dist = math.sqrt(point.x * point.x + point.z * point.z);
+        expect(dist, lessThanOrEqualTo(walkableRadius + 1e-5));
+        expect(point.y, closeTo(0, 1e-9));
+
+        final dx = point.x - avoid.x;
+        final dz = point.z - avoid.z;
+        expect(math.sqrt(dx * dx + dz * dz), greaterThanOrEqualTo(avoidRadius));
+      }
+    });
+
+    test('falls back to a rim point when the avoid disc covers everything', () {
+      final point = pickWanderTarget(
+        random: math.Random(1),
+        walkableRadius: 1.0,
+        avoid: vm.Vector3.zero(),
+        avoidRadius: 4.0,
+        maxAttempts: 3,
+      );
+      expect(
+        math.sqrt(point.x * point.x + point.z * point.z),
+        closeTo(1.0, 1e-5),
+      );
+    });
+  });
 }

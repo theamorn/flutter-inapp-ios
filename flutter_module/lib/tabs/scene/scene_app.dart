@@ -573,7 +573,7 @@ class _Readout extends StatelessWidget {
               ),
               Text(
                 ultraMode
-                    ? '🔥 Mode: Ultra (8 balls, SSR water bump)'
+                    ? '🔥 Mode: Ultra (8 balls, extra props)'
                     : '⚡ Mode: Normal (1 ball)',
                 style: TextStyle(
                   fontFamily: 'Menlo',

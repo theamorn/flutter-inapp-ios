@@ -11,9 +11,12 @@ final class LoginViewController: UIViewController {
     private let scrollView = UIScrollView()
     private let contentView = UIView()
 
+    private let logoBackgroundView = UIView()
     private let logoImageView = UIImageView()
     private let titleLabel = UILabel()
+    private let meetupChip = UILabel()
     private let subtitleLabel = UILabel()
+    private let formCard = UIView()
 
     private let usernameTextField = UITextField()
     private let passwordTextField = UITextField()
@@ -42,25 +45,41 @@ final class LoginViewController: UIViewController {
         scrollView.addSubview(contentView)
 
         gradientLayer.colors = [
-            UIColor.systemBlue.withAlphaComponent(0.1).cgColor,
-            UIColor.systemPurple.withAlphaComponent(0.1).cgColor,
+            UIColor.systemBlue.withAlphaComponent(0.28).cgColor,
+            UIColor.systemPurple.withAlphaComponent(0.22).cgColor,
+            UIColor.systemBackground.cgColor,
         ]
-        gradientLayer.locations = [0.0, 1.0]
+        gradientLayer.locations = [0.0, 0.45, 1.0]
         view.layer.insertSublayer(gradientLayer, at: 0)
 
+        logoBackgroundView.translatesAutoresizingMaskIntoConstraints = false
+        logoBackgroundView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.14)
+        logoBackgroundView.layer.cornerRadius = 44
+        contentView.addSubview(logoBackgroundView)
+
         logoImageView.translatesAutoresizingMaskIntoConstraints = false
-        logoImageView.image = UIImage(systemName: "app.badge.fill")
+        logoImageView.image = UIImage(systemName: "person.3.fill")
         logoImageView.tintColor = .systemBlue
         logoImageView.contentMode = .scaleAspectFit
-        contentView.addSubview(logoImageView)
+        logoBackgroundView.addSubview(logoImageView)
 
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        titleLabel.text = "Welcome Back Google Dev Fest 2025"
+        titleLabel.text = "Mobile Native Meetup"
         titleLabel.font = .systemFont(ofSize: 32, weight: .bold)
         titleLabel.textColor = .label
         titleLabel.textAlignment = .center
         titleLabel.numberOfLines = 0
         contentView.addSubview(titleLabel)
+
+        meetupChip.translatesAutoresizingMaskIntoConstraints = false
+        meetupChip.text = "Meetup"
+        meetupChip.font = .systemFont(ofSize: 13, weight: .semibold)
+        meetupChip.textColor = .systemPurple
+        meetupChip.textAlignment = .center
+        meetupChip.backgroundColor = UIColor.systemPurple.withAlphaComponent(0.14)
+        meetupChip.layer.cornerRadius = 12
+        meetupChip.clipsToBounds = true
+        contentView.addSubview(meetupChip)
 
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
         subtitleLabel.text = "Sign in to continue to Flutter Demo"
@@ -68,6 +87,15 @@ final class LoginViewController: UIViewController {
         subtitleLabel.textColor = .secondaryLabel
         subtitleLabel.textAlignment = .center
         contentView.addSubview(subtitleLabel)
+
+        formCard.translatesAutoresizingMaskIntoConstraints = false
+        formCard.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.92)
+        formCard.layer.cornerRadius = 20
+        formCard.layer.shadowColor = UIColor.black.cgColor
+        formCard.layer.shadowOpacity = 0.08
+        formCard.layer.shadowOffset = CGSize(width: 0, height: 8)
+        formCard.layer.shadowRadius = 16
+        contentView.addSubview(formCard)
 
         setupTextField(usernameTextField, placeholder: "Username", isSecure: false)
         usernameTextField.textContentType = .username
@@ -84,7 +112,7 @@ final class LoginViewController: UIViewController {
         loginButton.layer.shadowOffset = CGSize(width: 0, height: 4)
         loginButton.layer.shadowOpacity = 0.3
         loginButton.layer.shadowRadius = 8
-        contentView.addSubview(loginButton)
+        formCard.addSubview(loginButton)
     }
 
     private func setupTextField(
@@ -96,7 +124,7 @@ final class LoginViewController: UIViewController {
         textField.placeholder = placeholder
         textField.isSecureTextEntry = isSecure
         textField.borderStyle = .none
-        textField.backgroundColor = .secondarySystemBackground
+        textField.backgroundColor = .tertiarySystemBackground
         textField.layer.cornerRadius = 12
         textField.layer.borderWidth = 1
         textField.layer.borderColor = UIColor.separator.cgColor
@@ -112,7 +140,7 @@ final class LoginViewController: UIViewController {
         textField.leftView = iconContainer
         textField.leftViewMode = .always
 
-        contentView.addSubview(textField)
+        formCard.addSubview(textField)
     }
 
     private func setupConstraints() {
@@ -128,34 +156,49 @@ final class LoginViewController: UIViewController {
             contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
 
-            logoImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 60),
-            logoImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            logoImageView.widthAnchor.constraint(equalToConstant: 80),
-            logoImageView.heightAnchor.constraint(equalToConstant: 80),
+            logoBackgroundView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 52),
+            logoBackgroundView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            logoBackgroundView.widthAnchor.constraint(equalToConstant: 88),
+            logoBackgroundView.heightAnchor.constraint(equalToConstant: 88),
 
-            titleLabel.topAnchor.constraint(equalTo: logoImageView.bottomAnchor, constant: 24),
+            logoImageView.centerXAnchor.constraint(equalTo: logoBackgroundView.centerXAnchor),
+            logoImageView.centerYAnchor.constraint(equalTo: logoBackgroundView.centerYAnchor),
+            logoImageView.widthAnchor.constraint(equalToConstant: 44),
+            logoImageView.heightAnchor.constraint(equalToConstant: 44),
+
+            titleLabel.topAnchor.constraint(equalTo: logoBackgroundView.bottomAnchor, constant: 20),
             titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 32),
             titleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -32),
 
-            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
+            meetupChip.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 12),
+            meetupChip.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            meetupChip.widthAnchor.constraint(equalToConstant: 88),
+            meetupChip.heightAnchor.constraint(equalToConstant: 24),
+
+            subtitleLabel.topAnchor.constraint(equalTo: meetupChip.bottomAnchor, constant: 10),
             subtitleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 32),
             subtitleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -32),
 
-            usernameTextField.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 48),
-            usernameTextField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 32),
-            usernameTextField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -32),
+            formCard.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 32),
+            formCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            formCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            formCard.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -48),
+
+            usernameTextField.topAnchor.constraint(equalTo: formCard.topAnchor, constant: 20),
+            usernameTextField.leadingAnchor.constraint(equalTo: formCard.leadingAnchor, constant: 16),
+            usernameTextField.trailingAnchor.constraint(equalTo: formCard.trailingAnchor, constant: -16),
             usernameTextField.heightAnchor.constraint(equalToConstant: 56),
 
-            passwordTextField.topAnchor.constraint(equalTo: usernameTextField.bottomAnchor, constant: 16),
-            passwordTextField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 32),
-            passwordTextField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -32),
+            passwordTextField.topAnchor.constraint(equalTo: usernameTextField.bottomAnchor, constant: 14),
+            passwordTextField.leadingAnchor.constraint(equalTo: formCard.leadingAnchor, constant: 16),
+            passwordTextField.trailingAnchor.constraint(equalTo: formCard.trailingAnchor, constant: -16),
             passwordTextField.heightAnchor.constraint(equalToConstant: 56),
 
-            loginButton.topAnchor.constraint(equalTo: passwordTextField.bottomAnchor, constant: 32),
-            loginButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 32),
-            loginButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -32),
+            loginButton.topAnchor.constraint(equalTo: passwordTextField.bottomAnchor, constant: 24),
+            loginButton.leadingAnchor.constraint(equalTo: formCard.leadingAnchor, constant: 16),
+            loginButton.trailingAnchor.constraint(equalTo: formCard.trailingAnchor, constant: -16),
             loginButton.heightAnchor.constraint(equalToConstant: 56),
-            loginButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -48),
+            loginButton.bottomAnchor.constraint(equalTo: formCard.bottomAnchor, constant: -20),
         ])
     }
 

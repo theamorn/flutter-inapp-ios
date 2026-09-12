@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,14 +15,19 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -38,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -77,6 +84,7 @@ private fun LoginScreen(onSignedIn: () -> Unit) {
     var password by remember { mutableStateOf("") }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val colorScheme = MaterialTheme.colorScheme
 
     fun submit() {
         if (username.isBlank() || password.isBlank()) {
@@ -87,80 +95,121 @@ private fun LoginScreen(onSignedIn: () -> Unit) {
     }
 
     Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { insets ->
-        Surface(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            colorScheme.primary.copy(alpha = 0.28f),
+                            colorScheme.tertiary.copy(alpha = 0.22f),
+                            colorScheme.background,
+                        ),
+                    ),
+                )
                 .padding(insets),
-            color = MaterialTheme.colorScheme.background,
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .imePadding()
-                    .padding(horizontal = 32.dp),
+                    .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
                 Box(
-                    modifier = Modifier.size(80.dp),
+                    modifier = Modifier
+                        .size(88.dp)
+                        .background(
+                            color = colorScheme.primary.copy(alpha = 0.14f),
+                            shape = CircleShape,
+                        ),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.PlayArrow,
+                        imageVector = Icons.Filled.Groups,
                         contentDescription = null,
-                        modifier = Modifier.size(72.dp),
-                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(44.dp),
+                        tint = colorScheme.primary,
                     )
                 }
                 Text(
-                    text = "Welcome Back Google Dev Fest 2025",
+                    text = "Mobile Native Meetup",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 24.dp),
+                    modifier = Modifier.padding(top = 20.dp),
                 )
+                Surface(
+                    color = colorScheme.tertiary.copy(alpha = 0.16f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.padding(top = 12.dp),
+                ) {
+                    Text(
+                        text = "Meetup",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colorScheme.tertiary,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+                    )
+                }
                 Text(
                     text = "Sign in to continue to Flutter Demo",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 8.dp),
+                    modifier = Modifier.padding(top = 10.dp),
                 )
 
-                OutlinedTextField(
-                    value = username,
-                    onValueChange = { username = it },
-                    label = { Text("Username") },
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 48.dp),
-                )
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text("Password") },
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { submit() }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
-                )
-
-                Button(
-                    onClick = { submit() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 32.dp)
-                        .height(56.dp),
+                        .padding(top = 32.dp, bottom = 32.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = colorScheme.surface.copy(alpha = 0.92f),
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
                 ) {
-                    Text("Sign In", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        OutlinedTextField(
+                            value = username,
+                            onValueChange = { username = it },
+                            label = { Text("Username") },
+                            singleLine = true,
+                            leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            label = { Text("Password") },
+                            singleLine = true,
+                            leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { submit() }),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 14.dp),
+                        )
+
+                        Button(
+                            onClick = { submit() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 24.dp)
+                                .height(56.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colorScheme.primary,
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Text("Sign In", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
                 }
             }
         }

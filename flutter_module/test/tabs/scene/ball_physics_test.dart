@@ -216,5 +216,37 @@ void main() {
       expect(ballInFront.velocity.y, greaterThan(3.0));
       expect(ballBehind.velocity.z, equals(0.0));
     });
+
+    test('setUltraObstaclesEnabled adds and removes the extra hulls', () {
+      final world = BallPhysicsWorld();
+      final baseCount = world.obstacles.length;
+      expect(
+        world.obstacles.any((obstacle) => obstacle.name.startsWith('ultra_')),
+        isFalse,
+      );
+
+      world.setUltraObstaclesEnabled(true);
+      expect(
+        world.obstacles.length,
+        equals(baseCount + IslandObstacle.ultraObstacles().length),
+      );
+      expect(
+        world.obstacles.any((obstacle) => obstacle.name.startsWith('ultra_')),
+        isTrue,
+      );
+
+      world.setUltraObstaclesEnabled(true);
+      expect(
+        world.obstacles.length,
+        equals(baseCount + IslandObstacle.ultraObstacles().length),
+      );
+
+      world.setUltraObstaclesEnabled(false);
+      expect(world.obstacles.length, equals(baseCount));
+      expect(
+        world.obstacles.any((obstacle) => obstacle.name.startsWith('ultra_')),
+        isFalse,
+      );
+    });
   });
 }
