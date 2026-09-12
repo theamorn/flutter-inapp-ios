@@ -219,7 +219,9 @@ class BallPhysicsWorld {
     this.islandRimRadius = 9.9,
     this.groundY = 0.0,
     List<IslandObstacle>? obstacles,
-  }) : obstacles = obstacles ?? IslandObstacle.defaultObstacles();
+  }) : obstacles = List<IslandObstacle>.of(
+          obstacles ?? IslandObstacle.defaultObstacles(),
+        );
 
   final double islandRimRadius;
   final double groundY;
