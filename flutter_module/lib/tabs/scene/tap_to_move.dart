@@ -43,6 +43,35 @@ vm.Vector3 clampToIsland(vm.Vector3 point, {required double radius}) {
   return vm.Vector3(point.x * scale, point.y, point.z * scale);
 }
 
+/// Picks a random walkable point on the island disc, staying clear of [avoid]
+/// (typically the campfire). Uses uniform-disc sampling so destinations do not
+/// clump at the origin.
+vm.Vector3 pickWanderTarget({
+  required math.Random random,
+  required double walkableRadius,
+  required vm.Vector3 avoid,
+  required double avoidRadius,
+  double groundY = 0.0,
+  int maxAttempts = 24,
+}) {
+  final avoidRadiusSq = avoidRadius * avoidRadius;
+  for (var i = 0; i < maxAttempts; i++) {
+    final angle = random.nextDouble() * math.pi * 2.0;
+    final radius = math.sqrt(random.nextDouble()) * walkableRadius;
+    final x = math.cos(angle) * radius;
+    final z = math.sin(angle) * radius;
+    final dx = x - avoid.x;
+    final dz = z - avoid.z;
+    if (dx * dx + dz * dz >= avoidRadiusSq) {
+      return vm.Vector3(x, groundY, z);
+    }
+  }
+  return clampToIsland(
+    vm.Vector3(avoid.x + walkableRadius, groundY, avoid.z),
+    radius: walkableRadius,
+  );
+}
+
 /// The walkable point a tap selects, or null if the tap missed the ground.
 vm.Vector3? pickIslandPoint(
   vm.Ray ray, {
