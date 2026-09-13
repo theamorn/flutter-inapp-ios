@@ -23,6 +23,7 @@ Do not relitigate these.
 | Cons | Spoken after the 20s production names. **No new slide.** |
 | AI | No on-device AI tab. Q&A only: AI drafts a second implementation; it does not share a renderer. |
 | Demo | Airplane mode, release, native HUD. Ultra: extra props + NPC; no water-bump. Android optional for Home + game only. |
+| Act 2 | Native engines differ — that is fine. Flutter owns a renderer for nearly the same picture. Trade-off is codecs/chrome, not “can’t do 120 fps.” Point: identical *motion* that would be cancelled on Android. |
 | If over 33:00 | Cut Unity-vs-Flutter comparison first. Then Duo from the cons beat. Keep the 8.3 ms board. |
 
 ---
@@ -32,11 +33,15 @@ Do not relitigate these.
 ```
 [Open: 18 years → cooperate, not replace]
         │
-[Holy war is the wrong exam question]
+[Native difference is fine for the shell]
         │
-[Precedents: Unity in games & WebViews at Meta]
+[Flutter owns the renderer → nearly the same picture]
         │
-[Safe-to-use names, then Flutter cons]
+[Trade-off is codecs/chrome, not 120 fps]
+        │
+[Use case: iOS animation, Android too slow, cut it]
+        │
+[Games/WebView as votes, then names + cons]
         │
 [Foundation: who owns the pixels + 120 Hz budget]
         │
@@ -58,14 +63,14 @@ If the room is hungry for theory, steal 2 minutes from demo tab 3. If the room i
 | Clock | Act | Goal |
 |---|---|---|
 | 0:00–3:00 | 1 Open | 18 years of native; replace failed; Flutter cooperates |
-| 3:00–10:00 | 2 Precedents | Unity + WebView + names + cons |
+| 3:00–10:00 | 2 Identical UI | Native difference OK; Flutter when motion must match |
 | 10:00–20:00 | 3 Foundation | Three drawing models + 8.3 ms budget |
 | 20:00–28:00 | 4 Add-to-App theory | Engine group, memory, Impeller in one sentence |
 | 28:00–33:00 | 5 Heartbreak | Five-beat cancelled-animation story |
 | 33:00–45:00 | 6 Live demo | Tabs 1–5 + score back on Home |
 | 45:00–50:00 | 7 Close + Q&A | Decision matrix and punchline |
 
-**Rehearsal gate:** Acts 1–5 must finish by **33:00**. Script word counts in [SPEAKER_SCRIPT.md](SPEAKER_SCRIPT.md) target ~130 words/minute (~3,670 spoken words + ~4:45 stage).
+**Rehearsal gate:** Acts 1–5 must finish by **33:00**. Script word counts in [SPEAKER_SCRIPT.md](SPEAKER_SCRIPT.md) target ~130 words/minute (~3,640 spoken words + ~5:00 stage).
 
 ---
 
@@ -109,21 +114,19 @@ Show of hands: “Who shipped a proud iOS animation and then heard *how long for
 
 Land with: I am not here to tell you to rewrite your native app.
 
-### Act 2 — Precedents (3:00–10:00)
+### Act 2 — When identical UI is the point (3:00–10:00)
 
-Holy war is the wrong question. The waste is duplicating custom graphics twice.
+Logic, in this order:
 
-**Unity:** Apple has Metal/SceneKit; Google has Vulkan/Filament; still >70% of top mobile games use one engine.
+1. **Native engines differ.** UIKit ≠ Compose. That is alright. Nobody wants Material on iPhone.
+2. **Users accept platform chrome.** They are not holding two phones side by side. Testers will compare; customers will not.
+3. **Flutter’s different POV:** it owns the renderer (Impeller → Metal / Vulkan). Nearly the same picture. Do **not** promise pixel-perfect.
+4. **Trade-off is not “can’t do 120 fps.”** It can. The tax is codecs (Dart `image` vs `libjpeg-turbo`), OS chrome (Liquid Glass, Duo), first-engine RAM.
+5. **When is identical UI the point?** Not login/tabs/settings. Custom motion that *is* the product.
+6. **Use case:** cool iOS Core Animation, Android is three sprints / maybe jank, PM cuts it to a static card.
+7. **Supporting votes, short:** games → Unity (one picture); Help → WebView (difference is fine). Then names + cons.
 
-**WebView:** Settings, Help, legal. Concede this hard. Right tool when copy changes weekly.
-
-**Missing middle:** Native is too expensive for identical canvas work. WebView has a ceiling. Where do mini-games, liquid glass, and a 3D island go?
-
-**Safe-to-use, then stop:** Apptopia 10%→30% of tracked free iOS apps. BMW, Google Pay, Xianyu.
-
-**Cons, then stop (~60–90s, no new slide):** Flutter is not free and not everything. iOS 26: runs; Cupertino ≠ Liquid Glass. Duo: layout stretches, `AppBar` stays on top. Compress: codec tax — call native. Closer: Swift/Kotlin vs C++ — pick the layer. Then back to architecture — this is not a Flutter keynote.
-
-If over: cut Duo first. Keep Liquid Glass + “call the platform” + the C++ closer.
+If over: cut Duo, then the Unity/WebView votes. Keep the cancelled-animation case and “not 120 fps.”
 
 ### Act 3 — Foundation (10:00–20:00)
 
@@ -194,6 +197,8 @@ One-breath counters (full wording in [SPEAKER_SCRIPT.md](SPEAKER_SCRIPT.md)):
 - **Wrong:** “Flutter doesn’t support iOS 26 / Duo / image compress”
 - **Wrong:** “Only Flutter can add-to-app”
 - **Wrong:** “None of those cross-platform stacks ever worked” — they failed as *replacements*
+- **Wrong:** “Flutter cannot do 120 fps” — it can; the tax is codecs and chrome
+- **Wrong:** “pixel-perfect on every device” — say nearly the same picture
 
 ---
 

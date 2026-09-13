@@ -842,9 +842,9 @@
         </div>
         <div class="talking-points" style="display:none;">
           <ul>
-            <li>For a decade, mobile architecture has been treated as a binary religion.</li>
-            <li>You either commit to two separate native teams rewriting everything twice, or you compromise on a cross-platform rewrite.</li>
-            <li>It's time to escape that trap.</li>
+            <li>iOS and Android each paint with their own engine. UI difference is alright. Nobody wants Material on iPhone.</li>
+            <li>Customers are not holding two phones side by side. They accept Settings looking like the OS.</li>
+            <li>Flutter’s different POV: it owns the renderer, so you get nearly the same picture. Do not say pixel-perfect.</li>
           </ul>
         </div>
       </section>
@@ -868,8 +868,9 @@
         </div>
         <div class="talking-points" style="display:none;">
           <ul>
-            <li>Ask for a show of hands: "Who has spent 2 weeks perfecting a custom animation in Swift, only for Product to ask when Android gets it?"</li>
-            <li>The real enemy isn't native or cross-platform. The enemy is wasting sprints duplicating pixel-pushing.</li>
+            <li>When is identical UI the point? Not login or tabs. Custom motion that is the product.</li>
+            <li>Use case: two weeks of Core Animation on iOS. Android is three sprints, maybe jank. PM cuts it to a static card.</li>
+            <li>Trade-off is not “Flutter can’t do 120 fps.” It can. The tax is codecs and OS chrome. Call native for compress.</li>
           </ul>
         </div>
       </section>
@@ -887,9 +888,9 @@
         </div>
         <div class="talking-points" style="display:none;">
           <ul>
-            <li>Look at mobile gaming. Apple has SceneKit, Metal, and SpriteKit. Google has Vulkan and Filament.</li>
-            <li>Yet over 70% of top mobile games use Unity. Why?</li>
-            <li>Because game studios realized early on: writing 3D graphics and shaders twice is commercial suicide.</li>
+            <li>Supporting vote, not the spine: games already picked one picture. Steal the lesson, not the 100 MB crate.</li>
+            <li>Apple has SceneKit and Metal. Google has Vulkan and Filament. Still >70% of top games run Unity.</li>
+            <li>The spine of this act is the cancelled iOS animation, not a Unity keynote.</li>
           </ul>
         </div>
       </section>

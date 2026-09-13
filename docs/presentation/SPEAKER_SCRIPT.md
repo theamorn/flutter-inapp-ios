@@ -7,12 +7,12 @@ Word counts are spoken text only.
 | Act | Clock | Words | Read time @ 130 wpm |
 |---|---|---|---|
 | 1 Open | 0:00–3:00 | ~430 | ~3:20 |
-| 2 Precedents | 3:00–10:00 | ~850 | ~6:35 |
+| 2 Identical UI | 3:00–10:00 | ~820 | ~6:20 |
 | 3 Foundation | 10:00–20:00 | ~1,100 | ~8:30 |
 | 4 Add-to-App | 20:00–28:00 | ~770 | ~5:55 |
 | 5 Heartbreak | 28:00–33:00 | ~520 | ~4:00 |
-| Spoken 1–5 | | **~3,670** | **~28:15** |
-| Stage business | hands, board drawing, pauses | | **~4:45** |
+| Spoken 1–5 | | **~3,640** | **~28:00** |
+| Stage business | hands, board drawing, pauses | | **~5:00** |
 | **Acts 1–5** | **0:00–33:00** | | **~33:00** |
 
 Then switch to the phone and [DEMO_SCRIPT.md](DEMO_SCRIPT.md). Draw the boards from [THEORY_BOARDS.md](THEORY_BOARDS.md) while you talk Act 3 and Act 4.
@@ -39,41 +39,35 @@ Keep your hands up for a second if the honest answer was “we shipped a static 
 
 That question is the talk. When the pixels have to match, and the physics have to match, who should own the canvas — and how do we do that without burning the native app down?
 
-Here is the next half hour in one breath. Precedents — games and WebViews — then three drawing models and an 8.3-millisecond budget on a board. Then how this repo embeds a canvas without giving away the shell. Then a story you already know. Then the phone. If at any point I start listing widgets, throw something.
+Here is the next half hour in one breath. When platform difference is fine, and when it is not. Then three drawing models and an 8.3-millisecond budget on a board. Then how this repo embeds a canvas without giving away the shell. Then the full cancelled-animation story. Then the phone. If at any point I start listing widgets, throw something.
 
 ---
 
-## Act 2 — Precedents (3:00–10:00)
+## Act 2 — When identical UI is the point (3:00–10:00)
 
-For about ten years we treated mobile architecture like a religion. Team Native sat on one side of the aisle: one hundred percent Swift, one hundred percent Kotlin, two codebases, two design systems, two bug lists, and a story we told ourselves that this was the only way to respect the platform. Team Cross-Platform sat on the other: throw the native app away, start over, one repo will save you.
+iOS and Android each paint with their own engine. UIKit and SwiftUI look like Apple. Views and Compose look like Google. The buttons differ. The fonts differ. The scroll physics differ. That is alright. That is the operating system doing its job. Nobody in this room wants an iPhone that looks like Material 3.
 
-Both sides were answering the wrong exam question. The waste is not “we used a framework.” The waste is writing the same custom graphics pipeline twice. Forms are cheap to write twice. A refraction shader is not. A 3D camera rig is not. A 120-hertz particle death effect is not.
+Your customer is not holding an iPhone and a Pixel side by side on the train. Even people who own both accept that Settings looks like iOS on iOS. Platform difference for the shell is not a bug. Testers will compare screenshots. Designers will. The person who paid for the app will not. They can live with a different switch.
 
-Look at games, because games already ran this experiment at industry scale. Apple gave you SceneKit, SpriteKit, Metal, RealityKit. Those are not toys. Google gave you Vulkan, Filament, OpenGL ES. Also not toys. If native graphics frameworks were enough, the top of the App Store would be a festival of SceneKit and Filament. It is not. More than seventy percent of the top thousand mobile games run on Unity.
+Flutter comes in with a different point of view. It does not ask UIKit and Compose to agree. It owns the renderer. Impeller paints the same scene to Metal on iPhone and Vulkan on Pixel. You get nearly the same picture — not because we mapped every widget, because we stopped asking two engines to impersonate each other. I will not say pixel-perfect. Text, fonts, and notches still exist. I will say: one picture, two phones, close enough that design stops arguing whose build is the source of truth.
 
-Studios did not do that because they hate native APIs. They did it because maintaining two rendering pipelines, two shader languages, two lighting models, two sets of artist tools, is two to three times the engineering cost. They paid a runtime — yes, a real binary, yes, real memory — so one team could ship one picture.
+There is a trade. I want to be precise, because in this room “trade-off” usually means “it cannot do 120 frames.” That is not what I mean. This canvas can do 120 hertz. You will see it on the HUD. The tax is elsewhere. Own the pixels and you own catching up to OS chrome. Own the pixels and you do not get `libjpeg-turbo` for free. Heavy image compress in the Dart `image` package is tens of times slower than native. Isolates stop the UI from hitching. They do not make Huffman faster. Call the platform. That is the performance I mean: not vsync. Codecs. Chrome. A first-engine RAM bill.
 
-There is a second reason Unity won that native UI people under-count: the art pipeline. One set of meshes, one set of materials, one lighting model, one person who can press Play and trust that the iPhone and the Pixel will agree. Determinism is not a graphics-nerd luxury. It is how you stop the Friday argument about whose build is the source of truth. When the product *is* the pixels, industry already picked an embedded engine. That is precedent one. I want you to steal the lesson, not the engine. Steal “one picture, one team.” Leave the 100-megabyte crate on the shelf.
+So what is Flutter for? When do we actually need identical UI? What difference is *not* acceptable?
 
-Precedent two sits at the other extreme, and I need you to let me concede it. Open Facebook. Open Instagram. Open Amazon. Settings, Help, Terms of Service — a lot of that is a WebView sitting inside a native chrome. That is not a failure of craft. Legal copy changes weekly. A help center is a CMS problem. Nobody in this room needs one hundred and twenty frames per second to read a privacy policy. Building two native table hierarchies for text that legal will rewrite on Thursday is a poor allocation of senior engineers.
+Not the login. Not the tab bar. Not a settings toggle. Those should look like the OS. Your user expects that. Difference there is a feature.
 
-If you sound anti-web in a room of native developers, they will stop listening, and they should. WebViews are the right tool until they are not. The ceiling is the point.
+The difference that is not acceptable is custom motion that *is* the product. Design ships a physics-heavy interaction. A spring. A dissolve. A card that feels like it has weight. iOS spends two weeks in Core Animation. Maybe a custom `CADisplayLink` driver. It ships. It is gorgeous. Then the ticket hits Android: three sprints, and it might drop frames on the phones you actually have in market, not the flagship on the poster. “Just port the animation” is not a ticket. It is a second product. The PM does the rational thing under a parity constraint. Cut it. Make a static card. Ship both stores equally beige.
 
-A WebView is a document compositor. It is excellent at text, forms, and content you want to update without an App Store review. It is a bad place to put deterministic physics. It is a bad place to put a fragment shader over a live scrolling tree. It is a bad place to put a three-dimensional island you can walk around.
+That is the case for an owned canvas. Not “make every screen identical.” The case is: this interaction is why someone opens the app, we cannot afford to build it twice, and we will not ship delight on one store.
 
-You will feel the ceiling in a specific way, and I want you to watch for it in the demo. Layout thrash. Blur. A JavaScript loop that looks innocent in desktop Chrome and dies on a thermal-throttled phone. A page cadence that falls off the native display link while the tab bar stays buttery. The host is fine. The document is not. On iOS you also have a second process — WebKit content, network, GPU — that your host `phys_footprint` will not fully confess. If someone tells you “the WebView is cheap because the HUD did not move,” ask them which process they measured.
+Games already voted. Apple has SceneKit and Metal. Google has Vulkan and Filament. More than seventy percent of the top thousand mobile games still run on Unity. One picture. One team. Steal the lesson, not the 100-megabyte crate.
 
-So we have a missing middle. Pure native: peak OS integration, terrible duplication cost for identical canvas work. WebView: cheap and dynamic, hard performance ceiling. Where does the branded promo go? The in-app game? The liquid glass that design saw in a keynote? The 3D configurator? That is the gap. The rest of this hour is how we fill it without burning the native app down.
+Help already voted the other way. Facebook, Instagram, Amazon — Settings, legal, FAQ — a lot of that is a WebView. Copy changes Thursday. Difference is fine. A document compositor is the right guest until you ask it for physics, a shader, or a 3D island. Watch for that ceiling in the demo: the native chrome stays smooth while the page falls off the display link.
 
-Twenty seconds, then I will stop naming Flutter. This is not a sales slide. I need you to know the canvas I am about to recommend is not a weekend experiment. Apptopia — quoted by the Flutter team — saw Flutter in about ten percent of tracked free iOS apps in 2021 and nearly thirty percent in 2024. BMW ships My BMW on it. Alibaba’s Xianyu, Google Pay, NotebookLM, eBay Motors, Nubank, Toyota infotainment, LG on webOS. I am not asking you to become those companies. I am asking you to treat an embedded canvas as a known production tool, the way you already treat Unity and WKWebView.
+Twenty seconds, then I will stop naming companies. This canvas is not a weekend experiment. Apptopia — quoted by the Flutter team — saw Flutter in about ten percent of tracked free iOS apps in 2021 and nearly thirty percent in 2024. BMW ships My BMW on it. Alibaba’s Xianyu, Google Pay, NotebookLM, eBay Motors, Nubank, Toyota infotainment, LG on webOS. I am not asking you to become those companies. I am asking you to treat an owned renderer as a known production tool.
 
-Flutter is not free, and it is not everything. It draws its own UI. iOS 26 shipped Liquid Glass. Flutter *runs* on iOS 26. Cupertino does not look like iOS 26 yet. You wait, or you fake the glass. It will not be pixel-identical to Settings. That is the owned-canvas tax.
-
-iPhone Duo moves Apple’s nav and tab bars to the side. A Flutter `AppBar` will not. Layout stretches. Chrome does not migrate unless we detect the device or Flutter adds it. Do not say Flutter cannot run on Duo.
-
-Heavy image compress: blame the codec, not Dart. The `image` package is not `libjpeg-turbo`. I have measured tens of times slower than native. Isolates fix jank, not speed. Call the platform.
-
-Why is this app Swift and Kotlin, not C++ or assembly? We pick the layer that fits. Native for the shell. A canvas when two pipelines would kill the feature. Then we go back to architecture.
+The rest of the tax, in one breath. iOS 26 shipped Liquid Glass. Flutter *runs* on iOS 26. Cupertino does not look like iOS 26 yet. You wait, or you fake the glass. It will not match Settings. iPhone Duo moves Apple’s nav and tab bars to the side. A Flutter `AppBar` will not. Layout stretches. Chrome does not migrate unless we detect the device or Flutter adds it. You already heard the codec. Why is this app Swift and Kotlin, not C++ or assembly? We pick the layer that fits. Native for the shell. A canvas when identical motion is the product. Then we go back to architecture.
 
 ---
 
@@ -139,7 +133,7 @@ Leave this cheat sheet up for the rest of the hour. Native: shell, forms, OS API
 
 ## Act 5 — Heartbreak (28:00–33:00)
 
-I have given you precedents and a board. Here is the story every dual-platform team already knows. I am not going to put five bullet points behind me and read them. I am going to say it once, because you have lived it.
+You already heard the ticket in Act 2. Here is the full story so it sticks. I am not going to put five bullet points behind me and read them. I am going to say it once, because you have lived it.
 
 Design ships a physics-heavy interaction. A spring. A dissolve. A card that feels like it has weight. It is beautiful in the prototype. It is the reason someone would open the app instead of the competitor. The room gets quiet in the good way.
 
@@ -166,7 +160,7 @@ I am going to pick up the phone now. Release build. Airplane mode. The HUD you w
 - [ ] Read Acts 1–5 out loud once with a timer, standing, no skipping
 - [ ] Record finish time. Target: **≤ 33:00** and **≥ 31:00**
 - [ ] If over 33:00: delete the CUT-FIRST Unity paragraph, re-time
-- [ ] If still over: shorten Act 2 WebView examples (keep the ceiling); do not cut the 8.3 ms board
+- [ ] If still over: shorten the Unity / WebView supporting votes in Act 2 (keep the cancelled-animation case); do not cut the 8.3 ms board
 - [ ] If under 31:00: add one concrete “cancelled animation” from your own team at the start of Act 5, and slow the board drawing — do not improvise new architecture
 - [ ] Confirm you can draw all four boards in [THEORY_BOARDS.md](THEORY_BOARDS.md) without looking
 - [ ] Stage business that is already in the clock: show of hands (~20s), four boards drawn while talking (do not add a silent drawing act), one sip of water after Act 3
