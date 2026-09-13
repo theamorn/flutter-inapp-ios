@@ -10,7 +10,7 @@ The argument is *not* "rewrite your app in Flutter." It is:
 
 1. **Native is good.** Keep the shell — login, tabs, Home, OS APIs. (Tab 1)
 2. **WebView is genuinely the right tool for some screens** — and it has a measurable ceiling. (Tab 2)
-3. **Flutter cooperates, it does not replace.** Add-to-app is also React Native brownfield and Unity as a Library. The guest here is an owned canvas for the screens two GPU pipelines would kill. (Tabs 3, 4, 5)
+3. **Flutter cooperates, it does not replace.** The guest is an owned canvas for **pictures that must match**: animation, game, live shader, 3D, branded promo. Not business logic — AI copies that. Tabs 3–5 are the pictures. Timing on stage: a few days on iOS vs a sprint on Android, no device guarantee.
 
 Talk clock, cons, and wording rules live in `docs/presentation/SLIDE_PLAN.md`.
 
