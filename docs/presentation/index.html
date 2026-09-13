@@ -401,6 +401,53 @@
       color: var(--text-primary);
     }
 
+    .theory-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 28px;
+      width: 100%;
+    }
+
+    .theory-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 22px 20px;
+      text-align: left;
+      min-height: 220px;
+    }
+
+    .theory-card h3 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 0 0 10px 0;
+    }
+
+    .theory-card p {
+      font-size: 16px;
+      line-height: 1.45;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    .theory-mono {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--text-secondary);
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 22px 24px;
+      text-align: left;
+      white-space: pre;
+      overflow-x: auto;
+      width: 100%;
+      margin-top: 20px;
+    }
+
     /* Image / Visual Placeholder Component */
     .image-placeholder-frame {
       width: 100%;
@@ -742,9 +789,11 @@
         </div>
         <div class="talking-points" style="display:none;">
           <ul>
-            <li>"Good evening! Welcome everyone."</li>
-            <li>Defuse skepticism in the first 5 seconds: "I am not here to tell you to rewrite your native app in Flutter."</li>
-            <li>Today is about pragmatic engineering: keeping your native app, and offloading the screens that cost you weeks of duplicate work.</li>
+            <li>Greeting. Then: native is a little over 18 years old — July 2008, iPhone 3G, App Store, third-party native apps. The original iPhone was web-apps-only.</li>
+            <li>Lots of stacks tried to replace native. Do not say “none ever worked.” They failed as replacements. Performance is why the replacement religion dies.</li>
+            <li>Flutter is not here to compete with native. It cooperates. This repo does too: native login, tabs, HUD.</li>
+            <li>Add-to-app is not a Flutter trademark. React Native brownfield and Unity as a Library already embed. Today is pros, cons, tradeoffs, capability.</li>
+            <li>Land with: “I am not here to tell you to rewrite your native app.”</li>
           </ul>
         </div>
       </section>
@@ -793,9 +842,9 @@
         </div>
         <div class="talking-points" style="display:none;">
           <ul>
-            <li>For a decade, mobile architecture has been treated as a binary religion.</li>
-            <li>You either commit to two separate native teams rewriting everything twice, or you compromise on a cross-platform rewrite.</li>
-            <li>It's time to escape that trap.</li>
+            <li>iOS and Android each paint with their own engine. UI difference is alright. Nobody wants Material on iPhone.</li>
+            <li>Customers are not holding two phones side by side. They accept Settings looking like the OS.</li>
+            <li>Flutter’s different POV: it owns the renderer, so you get nearly the same picture. Do not say pixel-perfect.</li>
           </ul>
         </div>
       </section>
@@ -819,8 +868,9 @@
         </div>
         <div class="talking-points" style="display:none;">
           <ul>
-            <li>Ask for a show of hands: "Who has spent 2 weeks perfecting a custom animation in Swift, only for Product to ask when Android gets it?"</li>
-            <li>The real enemy isn't native or cross-platform. The enemy is wasting sprints duplicating pixel-pushing.</li>
+            <li>When is identical UI the point? Pictures: animation, game, live shader, 3D, branded promo. Not business logic — AI copies that.</li>
+            <li>Use case timing: a few days of Core Animation on iOS. A whole sprint on Android, no guarantee on every device. PM cuts it to a static card.</li>
+            <li>Trade-off is not “Flutter can’t do 120 fps.” It can. The tax is codecs and OS chrome. Call native for compress.</li>
           </ul>
         </div>
       </section>
@@ -838,9 +888,9 @@
         </div>
         <div class="talking-points" style="display:none;">
           <ul>
-            <li>Look at mobile gaming. Apple has SceneKit, Metal, and SpriteKit. Google has Vulkan and Filament.</li>
-            <li>Yet over 70% of top mobile games use Unity. Why?</li>
-            <li>Because game studios realized early on: writing 3D graphics and shaders twice is commercial suicide.</li>
+            <li>Supporting vote, not the spine: games already picked one picture. Steal the lesson, not the 100 MB crate.</li>
+            <li>Apple has SceneKit and Metal. Google has Vulkan and Filament. Still >70% of top games run Unity.</li>
+            <li>The spine of this act is the cancelled iOS animation, not a Unity keynote.</li>
           </ul>
         </div>
       </section>
@@ -922,8 +972,93 @@
         </div>
       </section>
 
-      <!-- SLIDE 9: Enter Flutter -->
+      <!-- SLIDE 9: Three drawing models -->
       <section class="slide" data-slide="9">
+        <div class="slide-hero-center" style="max-width:1100px;">
+          <div class="slide-badge badge-emerald">Foundation • Act 3</div>
+          <h1 class="title-main" style="font-size:42px;">Three ways a mobile screen draws.</h1>
+          <h2 class="subtitle-main">Widgets. Web. Owned canvas. Flutter Add-to-App is the third.</h2>
+          <div class="theory-grid">
+            <div class="theory-card">
+              <h3>1. Platform widgets</h3>
+              <p>UIKit / Compose. The OS owns layout, accessibility, and look. Login, Home, forms stay here.</p>
+            </div>
+            <div class="theory-card">
+              <h3>2. Web document</h3>
+              <p>DOM + compositor. Great for copy that changes weekly. Weak at deterministic 120 fps physics.</p>
+            </div>
+            <div class="theory-card">
+              <h3>3. Owned canvas</h3>
+              <p>OS gives a UIView or Surface. You paint every pixel. Unity, custom Metal, Flutter Add-to-App.</p>
+            </div>
+          </div>
+        </div>
+        <div class="talking-points" style="display:none;">
+          <ul>
+            <li>This is a board, not a code tour.</li>
+            <li>Flutter inside a native app is column 3: give me a canvas.</li>
+            <li>Do not rewrite forms onto a canvas. You will lose VoiceOver.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- SLIDE 10: Frame budget -->
+      <section class="slide" data-slide="10">
+        <div class="slide-hero-center" style="max-width:1100px;">
+          <div class="slide-badge badge-amber">Foundation • 120 Hz</div>
+          <h1 class="title-main amber-text" style="font-size:42px;">8.3 milliseconds.</h1>
+          <h2 class="subtitle-main">That is the entire ProMotion budget. UI isolate + Raster both have to fit.</h2>
+          <div class="theory-mono">60 Hz  →  16.6 ms
+120 Hz →   8.3 ms   ← ProMotion
+
+UI isolate     layout, widgets, game tick
+Raster         Impeller → Metal / Vulkan
+
+HUD is native-owned
+  CADisplayLink / Choreographer
+  task_info / Debug.getPss
+  Flutter reports UI + raster batches only</div>
+        </div>
+        <div class="talking-points" style="display:none;">
+          <ul>
+            <li>If Flutter graded itself, you would be right to call the meter rigged.</li>
+            <li>Jank is two diseases: fat UI time vs fat raster time. Read both clocks.</li>
+            <li>Users feel the worst frame, not the average. Say "average" when you quote the HUD.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- SLIDE 11: Identical pixels -->
+      <section class="slide" data-slide="11">
+        <div class="slide-split">
+          <div>
+            <div class="slide-badge badge-purple">Foundation • Architecture</div>
+            <h1 class="title-main">Identical pixels is a choice.</h1>
+            <h2 class="subtitle-main">Two teams, two shaders, two “looks close enough.” One canvas, one picture.</h2>
+          </div>
+          <div>
+            <div class="theory-mono" style="margin-top:0;">Two implementations
+  iOS Metal
+  Android AGSL / RenderNode
+        ↓
+  two bugs + beige parity
+
+One owned canvas
+        ↓
+  one picture
+  (how games already work)</div>
+          </div>
+        </div>
+        <div class="talking-points" style="display:none;">
+          <ul>
+            <li>Stop here. Do not explain Impeller internals yet.</li>
+            <li>We already accepted a runtime tax for games. A promo screen is the same problem.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- SLIDE 12: Enter Flutter -->
+      <section class="slide" data-slide="12">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-emerald">The Solution</div>
@@ -949,7 +1084,7 @@
       </section>
 
       <!-- SLIDE 10: Canvas Architecture -->
-      <section class="slide" data-slide="10">
+      <section class="slide" data-slide="13">
         <div class="slide-split">
           <div>
             <div class="slide-badge">Under The Hood</div>
@@ -975,7 +1110,7 @@
       </section>
 
       <!-- SLIDE 11: The Misconception -->
-      <section class="slide" data-slide="11">
+      <section class="slide" data-slide="14">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-emerald">Myth Buster</div>
@@ -1002,7 +1137,7 @@
       </section>
 
       <!-- SLIDE 12: Add-to-App -->
-      <section class="slide" data-slide="12">
+      <section class="slide" data-slide="15">
         <div class="slide-split">
           <div>
             <div class="slide-badge">Architecture</div>
@@ -1027,8 +1162,31 @@
         </div>
       </section>
 
+      <!-- Engine group topology -->
+      <section class="slide" data-slide="16">
+        <div class="slide-hero-center" style="max-width:1100px;">
+          <div class="slide-badge">Architecture • Act 4</div>
+          <h1 class="title-main" style="font-size:40px;">One group. Three lazy engines.</h1>
+          <h2 class="subtitle-main">Hidden tabs pause. First visit is when the HUD shows the cost.</h2>
+          <div class="theory-mono">Native window + native HUD
+  ├── Tab 1   UIKit / Compose Home
+  ├── Tab 2   WKWebView settings
+  └── FlutterEngineGroup("hybrid-demo")
+        ├── /game    first visit to tab 3
+        ├── /glass   first visit to tab 4
+        └── /scene   first visit to tab 5</div>
+        </div>
+        <div class="talking-points" style="display:none;">
+          <ul>
+            <li>Do not pre-warm at launch — it hides the incremental memory story.</li>
+            <li>Hidden tabs pause so Flappy Cat does not run behind Home.</li>
+            <li>Quote costs once: 4–6 MB bundle, ~13–19 MB first engine, ~180 KB / 1.4 MB extras.</li>
+          </ul>
+        </div>
+      </section>
+
       <!-- SLIDE 13: Memory Stat Hero -->
-      <section class="slide" data-slide="13">
+      <section class="slide" data-slide="17">
         <div class="slide-hero-center">
           <div class="slide-badge badge-emerald">Memory Benchmark</div>
           <div class="stat-hero-number emerald-text">~180 KB</div>
@@ -1049,7 +1207,7 @@
       </section>
 
       <!-- SLIDE 14: Unity Comparison -->
-      <section class="slide" data-slide="14">
+      <section class="slide" data-slide="18">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-purple">The Comparison</div>
@@ -1076,7 +1234,7 @@
       </section>
 
       <!-- SLIDE 15: Developer Heartbreak -->
-      <section class="slide" data-slide="15">
+      <section class="slide" data-slide="19">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-rose" style="color:var(--accent-rose); border-color:rgba(251,113,133,0.3); background:rgba(251,113,133,0.1);">The Heartbreak</div>
@@ -1084,7 +1242,7 @@
             <h2 class="subtitle-main">The heartbreak of dual native development.</h2>
           </div>
           <div>
-            <div class="image-placeholder-frame" data-prompt="Comic strip: Designer presents an incredible fluid UI prototype. iOS finishes in 2 weeks. Android says '3 sprints'. A red 'FEATURE CANCELLED' stamp hits the desk.">
+            <div class="image-placeholder-frame" data-prompt="Comic strip: Designer presents an incredible fluid UI prototype. iOS finishes in a few days. Android says 'a sprint, no device guarantee'. A red 'FEATURE CANCELLED' stamp hits the desk.">
               <!-- PLACE YOUR <img> HERE -->
               <div class="placeholder-icon">💔</div>
               <div class="placeholder-tag">Image Placeholder</div>
@@ -1104,7 +1262,7 @@
       </section>
 
       <!-- SLIDE 16: Build Once Parity -->
-      <section class="slide" data-slide="16">
+      <section class="slide" data-slide="20">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-emerald">The Superpower</div>
@@ -1131,7 +1289,7 @@
       </section>
 
       <!-- SLIDE 17: Showcase Intro -->
-      <section class="slide" data-slide="17">
+      <section class="slide" data-slide="21">
         <div class="slide-split">
           <div>
             <div class="slide-badge">The Live Demo</div>
@@ -1157,7 +1315,7 @@
       </section>
 
       <!-- SLIDE 18: Tab 1 (Native) -->
-      <section class="slide" data-slide="18">
+      <section class="slide" data-slide="22">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-emerald">Tab 1 • Baseline</div>
@@ -1183,7 +1341,7 @@
       </section>
 
       <!-- SLIDE 19: Tab 2 (Web) -->
-      <section class="slide" data-slide="19">
+      <section class="slide" data-slide="23">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-amber">Tab 2 • The Ceiling</div>
@@ -1210,7 +1368,7 @@
       </section>
 
       <!-- SLIDE 20: Tab 3 (Flappy Cat) -->
-      <section class="slide" data-slide="20">
+      <section class="slide" data-slide="24">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-purple">Tab 3 • 2D Engine</div>
@@ -1237,7 +1395,7 @@
       </section>
 
       <!-- SLIDE 21: Tab 4 (Liquid Glass) -->
-      <section class="slide" data-slide="21">
+      <section class="slide" data-slide="25">
         <div class="slide-split">
           <div>
             <div class="slide-badge">Tab 4 • Shaders</div>
@@ -1264,7 +1422,7 @@
       </section>
 
       <!-- SLIDE 22: Tab 5 (3D Island) -->
-      <section class="slide" data-slide="22">
+      <section class="slide" data-slide="26">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-purple">Tab 5 • 3D GPU</div>
@@ -1283,16 +1441,15 @@
         <div class="talking-points" style="display:none;">
           <ul>
             <li>(Switch to Tab 5)</li>
-            <li>Orbit around the 3D island with your finger.</li>
-            <li>Drag the Day/Night slider.</li>
-            <li>Tap the ground: The raycaster unprojects screen touch into 3D world space and the character walks there.</li>
+            <li>Orbit, day/night slider, tap-to-walk on the ground plane.</li>
+            <li>Ultra adds extra props and a wandering NPC. Water bump is off so the phone stays live.</li>
             <li>Full 3D graphics inside your native tab without Unity.</li>
           </ul>
         </div>
       </section>
 
       <!-- SLIDE 23: The Two-Way Bridge -->
-      <section class="slide" data-slide="23">
+      <section class="slide" data-slide="27">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-emerald">Integration</div>
@@ -1318,7 +1475,7 @@
       </section>
 
       <!-- SLIDE 24: Decision Matrix -->
-      <section class="slide" data-slide="24">
+      <section class="slide" data-slide="28">
         <div class="slide-split">
           <div>
             <div class="slide-badge">The Strategy</div>
@@ -1345,7 +1502,7 @@
       </section>
 
       <!-- SLIDE 25: Typographic Conclusion -->
-      <section class="slide" data-slide="25">
+      <section class="slide" data-slide="29">
         <div class="slide-hero-center">
           <div class="quote-insignia">🎯</div>
           <h1 class="title-main gradient-text" style="font-size: 54px; margin-bottom: 24px;">We solve problems with software.</h1>
@@ -1364,7 +1521,7 @@
       </section>
 
       <!-- SLIDE 26: Q & A -->
-      <section class="slide" data-slide="26">
+      <section class="slide" data-slide="30">
         <div class="slide-hero-center">
           <div class="slide-badge badge-emerald">Open Discussion</div>
           <h1 class="title-main gradient-text" style="font-size: 64px; margin-bottom: 16px;">Questions & Discussion</h1>
@@ -1378,7 +1535,13 @@
         <div class="talking-points" style="display:none;">
           <ul>
             <li>Open the floor for questions.</li>
-            <li>Address common questions: CI/CD setup with XCFrameworks, accessibility semantics, and production readiness.</li>
+            <li>Address common questions: CI/CD, a11y, production readiness.</li>
+            <li>“Why not AI-port iOS to Android?” AI drafts a second implementation. It does not share a renderer or an 8.3 ms budget. Use AI to write one canvas, not to fork the pixels.</li>
+            <li>If asked “is Flutter safe?”: Apptopia 10%→30% of tracked free iOS apps; BMW, Google Pay, Xianyu. Then stop. This is not a sales slide.</li>
+            <li>If asked “does Flutter support iOS 26?”: it runs. The gap is Cupertino / Liquid Glass parity, not the OS target. Wait or fake; it will not match Settings.</li>
+            <li>If asked “what about iPhone Duo?”: layout reflow is fine. Apple chrome goes vertical; a Flutter AppBar will not. displayFeatures is Android-shaped. Detect or wait. Do not say Flutter cannot run on Duo.</li>
+            <li>If asked “isn’t Flutter bad at image compress?”: the Dart image package is not libjpeg-turbo. Isolates fix jank, not speed. MethodChannel or FFI. Do not say Flutter cannot compress images.</li>
+            <li>If asked “can’t React Native do add-to-app too?”: yes. Official brownfield. Unity as a Library too. The question is which guest — native widgets + JS, a game engine, or an owned canvas with cheap extra engines.</li>
           </ul>
         </div>
       </section>
@@ -1389,7 +1552,7 @@
   <!-- Bottom Floating Control Bar -->
   <div id="controls-bar">
     <button class="control-btn" id="btn-prev" title="Previous Slide (Left Arrow / Backspace)">◀</button>
-    <div class="slide-counter" id="slide-counter">01 / 26</div>
+    <div class="slide-counter" id="slide-counter">01 / 30</div>
     <button class="control-btn" id="btn-next" title="Next Slide (Right Arrow / Space)">▶</button>
     <div style="width: 1px; height: 18px; background: var(--border-subtle); margin: 0 4px;"></div>
     <button class="btn-badge" id="btn-notes" title="Toggle Presenter Notes (N)">
@@ -1422,7 +1585,7 @@
   <!-- Slide Overview Grid Modal -->
   <div id="overview-modal">
     <div style="display:flex; justify-content:space-between; align-items:center; max-width:1400px; margin: 0 auto 24px auto;">
-      <h2 style="font-size:24px; font-weight:700;">Slide Overview (26 Slides)</h2>
+      <h2 style="font-size:24px; font-weight:700;">Slide Overview (30 Slides)</h2>
       <button class="control-btn" id="btn-close-overview" style="background:rgba(255,255,255,0.1);">✕</button>
     </div>
     <div class="overview-grid" id="overview-grid">

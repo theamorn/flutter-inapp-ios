@@ -46,8 +46,9 @@ style: |
 
 <!--
 Talking Points:
-- Defuse skepticism immediately: "I am not here to tell you to rewrite your native app in Flutter."
-- Introduce the premise: Native is great for your core app, but there is a smarter way to handle complex UI.
+- Greeting. Native is 18+ years old (July 2008, iPhone 3G, App Store). Replacement stacks failed as replacements — do not say they never worked.
+- Flutter cooperates with native. Add-to-app is also React Native brownfield and Unity as a Library.
+- Land with: "I am not here to tell you to rewrite your native app." Today is pros, cons, tradeoffs, capability.
 -->
 
 ---
@@ -125,6 +126,53 @@ Talking Points:
 - WebViews choke under heavy layout and animation.
 - There is a massive gap in the middle.
 -->
+
+---
+
+# Foundation: Three Drawing Models
+## Widgets · Web · Owned canvas
+
+- **Platform widgets:** OS owns layout and a11y — login, Home, forms
+- **Web document:** DOM for weekly copy — legal, FAQ, CMS
+- **Owned canvas:** you paint a `UIView` / `Surface` — Unity, Metal, Flutter Add-to-App
+
+<!--
+Talking Points:
+- Flutter Add-to-App is column 3: give me a canvas.
+- Do not put a form on a canvas.
+-->
+
+---
+
+# Foundation: 8.3 ms
+## The entire 120 Hz budget
+
+- 60 Hz = 16.6 ms · **120 Hz = 8.3 ms**
+- UI isolate + Raster (Impeller → Metal / Vulkan)
+- HUD is native-owned; Flutter reports batches only
+
+<!--
+Talking Points:
+- If Flutter graded itself, the meter is rigged.
+-->
+
+---
+
+# Foundation: Identical Pixels
+## Two shaders is two bugs
+
+- Metal + “equivalent” AGSL → looks close enough
+- One owned canvas → one picture
+- Stop before Impeller internals
+
+---
+
+# Add-to-App Topology
+## FlutterEngineGroup("hybrid-demo")
+
+- Lazy spawn: `/game`, `/glass`, `/scene` on first tab visit
+- Hidden tabs pause rendering
+- Extra engine: ~180 KB iOS / ~1.4 MB Android
 
 ---
 
@@ -249,8 +297,8 @@ Talking Points:
 ## The Real Pain Point Behind Two Apps
 
 - **Design:** Creates a gorgeous, fluid, physics-driven animation
-- **iOS:** Spends 2 weeks building it in CoreAnimation
-- **Android:** "This will take 3 sprints and might drop frames"
+- **iOS:** A few days in Core Animation
+- **Android:** A whole sprint, no guarantee on every device
 - **Product Owner:** "Cut the feature. We'll make it static."
 
 > **Image Prompt:**  

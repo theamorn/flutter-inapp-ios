@@ -57,8 +57,9 @@ style: |
 <!--
 Talking Points:
 - "Good evening! Welcome everyone."
-- Defuse skepticism in the first 5 seconds: "I am not here to tell you to rewrite your native app in Flutter."
-- Today is about pragmatic engineering: keeping your native app, and offloading the screens that cost you weeks of duplicate work.
+- Greeting. Native is 18+ years old (July 2008, iPhone 3G, App Store). Replacement stacks failed as replacements — do not say they never worked.
+- Flutter cooperates with native. Add-to-app is also React Native brownfield and Unity as a Library.
+- Land with: "I am not here to tell you to rewrite your native app." Today is pros, cons, tradeoffs, capability.
 -->
 
 ---
@@ -102,7 +103,7 @@ Talking Points:
 
 <!--
 Talking Points:
-- Ask for a show of hands: "Who has spent 2 weeks perfecting a custom animation in Swift, only for Product to ask when Android gets it?"
+- Ask for a show of hands: "Who shipped a proud iOS animation in a few days, then heard Android would take a sprint with no device guarantee?"
 - The real enemy isn't native or cross-platform. The enemy is wasting sprints duplicating pixel-pushing.
 -->
 
@@ -172,6 +173,50 @@ Talking Points:
 
 ---
 
+# Three ways a screen draws.
+## Widgets. Web. Owned canvas.
+
+<div class="visual-card">
+  <strong>Board:</strong> Three columns. (1) UIKit/Compose owns layout and a11y. (2) DOM for weekly copy. (3) UIView/Surface you paint — Unity, Metal, Flutter Add-to-App.
+</div>
+
+<!--
+Talking Points:
+- Flutter Add-to-App is column 3: give me a canvas.
+- Do not put login or Home on a canvas. You will lose VoiceOver.
+-->
+
+---
+
+# 8.3 milliseconds.
+## That is the entire 120 Hz budget.
+
+<div class="visual-card">
+  <strong>Board:</strong> 60 Hz = 16.6 ms. 120 Hz = 8.3 ms. UI isolate + Raster/Impeller. HUD is native CADisplayLink / Choreographer. Flutter only reports batches.
+</div>
+
+<!--
+Talking Points:
+- If Flutter graded itself, the meter is rigged.
+- Jank is two clocks. Read both.
+-->
+
+---
+
+# Identical pixels is architecture.
+## Two shaders is two bugs.
+
+<div class="visual-card">
+  <strong>Board:</strong> Metal + AGSL "equivalent" → looks close enough. One owned canvas → one picture. Stop before Impeller internals.
+</div>
+
+<!--
+Talking Points:
+- Game studios already paid this tax. A promo screen is the same problem.
+-->
+
+---
+
 # Enter the Middle Ground.
 ## Introducing Flutter for offloading complex UI.
 
@@ -237,6 +282,21 @@ Talking Points:
 
 ---
 
+# One group. Three lazy engines.
+## Hidden tabs pause. First visit shows the cost.
+
+<div class="visual-card">
+  <strong>Board:</strong> Native HUD over Tab 1 Home, Tab 2 WebView, and FlutterEngineGroup("hybrid-demo") spawning /game, /glass, /scene on first visit.
+</div>
+
+<!--
+Talking Points:
+- Do not pre-warm at launch.
+- Quote 4–6 MB bundle, ~13–19 MB first engine, ~180 KB / 1.4 MB extras, then move.
+-->
+
+---
+
 <div class="big-stat">~180 KB</div>
 
 ## The memory cost of an extra Flutter engine on iOS.
@@ -276,7 +336,7 @@ Talking Points:
 ## The heartbreak of dual native development.
 
 <div class="visual-card">
-  <strong>Visual:</strong> Comic strip: Designer presents an incredible fluid UI prototype. iOS finishes in 2 weeks. Android says "3 sprints". A red "FEATURE CANCELLED" stamp hits the desk.
+  <strong>Visual:</strong> Comic strip: Designer presents an incredible fluid UI prototype. iOS finishes in a few days. Android says "a sprint, no device guarantee". A red "FEATURE CANCELLED" stamp hits the desk.
 </div>
 
 <!--
@@ -403,6 +463,7 @@ Talking Points:
 - Orbit around the 3D island with your finger.
 - Drag the Day/Night slider.
 - Tap the ground: The raycaster unprojects screen touch into 3D world space and the character walks there.
+- Ultra: extra props + wandering NPC. Water bump is off so the phone stays live.
 - Full 3D graphics inside your native tab without Unity.
 -->
 
