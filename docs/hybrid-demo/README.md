@@ -8,9 +8,11 @@ Build docs for a conference demo. **Read this file and `ARCHITECTURE.md` before 
 
 The argument is *not* "rewrite your app in Flutter." It is:
 
-1. **Native is good.** Keep your native app. (Tab 1)
+1. **Native is good.** Keep the shell — login, tabs, Home, OS APIs. (Tab 1)
 2. **WebView is genuinely the right tool for some screens** — and it has a measurable ceiling. (Tab 2)
-3. **Flutter gives you fast development AND high performance**, so you offload the screens native would cost you weeks on. (Tabs 3, 4, 5)
+3. **Flutter cooperates, it does not replace.** Add-to-app is also React Native brownfield and Unity as a Library. The guest here is an owned canvas for the screens two GPU pipelines would kill. (Tabs 3, 4, 5)
+
+Talk clock, cons, and wording rules live in `docs/presentation/SLIDE_PLAN.md`.
 
 Everything in these docs serves one requirement: **"high performance" must be measurable on a projector, not asserted.** That is the job of the native performance HUD (see `ARCHITECTURE.md`), which is the spine of the whole demo. If a change would weaken or fake the HUD, it is the wrong change.
 

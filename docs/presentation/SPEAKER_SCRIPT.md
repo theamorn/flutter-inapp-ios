@@ -6,13 +6,13 @@ Word counts are spoken text only.
 
 | Act | Clock | Words | Read time @ 130 wpm |
 |---|---|---|---|
-| 1 Open | 0:00–3:00 | ~410 | ~3:10 |
-| 2 Precedents | 3:00–10:00 | ~710 | ~5:30 |
+| 1 Open | 0:00–3:00 | ~430 | ~3:20 |
+| 2 Precedents | 3:00–10:00 | ~850 | ~6:35 |
 | 3 Foundation | 10:00–20:00 | ~1,100 | ~8:30 |
 | 4 Add-to-App | 20:00–28:00 | ~770 | ~5:55 |
 | 5 Heartbreak | 28:00–33:00 | ~520 | ~4:00 |
-| Spoken 1–5 | | **~3,510** | **~27:00** |
-| Stage business | hands, board drawing, pauses | | **~6:00** |
+| Spoken 1–5 | | **~3,670** | **~28:15** |
+| Stage business | hands, board drawing, pauses | | **~4:45** |
 | **Acts 1–5** | **0:00–33:00** | | **~33:00** |
 
 Then switch to the phone and [DEMO_SCRIPT.md](DEMO_SCRIPT.md). Draw the boards from [THEORY_BOARDS.md](THEORY_BOARDS.md) while you talk Act 3 and Act 4.
@@ -21,21 +21,25 @@ Then switch to the phone and [DEMO_SCRIPT.md](DEMO_SCRIPT.md). Draw the boards f
 
 ## Act 1 — Open (0:00–3:00)
 
-I am not here to tell you to rewrite your native app in Flutter.
+Thanks for having me.
 
-I want that sentence in the room before anyone looks at a logo on a slide. I have given talks where half the first row folded their arms the moment they saw the word Flutter in the abstract. That reaction is earned. For a decade, “cross-platform” was sold as a replacement religion: throw away the Swift, throw away the Kotlin, start over, trust us. That is not this talk.
+Native mobile development is a little over eighteen years old. July 2008: iPhone 3G, iPhone OS 2.0, the App Store. That is the moment Apple let third parties write real native applications. The original iPhone, a year earlier, did not — web apps only. Android shipped the same year. For eighteen years the job has been the same: respect the operating system.
 
-Native is still the right place for the shell of a real product. Your login. Your tab bar. Your Home screen. HealthKit. Bluetooth. Push. App clips. The things that have to feel like the operating system, because they *are* the operating system. Keep them. The meetup login you saw on the way in — Mobile Native Meetup, username, password, Sign In — that is a native screen on purpose. Nobody needs a game engine to draw a text field.
+In those eighteen years, a lot of technologies tried to *replace* native. Web wrappers. PhoneGap. Titanium. Xamarin. A decade of “write once, throw the Swift away.” Some of those stacks shipped real products. None of them replaced native as the default for the shell — login, tabs, HealthKit, the thing that has to feel like iOS and Android. The reason people remember is performance, and they are not wrong. Miss the frame and users feel it. Fake the chrome and users feel it. A replacement religion dies the first time the scroll is not as good as Settings.
 
-Today is about a narrower, more expensive problem. The screens that make two platform teams cry. Mini-games. Custom shaders. Three-dimensional product views. Physics-heavy branded motion that design fell in love with on a Tuesday and product wants on both stores by Friday. The work where “just do it in UIKit and then do it again in Compose” is not a plan. It is a six-week argument and a cancelled animation.
+Here is the sentence I want in the room before anyone looks at a logo. Flutter is not here to compete with native. It is here to cooperate with it. And that is not a Flutter trademark. React Native has official brownfield docs — Meta shipped that way. Unity as a Library embeds a game engine in a native host. A WebView already does this. Add-to-app is a pattern, not a brand.
+
+What we are going to look at is one guest with a specific job: an owned canvas that paints its own pixels, sitting inside a native window. This repo does that. The login you saw — Mobile Native Meetup — is UIKit and Compose. The tab bar is native. The HUD is native. Flutter is a view we spawn when two GPU pipelines would kill the feature.
+
+Today is the trade. Pros. Cons. What it can do. What it costs. I am not here to tell you to rewrite your native app.
 
 Quick show of hands. Who here has shipped an animation on iOS that you were proud of — Core Animation, a custom transition, a spring that finally felt expensive in a good way — and then heard, “Great. How long until Android has it?”
 
 Keep your hands up for a second if the honest answer was “we shipped a static card instead.”
 
-That question is the talk. Not Flutter versus native. Not rewrite versus stay. When the pixels have to match, and the physics have to match, who should own the canvas?
+That question is the talk. When the pixels have to match, and the physics have to match, who should own the canvas — and how do we do that without burning the native app down?
 
-Here is the next half hour in one breath, so you know I am not sneaking up on a rewrite. We will look at two industry precedents — games and WebViews — then I will put three drawing models and an 8.3-millisecond budget on a board. Then I will show you how this repo embeds a canvas without giving away the native shell. Then a story you already know. Then the phone. If at any point I start listing widgets, throw something.
+Here is the next half hour in one breath. Precedents — games and WebViews — then three drawing models and an 8.3-millisecond budget on a board. Then how this repo embeds a canvas without giving away the shell. Then a story you already know. Then the phone. If at any point I start listing widgets, throw something.
 
 ---
 
@@ -61,7 +65,15 @@ You will feel the ceiling in a specific way, and I want you to watch for it in t
 
 So we have a missing middle. Pure native: peak OS integration, terrible duplication cost for identical canvas work. WebView: cheap and dynamic, hard performance ceiling. Where does the branded promo go? The in-app game? The liquid glass that design saw in a keynote? The 3D configurator? That is the gap. The rest of this hour is how we fill it without burning the native app down.
 
-Twenty seconds, then I will stop naming Flutter. This is not a sales slide. I need you to know the canvas I am about to recommend is not a weekend experiment. Apptopia — quoted by the Flutter team — saw Flutter in about ten percent of tracked free iOS apps in 2021 and nearly thirty percent in 2024. BMW ships My BMW on it. Alibaba’s Xianyu, Google Pay, NotebookLM, eBay Motors, Nubank, Toyota infotainment, LG on webOS. I am not asking you to become those companies. I am asking you to treat an embedded canvas as a known production tool, the way you already treat Unity and WKWebView. Then we go back to architecture.
+Twenty seconds, then I will stop naming Flutter. This is not a sales slide. I need you to know the canvas I am about to recommend is not a weekend experiment. Apptopia — quoted by the Flutter team — saw Flutter in about ten percent of tracked free iOS apps in 2021 and nearly thirty percent in 2024. BMW ships My BMW on it. Alibaba’s Xianyu, Google Pay, NotebookLM, eBay Motors, Nubank, Toyota infotainment, LG on webOS. I am not asking you to become those companies. I am asking you to treat an embedded canvas as a known production tool, the way you already treat Unity and WKWebView.
+
+Flutter is not free, and it is not everything. It draws its own UI. iOS 26 shipped Liquid Glass. Flutter *runs* on iOS 26. Cupertino does not look like iOS 26 yet. You wait, or you fake the glass. It will not be pixel-identical to Settings. That is the owned-canvas tax.
+
+iPhone Duo moves Apple’s nav and tab bars to the side. A Flutter `AppBar` will not. Layout stretches. Chrome does not migrate unless we detect the device or Flutter adds it. Do not say Flutter cannot run on Duo.
+
+Heavy image compress: blame the codec, not Dart. The `image` package is not `libjpeg-turbo`. I have measured tens of times slower than native. Isolates fix jank, not speed. Call the platform.
+
+Why is this app Swift and Kotlin, not C++ or assembly? We pick the layer that fits. Native for the shell. A canvas when two pipelines would kill the feature. Then we go back to architecture.
 
 ---
 
@@ -117,7 +129,7 @@ There is also a channel. I will not put code on the screen. I will tell you the 
 
 Cost. I am going to quote a short table and sit down. Do not let this become a numbers fight. The engine in the bundle is about four to six megabytes compressed. That is real. It is also not a hundred-megabyte game engine. The first running engine is on the order of thirteen megabytes of RAM on iOS and nineteen on Android. Extra engines in the group share the heavy stuff, so they cost about 180 kilobytes on iOS and about 1.4 megabytes on Android. Cold spawn is hundreds of milliseconds, not seconds. A cached spawn after the group is warm is on the order of five to fifteen milliseconds for the synchronous call. Measure it on your device. The HUD is there so you do not have to trust a blog post.
 
-**CUT-FIRST if you are over time — start here:** People ask, “Isn’t that just Unity in an app?” Conceptually, yes: you asked for a unified 2D and 3D canvas. The invoice is different. Unity as a library is often a three-to-six-second load and fifty to a hundred megabytes of baggage. Flutter is not free. I will not stand here and say it is free. It is a different invoice: smaller binary, faster spawn, incremental engines that are closer to “another image” than “another runtime.” If you only remember one contrast, remember spawn time and incremental RAM, not a holy war about which engine is morally native.
+**CUT-FIRST if you are over time — start here:** People ask, “Isn’t that just Unity in an app?” Conceptually, yes: you asked for a unified 2D and 3D canvas. The invoice is different. Unity as a library is often a three-to-six-second load and fifty to a hundred megabytes of baggage. Flutter is not free. I will not stand here and say it is free. You already heard the tax: OS chrome and codecs stay native. It is a different invoice: smaller binary, faster spawn, incremental engines that are closer to “another image” than “another runtime.” If you only remember one contrast, remember spawn time and incremental RAM, not a holy war about which engine is morally native.
 
 Impeller, one sentence, and then I will not say Impeller again until the cat dies: shaders compile ahead of time to Metal and Vulkan, so the first time a flame dissolve runs you should not hitch from a runtime compile. That is the 2019 scar a lot of you still have. The scar was real. The compiler story changed.
 
@@ -159,6 +171,7 @@ I am going to pick up the phone now. Release build. Airplane mode. The HUD you w
 - [ ] Confirm you can draw all four boards in [THEORY_BOARDS.md](THEORY_BOARDS.md) without looking
 - [ ] Stage business that is already in the clock: show of hands (~20s), four boards drawn while talking (do not add a silent drawing act), one sip of water after Act 3
 - [ ] If the “safe to use” names in Act 2 run long, keep Apptopia 10%→30% and **two** logos (BMW + Google Pay). Cut the rest.
+- [ ] If the Flutter-cons beat runs long, keep iOS 26 Liquid Glass + “call the platform for codecs” + the C++ closer. Cut Duo first.
 
 ---
 
@@ -179,3 +192,39 @@ Someone will say: we have Copilot / Gemini / Claude. Point it at the Swift, get 
 If they push: “We measured the AI port and it was fine.”
 
 > Great — then you did not need this talk for that screen. Keep native. This hour is for the screen where fine-on-Android is still a different movie.
+
+---
+
+## Q&A card — Flutter cons (say the accurate version)
+
+Do **not** invent a missing OS target. If someone asks these, use the short form and sit down.
+
+**“Does Flutter support iOS 26?”**
+
+> It runs on iOS 26. The gap is Cupertino visual parity — Liquid Glass — not the OS version. Community packages approximate. They are not UIKit `glassEffect`. Wait or fake. It will not match Settings.
+
+**“What about iPhone Duo?”**
+
+> Layout reflow is fine. Apple’s `TabView` and `NavigationStack` move bars to the side. A Flutter `AppBar` will not. `MediaQuery.displayFeatures` is Android-shaped and empty on Duo. Detect and build chrome, or wait. Flutter runs. The chrome does not migrate for free.
+
+**“Isn’t Flutter terrible at image compression?”**
+
+> The Dart `image` package is terrible next to `libjpeg-turbo`. That is a codec, not a framework. Isolates stop jank. They do not make Huffman faster. MethodChannel or FFI. Then you get native SIMD. Do not say Flutter cannot compress images.
+
+---
+
+## Q&A card — “Can’t React Native do add-to-app too?”
+
+Yes. Do not defend a unique embedding story that is not true.
+
+**Say this, then sit down.**
+
+> React Native has official “Integration with Existing Apps.” Meta shipped brownfield first. Expo now packages an AAR or XCFramework. Unity as a Library embeds a game engine. A WebView is add-to-app with a document compositor. Add-to-app is a pattern, not a Flutter trademark.
+>
+> The question is which guest you want. React Native’s historic job is native widgets plus a JS runtime. Unity is a 50-to-100-megabyte game engine, usually one instance, usually full-screen. Flutter is an owned canvas — Impeller paints every pixel — with a `FlutterEngineGroup` so extra engines are cheap.
+>
+> We picked the guest that matches the screens that would have been cancelled: one picture, two phones, native shell kept.
+
+If they push: “Then why not React Native for the island?”
+
+> You can. You will still need a real 3D/game stack beside it, or you will paint a canvas anyway. We already needed the canvas. Native keeps the login.

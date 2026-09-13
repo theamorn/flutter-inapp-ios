@@ -57,8 +57,9 @@ style: |
 <!--
 Talking Points:
 - "Good evening! Welcome everyone."
-- Defuse skepticism in the first 5 seconds: "I am not here to tell you to rewrite your native app in Flutter."
-- Today is about pragmatic engineering: keeping your native app, and offloading the screens that cost you weeks of duplicate work.
+- Greeting. Native is 18+ years old (July 2008, iPhone 3G, App Store). Replacement stacks failed as replacements — do not say they never worked.
+- Flutter cooperates with native. Add-to-app is also React Native brownfield and Unity as a Library.
+- Land with: "I am not here to tell you to rewrite your native app." Today is pros, cons, tradeoffs, capability.
 -->
 
 ---

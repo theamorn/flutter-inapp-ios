@@ -789,9 +789,11 @@
         </div>
         <div class="talking-points" style="display:none;">
           <ul>
-            <li>"Good evening! Welcome everyone."</li>
-            <li>Defuse skepticism in the first 5 seconds: "I am not here to tell you to rewrite your native app in Flutter."</li>
-            <li>Today is about pragmatic engineering: keeping your native app, and offloading the screens that cost you weeks of duplicate work.</li>
+            <li>Greeting. Then: native is a little over 18 years old — July 2008, iPhone 3G, App Store, third-party native apps. The original iPhone was web-apps-only.</li>
+            <li>Lots of stacks tried to replace native. Do not say “none ever worked.” They failed as replacements. Performance is why the replacement religion dies.</li>
+            <li>Flutter is not here to compete with native. It cooperates. This repo does too: native login, tabs, HUD.</li>
+            <li>Add-to-app is not a Flutter trademark. React Native brownfield and Unity as a Library already embed. Today is pros, cons, tradeoffs, capability.</li>
+            <li>Land with: “I am not here to tell you to rewrite your native app.”</li>
           </ul>
         </div>
       </section>
@@ -1535,6 +1537,10 @@ One owned canvas
             <li>Address common questions: CI/CD, a11y, production readiness.</li>
             <li>“Why not AI-port iOS to Android?” AI drafts a second implementation. It does not share a renderer or an 8.3 ms budget. Use AI to write one canvas, not to fork the pixels.</li>
             <li>If asked “is Flutter safe?”: Apptopia 10%→30% of tracked free iOS apps; BMW, Google Pay, Xianyu. Then stop. This is not a sales slide.</li>
+            <li>If asked “does Flutter support iOS 26?”: it runs. The gap is Cupertino / Liquid Glass parity, not the OS target. Wait or fake; it will not match Settings.</li>
+            <li>If asked “what about iPhone Duo?”: layout reflow is fine. Apple chrome goes vertical; a Flutter AppBar will not. displayFeatures is Android-shaped. Detect or wait. Do not say Flutter cannot run on Duo.</li>
+            <li>If asked “isn’t Flutter bad at image compress?”: the Dart image package is not libjpeg-turbo. Isolates fix jank, not speed. MethodChannel or FFI. Do not say Flutter cannot compress images.</li>
+            <li>If asked “can’t React Native do add-to-app too?”: yes. Official brownfield. Unity as a Library too. The question is which guest — native widgets + JS, a game engine, or an owned canvas with cheap extra engines.</li>
           </ul>
         </div>
       </section>

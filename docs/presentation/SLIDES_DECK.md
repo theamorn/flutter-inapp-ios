@@ -46,8 +46,9 @@ style: |
 
 <!--
 Talking Points:
-- Defuse skepticism immediately: "I am not here to tell you to rewrite your native app in Flutter."
-- Introduce the premise: Native is great for your core app, but there is a smarter way to handle complex UI.
+- Greeting. Native is 18+ years old (July 2008, iPhone 3G, App Store). Replacement stacks failed as replacements — do not say they never worked.
+- Flutter cooperates with native. Add-to-app is also React Native brownfield and Unity as a Library.
+- Land with: "I am not here to tell you to rewrite your native app." Today is pros, cons, tradeoffs, capability.
 -->
 
 ---

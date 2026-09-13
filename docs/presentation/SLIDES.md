@@ -55,12 +55,10 @@ style: |
 
 <!-- 
 Presenter Notes:
-- Welcome everyone!
-- Start with a smile and address the elephant in the room: 
-  "I know what many of you might be thinking when you saw Flutter in the abstract: 'Oh no, another cross-platform advocate here to tell us native is dead.'
-  Let me set the record straight right now: I am NOT here to tell you to rewrite your native app in Flutter. 
-  Native is king. Keep your native app.
-  Today is about something much more interesting: pragmatic engineering and offloading complex UI."
+- Greeting. Native is a little over 18 years old: July 2008, iPhone 3G, App Store.
+- Lots of stacks tried to replace native. They failed as replacements (do not say “none ever worked”). Performance is the reason people remember.
+- Flutter cooperates with native; this repo does too. Add-to-app is also React Native brownfield and Unity as a Library.
+- Land with: I am NOT here to tell you to rewrite your native app. Today is pros, cons, tradeoffs, capability.
 -->
 
 ---
