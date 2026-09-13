@@ -401,6 +401,53 @@
       color: var(--text-primary);
     }
 
+    .theory-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 28px;
+      width: 100%;
+    }
+
+    .theory-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 22px 20px;
+      text-align: left;
+      min-height: 220px;
+    }
+
+    .theory-card h3 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 0 0 10px 0;
+    }
+
+    .theory-card p {
+      font-size: 16px;
+      line-height: 1.45;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    .theory-mono {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--text-secondary);
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 22px 24px;
+      text-align: left;
+      white-space: pre;
+      overflow-x: auto;
+      width: 100%;
+      margin-top: 20px;
+    }
+
     /* Image / Visual Placeholder Component */
     .image-placeholder-frame {
       width: 100%;
@@ -922,8 +969,93 @@
         </div>
       </section>
 
-      <!-- SLIDE 9: Enter Flutter -->
+      <!-- SLIDE 9: Three drawing models -->
       <section class="slide" data-slide="9">
+        <div class="slide-hero-center" style="max-width:1100px;">
+          <div class="slide-badge badge-emerald">Foundation • Act 3</div>
+          <h1 class="title-main" style="font-size:42px;">Three ways a mobile screen draws.</h1>
+          <h2 class="subtitle-main">Widgets. Web. Owned canvas. Flutter Add-to-App is the third.</h2>
+          <div class="theory-grid">
+            <div class="theory-card">
+              <h3>1. Platform widgets</h3>
+              <p>UIKit / Compose. The OS owns layout, accessibility, and look. Login, Home, forms stay here.</p>
+            </div>
+            <div class="theory-card">
+              <h3>2. Web document</h3>
+              <p>DOM + compositor. Great for copy that changes weekly. Weak at deterministic 120 fps physics.</p>
+            </div>
+            <div class="theory-card">
+              <h3>3. Owned canvas</h3>
+              <p>OS gives a UIView or Surface. You paint every pixel. Unity, custom Metal, Flutter Add-to-App.</p>
+            </div>
+          </div>
+        </div>
+        <div class="talking-points" style="display:none;">
+          <ul>
+            <li>This is a board, not a code tour.</li>
+            <li>Flutter inside a native app is column 3: give me a canvas.</li>
+            <li>Do not rewrite forms onto a canvas. You will lose VoiceOver.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- SLIDE 10: Frame budget -->
+      <section class="slide" data-slide="10">
+        <div class="slide-hero-center" style="max-width:1100px;">
+          <div class="slide-badge badge-amber">Foundation • 120 Hz</div>
+          <h1 class="title-main amber-text" style="font-size:42px;">8.3 milliseconds.</h1>
+          <h2 class="subtitle-main">That is the entire ProMotion budget. UI isolate + Raster both have to fit.</h2>
+          <div class="theory-mono">60 Hz  →  16.6 ms
+120 Hz →   8.3 ms   ← ProMotion
+
+UI isolate     layout, widgets, game tick
+Raster         Impeller → Metal / Vulkan
+
+HUD is native-owned
+  CADisplayLink / Choreographer
+  task_info / Debug.getPss
+  Flutter reports UI + raster batches only</div>
+        </div>
+        <div class="talking-points" style="display:none;">
+          <ul>
+            <li>If Flutter graded itself, you would be right to call the meter rigged.</li>
+            <li>Jank is two diseases: fat UI time vs fat raster time. Read both clocks.</li>
+            <li>Users feel the worst frame, not the average. Say "average" when you quote the HUD.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- SLIDE 11: Identical pixels -->
+      <section class="slide" data-slide="11">
+        <div class="slide-split">
+          <div>
+            <div class="slide-badge badge-purple">Foundation • Architecture</div>
+            <h1 class="title-main">Identical pixels is a choice.</h1>
+            <h2 class="subtitle-main">Two teams, two shaders, two “looks close enough.” One canvas, one picture.</h2>
+          </div>
+          <div>
+            <div class="theory-mono" style="margin-top:0;">Two implementations
+  iOS Metal
+  Android AGSL / RenderNode
+        ↓
+  two bugs + beige parity
+
+One owned canvas
+        ↓
+  one picture
+  (how games already work)</div>
+          </div>
+        </div>
+        <div class="talking-points" style="display:none;">
+          <ul>
+            <li>Stop here. Do not explain Impeller internals yet.</li>
+            <li>We already accepted a runtime tax for games. A promo screen is the same problem.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- SLIDE 12: Enter Flutter -->
+      <section class="slide" data-slide="12">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-emerald">The Solution</div>
@@ -949,7 +1081,7 @@
       </section>
 
       <!-- SLIDE 10: Canvas Architecture -->
-      <section class="slide" data-slide="10">
+      <section class="slide" data-slide="13">
         <div class="slide-split">
           <div>
             <div class="slide-badge">Under The Hood</div>
@@ -975,7 +1107,7 @@
       </section>
 
       <!-- SLIDE 11: The Misconception -->
-      <section class="slide" data-slide="11">
+      <section class="slide" data-slide="14">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-emerald">Myth Buster</div>
@@ -1002,7 +1134,7 @@
       </section>
 
       <!-- SLIDE 12: Add-to-App -->
-      <section class="slide" data-slide="12">
+      <section class="slide" data-slide="15">
         <div class="slide-split">
           <div>
             <div class="slide-badge">Architecture</div>
@@ -1027,8 +1159,31 @@
         </div>
       </section>
 
+      <!-- Engine group topology -->
+      <section class="slide" data-slide="16">
+        <div class="slide-hero-center" style="max-width:1100px;">
+          <div class="slide-badge">Architecture • Act 4</div>
+          <h1 class="title-main" style="font-size:40px;">One group. Three lazy engines.</h1>
+          <h2 class="subtitle-main">Hidden tabs pause. First visit is when the HUD shows the cost.</h2>
+          <div class="theory-mono">Native window + native HUD
+  ├── Tab 1   UIKit / Compose Home
+  ├── Tab 2   WKWebView settings
+  └── FlutterEngineGroup("hybrid-demo")
+        ├── /game    first visit to tab 3
+        ├── /glass   first visit to tab 4
+        └── /scene   first visit to tab 5</div>
+        </div>
+        <div class="talking-points" style="display:none;">
+          <ul>
+            <li>Do not pre-warm at launch — it hides the incremental memory story.</li>
+            <li>Hidden tabs pause so Flappy Cat does not run behind Home.</li>
+            <li>Quote costs once: 4–6 MB bundle, ~13–19 MB first engine, ~180 KB / 1.4 MB extras.</li>
+          </ul>
+        </div>
+      </section>
+
       <!-- SLIDE 13: Memory Stat Hero -->
-      <section class="slide" data-slide="13">
+      <section class="slide" data-slide="17">
         <div class="slide-hero-center">
           <div class="slide-badge badge-emerald">Memory Benchmark</div>
           <div class="stat-hero-number emerald-text">~180 KB</div>
@@ -1049,7 +1204,7 @@
       </section>
 
       <!-- SLIDE 14: Unity Comparison -->
-      <section class="slide" data-slide="14">
+      <section class="slide" data-slide="18">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-purple">The Comparison</div>
@@ -1076,7 +1231,7 @@
       </section>
 
       <!-- SLIDE 15: Developer Heartbreak -->
-      <section class="slide" data-slide="15">
+      <section class="slide" data-slide="19">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-rose" style="color:var(--accent-rose); border-color:rgba(251,113,133,0.3); background:rgba(251,113,133,0.1);">The Heartbreak</div>
@@ -1104,7 +1259,7 @@
       </section>
 
       <!-- SLIDE 16: Build Once Parity -->
-      <section class="slide" data-slide="16">
+      <section class="slide" data-slide="20">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-emerald">The Superpower</div>
@@ -1131,7 +1286,7 @@
       </section>
 
       <!-- SLIDE 17: Showcase Intro -->
-      <section class="slide" data-slide="17">
+      <section class="slide" data-slide="21">
         <div class="slide-split">
           <div>
             <div class="slide-badge">The Live Demo</div>
@@ -1157,7 +1312,7 @@
       </section>
 
       <!-- SLIDE 18: Tab 1 (Native) -->
-      <section class="slide" data-slide="18">
+      <section class="slide" data-slide="22">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-emerald">Tab 1 • Baseline</div>
@@ -1183,7 +1338,7 @@
       </section>
 
       <!-- SLIDE 19: Tab 2 (Web) -->
-      <section class="slide" data-slide="19">
+      <section class="slide" data-slide="23">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-amber">Tab 2 • The Ceiling</div>
@@ -1210,7 +1365,7 @@
       </section>
 
       <!-- SLIDE 20: Tab 3 (Flappy Cat) -->
-      <section class="slide" data-slide="20">
+      <section class="slide" data-slide="24">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-purple">Tab 3 • 2D Engine</div>
@@ -1237,7 +1392,7 @@
       </section>
 
       <!-- SLIDE 21: Tab 4 (Liquid Glass) -->
-      <section class="slide" data-slide="21">
+      <section class="slide" data-slide="25">
         <div class="slide-split">
           <div>
             <div class="slide-badge">Tab 4 • Shaders</div>
@@ -1264,7 +1419,7 @@
       </section>
 
       <!-- SLIDE 22: Tab 5 (3D Island) -->
-      <section class="slide" data-slide="22">
+      <section class="slide" data-slide="26">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-purple">Tab 5 • 3D GPU</div>
@@ -1283,16 +1438,15 @@
         <div class="talking-points" style="display:none;">
           <ul>
             <li>(Switch to Tab 5)</li>
-            <li>Orbit around the 3D island with your finger.</li>
-            <li>Drag the Day/Night slider.</li>
-            <li>Tap the ground: The raycaster unprojects screen touch into 3D world space and the character walks there.</li>
+            <li>Orbit, day/night slider, tap-to-walk on the ground plane.</li>
+            <li>Ultra adds extra props and a wandering NPC. Water bump is off so the phone stays live.</li>
             <li>Full 3D graphics inside your native tab without Unity.</li>
           </ul>
         </div>
       </section>
 
       <!-- SLIDE 23: The Two-Way Bridge -->
-      <section class="slide" data-slide="23">
+      <section class="slide" data-slide="27">
         <div class="slide-split">
           <div>
             <div class="slide-badge badge-emerald">Integration</div>
@@ -1318,7 +1472,7 @@
       </section>
 
       <!-- SLIDE 24: Decision Matrix -->
-      <section class="slide" data-slide="24">
+      <section class="slide" data-slide="28">
         <div class="slide-split">
           <div>
             <div class="slide-badge">The Strategy</div>
@@ -1345,7 +1499,7 @@
       </section>
 
       <!-- SLIDE 25: Typographic Conclusion -->
-      <section class="slide" data-slide="25">
+      <section class="slide" data-slide="29">
         <div class="slide-hero-center">
           <div class="quote-insignia">🎯</div>
           <h1 class="title-main gradient-text" style="font-size: 54px; margin-bottom: 24px;">We solve problems with software.</h1>
@@ -1364,7 +1518,7 @@
       </section>
 
       <!-- SLIDE 26: Q & A -->
-      <section class="slide" data-slide="26">
+      <section class="slide" data-slide="30">
         <div class="slide-hero-center">
           <div class="slide-badge badge-emerald">Open Discussion</div>
           <h1 class="title-main gradient-text" style="font-size: 64px; margin-bottom: 16px;">Questions & Discussion</h1>
@@ -1389,7 +1543,7 @@
   <!-- Bottom Floating Control Bar -->
   <div id="controls-bar">
     <button class="control-btn" id="btn-prev" title="Previous Slide (Left Arrow / Backspace)">◀</button>
-    <div class="slide-counter" id="slide-counter">01 / 26</div>
+    <div class="slide-counter" id="slide-counter">01 / 30</div>
     <button class="control-btn" id="btn-next" title="Next Slide (Right Arrow / Space)">▶</button>
     <div style="width: 1px; height: 18px; background: var(--border-subtle); margin: 0 4px;"></div>
     <button class="btn-badge" id="btn-notes" title="Toggle Presenter Notes (N)">
@@ -1422,7 +1576,7 @@
   <!-- Slide Overview Grid Modal -->
   <div id="overview-modal">
     <div style="display:flex; justify-content:space-between; align-items:center; max-width:1400px; margin: 0 auto 24px auto;">
-      <h2 style="font-size:24px; font-weight:700;">Slide Overview (26 Slides)</h2>
+      <h2 style="font-size:24px; font-weight:700;">Slide Overview (30 Slides)</h2>
       <button class="control-btn" id="btn-close-overview" style="background:rgba(255,255,255,0.1);">✕</button>
     </div>
     <div class="overview-grid" id="overview-grid">

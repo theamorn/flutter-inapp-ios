@@ -2,122 +2,153 @@
 
 > **Audience:** iOS & Android Native Mobile Developers  
 > **Event:** Mobile Native Meetup  
-> **Duration:** 35–40 Minutes (20 min story-driven talk + 12 min showcase demo + 5 min Q&A)  
-> **Demo Codebase:** `flutter-inapp-ios` (`cool-ios`, `cool-android`, `flutter_module`)
+> **Duration:** 50 minutes (42 min story + demo, 8 min Q&A)  
+> **Demo Codebase:** `flutter-inapp-ios` (`cool-ios`, `cool-android`, `flutter_module`)  
+> **Speaker materials:** [SPEAKER_SCRIPT.md](SPEAKER_SCRIPT.md) · [THEORY_BOARDS.md](THEORY_BOARDS.md) · [DEMO_SCRIPT.md](DEMO_SCRIPT.md)
+
+The extra time vs the old 35–40 minute cut goes into **foundation**, not more feature listing. Do not rewrite the app. Do not dump source code. Teach *why* a canvas engine exists, then prove it on the phone.
 
 ---
 
-## 1. Storytelling Strategy & Narrative Arc
-
-Instead of a dry feature-by-feature code review, this talk is structured as a **relatable developer story**:
+## 1. Narrative arc
 
 ```
-[The Holy War & Binary Mindset]
-              │
-[Precedents: Unity in Games & WebViews at Meta]
-              │
-[The Missing Middle Ground]
-              │
-[Enter Flutter: Game Engine Architecture for UI]
-              │
-[Myth Buster: Just Asking for a Canvas (Add-to-App)]
-              │
-[Myth Buster: Memory & The "Unity in an App" Comparison]
-              │
-[The Emotional Core: The Developer Heartbreak (The Cancelled Animation)]
-              │
-[Pixel-Perfect Parity Across OSs]
-              │
-[The Showcase: 2D Game, Shaders, 3D, and MethodChannel State Bridge]
-              │
-[The Pragmatic Decision Matrix & Takeaways]
+[Open and defuse]
+        │
+[Holy war & binary mindset]
+        │
+[Precedents: Unity in games & WebViews at Meta]
+        │
+[Foundation: who owns the pixels + 120 Hz budget]
+        │
+[Add-to-App, Impeller, FlutterEngineGroup]
+        │
+[The cancelled-animation heartbreak]
+        │
+[Live five-tab proof + MethodChannel score]
+        │
+[Decision matrix, punchline, Q&A]
 ```
+
+If the room is hungry for theory, steal 2 minutes from demo tab 3. If the room is restless, **cut the Unity-vs-Flutter comparison first** and keep the frame-budget board.
 
 ---
 
-## 2. Hard Facts & Benchmarks Cheat Sheet
+## 2. Timing
 
-| Topic / Claim | Verified Numbers & Facts | Source / Authority |
+| Clock | Act | Goal |
 |---|---|---|
-| **Unity Dominance** | **&gt;70% of the top 1,000 mobile games** run on Unity, despite Apple having SceneKit/Metal and Android having Vulkan/Filament. | Unity Industry Report |
-| **Why Unity Won** | 1 unified rendering engine avoids maintaining dual platform graphics pipelines (which costs **2x–3x in engineering effort**). | Mobile Game Market Analysis |
-| **WebViews at Meta** | Facebook & Instagram use WebViews for Settings and Help Centers because requirements change weekly and don't need 120fps physics. | Meta In-App Architecture |
-| **Flutter Canvas Contract** | Flutter doesn't wrap OEM native widgets; it requests a native surface (`UIViewController` / `FragmentActivity`) and renders via Impeller directly to Metal (iOS) and Vulkan (Android). | Flutter Engine Architecture |
-| **Add-to-App Memory** | Standalone engine: ~13–19 MB.<br>**With `FlutterEngineGroup`: ~180 KB on iOS / ~1.4 MB on Android** per extra engine by sharing GPU context, isolate snapshot, and font tables. | Official Flutter Multi-Instance Benchmarks |
-| **Startup: Flutter vs Unity** | Unity as a Library: **3–6 second load time**, 50–100MB+ binary bloat.<br>Flutter Add-to-App: **100–200 ms cold launch**, **5–15 ms** spawn time, ~4–6MB compressed binary. | Engine Benchmark Telemetry |
-| **120Hz Frame Budget** | 120Hz ProMotion has an **8.3ms frame budget**. Flutter UI + Raster batches run in **2–5 ms**. | Native HUD Readouts |
+| 0:00–3:00 | 1 Open and defuse | Line one kills the rewrite-your-app fear |
+| 3:00–10:00 | 2 Precedents | Unity + WebView prove teams already pick tools |
+| 10:00–20:00 | 3 Foundation | Three drawing models + 8.3 ms budget |
+| 20:00–28:00 | 4 Add-to-App theory | Engine group, memory, Impeller in one sentence |
+| 28:00–33:00 | 5 Heartbreak | Five-beat cancelled-animation story |
+| 33:00–45:00 | 6 Live demo | Tabs 1–5 + score back on Home |
+| 45:00–50:00 | 7 Close + Q&A | Decision matrix and punchline |
+
+**Rehearsal gate:** Acts 1–5 must finish by **33:00**. Script word counts in [SPEAKER_SCRIPT.md](SPEAKER_SCRIPT.md) target ~130 words/minute.
 
 ---
 
-## 3. Detailed Act-by-Act Narrative Breakdown
+## 3. Hard facts cheat sheet
 
-### Act 1: The Trap of the Binary Mindset (0:00 – 4:00)
-- **Defuse Skepticism:** Make it clear immediately: *"I am not here to tell you to rewrite your native app in Flutter."*
-- **The Holy War:** For 10 years, mobile development has been divided into Team Native vs. Team Cross-Platform.
-- **The Core Problem:** The enemy isn't native or cross-platform; the enemy is wasting engineering sprints duplicating custom graphics, shaders, and animations twice.
+| Topic | Quote these numbers | Source |
+|---|---|---|
+| Unity dominance | >70% of the top 1,000 mobile games | Unity industry reports |
+| Dual pipelines | 2x–3x engineering cost | Graphics-team reality, not a lab number |
+| Frame budget | 60 Hz = 16.6 ms · **120 Hz = 8.3 ms** | Display timing |
+| Flutter HUD | UI + raster batches typically **2–5 ms** | Native HUD on this demo |
+| Bundle | ~4–6 MB compressed engine | Flutter add-to-app docs |
+| First engine RAM | ~13 MB iOS / ~19 MB Android | Flutter multi-engine benchmarks |
+| Extra engine | **~180 KB iOS / ~1.4 MB Android** via `FlutterEngineGroup` | Same |
+| Unity as library | 3–6 s load, 50–100 MB+ | Engine telemetry (cut this beat first if over) |
+| Flutter spawn | Hundreds of ms cold, ~5–15 ms cached spawn | Demo + docs |
 
-### Act 2: Industry Precedents & The Missing Middle (4:00 – 9:00)
-- **Precedent 1 (Gaming):** Apple and Google built powerful native game frameworks (SceneKit, Metal, Vulkan), yet **over 70% of top mobile games use Unity**. Why? Because writing rendering pipelines twice is commercial insanity.
-- **Precedent 2 (Web):** Why does Meta use WebViews for Settings? Because pragmatic teams don't build native table views for legal text that changes bi-weekly.
-- **The Missing Middle:** If Web is too weak (30fps ceiling) and Native is too expensive (2x–3x duplication), where do complex branded animations, mini-games, and shaders belong?
-
-### Act 3: Introducing Flutter as the Middle Ground (9:00 – 16:00)
-- **The Concept:** Treat Flutter not as an app rewrite, but as an embedded, specialized graphics engine.
-- **How It Renders:** Like Unity, Flutter owns its canvas, compiles AOT to C++ machine code, and talks directly to Metal and Vulkan via Impeller.
-- **The Big Misconception:** *"Don't I have to rewrite my entire app?"*
-  - **No.** Flutter is just a view. It asks iOS for a `UIViewController` and Android for a `FragmentActivity`. It says: *"Just give me the canvas, and I'll draw the complex UI."*
-  - This is **Add-to-App**. Native keeps the app shell, navigation, system APIs, and standard forms.
-- **The Memory Question:** Does it eat memory?
-  - `FlutterEngineGroup` shares the GPU context, font tables, and isolate snapshot.
-  - Adding another engine/tab costs only **~180 KB on iOS** and **~1.4 MB on Android**!
-- **"Isn't that just Unity in an app?"**
-  - Conceptually, yes: you get a unified 2D/3D canvas.
-  - BUT without the game engine tax: Unity takes 3–6 seconds to load and adds 100MB. Flutter boots in 150ms, spawns in 10ms, and adds ~4MB.
-
-### Act 4: The Developer Heartbreak (The Why) (16:00 – 21:00)
-- **The Story Every Mobile Dev Knows:**
-  1. Design creates an incredible, fluid, physics-driven interaction.
-  2. iOS spends 2 weeks crafting it in CoreAnimation.
-  3. Android says: *"This will take 3 sprints and might drop frames on lower-end devices."*
-  4. Product Owner decides: *"We need feature parity. Cut the animation. Make it a static card."*
-  5. The team feels defeated, and the app looks boring.
-- **The Solution:** Pixel-perfect cross-platform rendering. Build the complex interaction once in Flutter; it runs with identical 120fps physics on iOS, Android, and Web.
-
-### Act 5: The Live Showcase (21:00 – 32:00)
-Show, don't just tell. Demonstrate the screens that native struggles to do identically:
-
-1. **Tab 3: Flappy Cat 2D Game (Flame Engine)**
-   - 120fps ProMotion, particle weather, sky shader.
-   - Die: Trigger the GLSL flame dissolve shader without dropping a single frame.
-   - Point to the HUD: 120fps host cadence, 2–4ms raster times.
-2. **Tab 4: Liquid Glass Panel (Fragment Shader over Live UI)**
-   - Apple Liquid Glass aesthetic running identically on Android.
-   - `AnimatedSampler` feeds the live scrolling widget tree into the GLSL shader.
-   - Interactive touch ripples across the glass at 120fps.
-3. **Tab 5: 3D Island Scene (`flutter_scene` + `flutter_gpu`)**
-   - Full 3D low-poly scene graph inside a native tab.
-   - Orbit camera, day-to-night lighting transitions.
-   - Centerpiece: Tap-to-move raycasting ground plane navigation ($y=0$).
-4. **The Bridge (MethodChannel Score Sync):**
-   - Score points in Flappy Cat (Tab 3).
-   - Switch back to Tab 1 (Native UIKit / Compose Home).
-   - Show the "Highest Score" row dynamically updating live in native Swift/Kotlin.
-   - *Proof that Flutter is not a closed silo.*
-
-### Act 6: The Decision Matrix & Takeaways (32:00 – 35:00)
-- **The Architect's Guide:**
-  - **Native:** System shell, navigation, forms, HealthKit, Bluetooth.
-  - **WebView:** Legal copy, FAQs, server-driven marketing.
-  - **Flutter Add-to-App:** Mini-games, custom canvas, shaders, 3D showcases.
-- **Closing Punchline:**
-  > *"Software engineers solve problems with software. Whatever tool fits the job—if it helps our users, use it."*
+Do not invent HUD numbers on stage. Read what the phone shows.
 
 ---
 
-## 4. Speaker Prep & Rehearsal Checklist
+## 4. Act-by-act beats
 
-- [ ] **Hardware:** iPhone running iOS with ProMotion (e.g. iPhone 13 Pro+) connected via QuickTime/AirPlay.
-- [ ] **Build:** Release configuration with `CADisableMinimumFrameDurationOnPhone` and `FLTEnableFlutterGPU`.
-- [ ] **Network:** Airplane mode enabled (all assets and local HTML are self-contained).
-- [ ] **Android Host:** Optional side-by-side device running `cool-android` to show instant parity for Home + Flappy Cat.
-- [ ] **Timing Check:** Keep Act 1–4 under 20 minutes to leave ample time for the interactive showcase and Q&A.
+### Act 1 — Open (0:00–3:00)
+
+Say this first, out loud:
+
+> I am not here to tell you to rewrite your native app in Flutter.
+
+Native keeps the shell: login, tabs, Home, HealthKit, Bluetooth. Today is the screens that make two platform teams cry: games, shaders, 3D.
+
+Show of hands: “Who shipped a proud iOS animation and then heard *how long for Android?*”
+
+### Act 2 — Precedents (3:00–10:00)
+
+Holy war is the wrong question. The waste is duplicating custom graphics twice.
+
+**Unity:** Apple has Metal/SceneKit; Google has Vulkan/Filament; still >70% of top mobile games use one engine.
+
+**WebView:** Settings, Help, legal. Concede this hard. Right tool when copy changes weekly.
+
+**Missing middle:** Native is too expensive for identical canvas work. WebView has a ceiling. Where do mini-games, liquid glass, and a 3D island go?
+
+### Act 3 — Foundation (10:00–20:00)
+
+Whiteboard / theory slides only. No code.
+
+1. **Three ways a mobile screen draws** — platform widgets, Web DOM, owned canvas.
+2. **Frame budget** — 8.3 ms at 120 Hz; UI thread + Raster/Impeller; HUD is native-owned.
+3. **Identical pixels is an architecture choice** — two teams, two bugs, two “looks close enough.”
+
+Stop. Do not explain Impeller internals yet.
+
+### Act 4 — Add-to-App (20:00–28:00)
+
+Myth: rewrite the app. No. Flutter is a lazily spawned view.
+
+This repo: one `FlutterEngineGroup("hybrid-demo")`, engines on first visit (`/game`, `/glass`, `/scene`), hidden tabs pause rendering.
+
+Quote the cost table once, then move. Impeller in one sentence: shaders compile AOT to Metal/Vulkan, so the flame dissolve does not hitch on first death.
+
+Leave the Native / WebView / Flutter cheat sheet up.
+
+### Act 5 — Heartbreak (28:00–33:00)
+
+Five beats, not a slide dump:
+
+1. Design ships a physics-heavy interaction  
+2. iOS spends two weeks in Core Animation  
+3. Android: three sprints, maybe jank  
+4. PM: cut it, make a static card  
+5. App gets boring  
+
+Punch: build that interaction once on the canvas; keep login and Home native.
+
+### Act 6 — Demo (33:00–45:00)
+
+See [DEMO_SCRIPT.md](DEMO_SCRIPT.md). Airplane mode. Release. Native HUD visible.
+
+### Act 7 — Close (45:00–50:00)
+
+Decision matrix. Punchline:
+
+> Software engineers solve problems with software. If the tool helps the user, use it.
+
+Expected Qs: binary size, KMP/CMP, can we delete Flutter later, 3D on older phones.
+
+---
+
+## 5. What not to spend time on
+
+- Line-by-line Dart, Swift, or Gradle
+- Flutter widget catalog
+- The cancelled “seam outline” / pixel-identical Home experiment
+- Toolchain archaeology (fvm, 3.47.2) unless someone asks
+
+---
+
+## 6. Speaker prep
+
+- [ ] ProMotion iPhone, release, `CADisableMinimumFrameDurationOnPhone`, `FLTEnableFlutterGPU`
+- [ ] Airplane mode
+- [ ] Optional Android for Home + Flappy Cat parity only
+- [ ] Dry-run Acts 1–5 to 33:00 using [SPEAKER_SCRIPT.md](SPEAKER_SCRIPT.md)
+- [ ] Walk [DEMO_SCRIPT.md](DEMO_SCRIPT.md) once on the device you will present

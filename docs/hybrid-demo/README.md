@@ -4,7 +4,7 @@ Build docs for a conference demo. **Read this file and `ARCHITECTURE.md` before 
 
 ## The talk
 
-**"The High-Performance Hybrid — Offloading Complex UI."**
+**"The High-Performance Hybrid — Offloading Complex UI."** (50-minute Meetup slot — see `docs/presentation/SLIDE_PLAN.md`)
 
 The argument is *not* "rewrite your app in Flutter." It is:
 

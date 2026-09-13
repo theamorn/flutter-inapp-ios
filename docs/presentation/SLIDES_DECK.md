@@ -128,6 +128,53 @@ Talking Points:
 
 ---
 
+# Foundation: Three Drawing Models
+## Widgets · Web · Owned canvas
+
+- **Platform widgets:** OS owns layout and a11y — login, Home, forms
+- **Web document:** DOM for weekly copy — legal, FAQ, CMS
+- **Owned canvas:** you paint a `UIView` / `Surface` — Unity, Metal, Flutter Add-to-App
+
+<!--
+Talking Points:
+- Flutter Add-to-App is column 3: give me a canvas.
+- Do not put a form on a canvas.
+-->
+
+---
+
+# Foundation: 8.3 ms
+## The entire 120 Hz budget
+
+- 60 Hz = 16.6 ms · **120 Hz = 8.3 ms**
+- UI isolate + Raster (Impeller → Metal / Vulkan)
+- HUD is native-owned; Flutter reports batches only
+
+<!--
+Talking Points:
+- If Flutter graded itself, the meter is rigged.
+-->
+
+---
+
+# Foundation: Identical Pixels
+## Two shaders is two bugs
+
+- Metal + “equivalent” AGSL → looks close enough
+- One owned canvas → one picture
+- Stop before Impeller internals
+
+---
+
+# Add-to-App Topology
+## FlutterEngineGroup("hybrid-demo")
+
+- Lazy spawn: `/game`, `/glass`, `/scene` on first tab visit
+- Hidden tabs pause rendering
+- Extra engine: ~180 KB iOS / ~1.4 MB Android
+
+---
+
 # Enter the Middle Ground
 ## Introducing Flutter for Offloading
 

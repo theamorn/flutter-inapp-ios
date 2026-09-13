@@ -167,6 +167,48 @@ Presenter Notes:
 
 ---
 
+## Foundation: Three Ways a Screen Draws
+
+| Model | Who owns the pixels | Use it for |
+|---|---|---|
+| **Platform widgets** | OS (UIKit / Compose) | Login, Home, forms, a11y |
+| **Web document** | DOM + compositor | Legal, FAQ, CMS |
+| **Owned canvas** | You paint a `UIView` / `Surface` | Games, shaders, 3D |
+
+Flutter Add-to-App is column 3: *give me a canvas.* Do not put a form on a canvas.
+
+<!--
+Presenter Notes:
+- This is the 10-minute foundation block. Whiteboard it if you can.
+- Accessibility is why login stays native.
+-->
+
+---
+
+## Foundation: The 8.3 ms Budget
+
+- 60 Hz = 16.6 ms. **120 Hz ProMotion = 8.3 ms.**
+- Two Flutter clocks: **UI isolate** (layout, game tick) and **Raster** (Impeller → Metal / Vulkan).
+- HUD is **native-owned** (`CADisplayLink` / `Choreographer` + memory). Flutter only reports UI/raster batches.
+
+> If Flutter graded itself, you would be right to call the meter rigged.
+
+<!--
+Presenter Notes:
+- Jank is two diseases. Read both clocks.
+- Users feel the worst frame, not the mean. Say "average" when you quote the HUD.
+-->
+
+---
+
+## Foundation: Identical Pixels Is Architecture
+
+- Two teams, two shaders → two bugs and “looks close enough.”
+- One owned canvas → one picture. That is how game studios already work.
+- Stop before Impeller internals.
+
+---
+
 ## What Does Offloading Actually Cost?
 ### Addressing the Native Developer's Concerns
 
@@ -214,6 +256,7 @@ Presenter Notes:
   - Native `CADisplayLink` / `Choreographer` (Host FPS).
   - Native `task_info()` / `Debug.getPss()` (Process Memory in MiB).
   - Telemetry MethodChannel: Batch-averaged Flutter UI & Raster frame timings.
+- **Engine group:** `FlutterEngineGroup("hybrid-demo")` lazily spawns `/game`, `/glass`, `/scene` on first tab visit. Hidden tabs pause rendering.
 
 <!-- 
 Presenter Notes:
@@ -344,6 +387,7 @@ Presenter Notes:
 - Orbit around the low-poly island.
 - Drag the Day/Night slider to show dynamic lighting and shadow shifts.
 - Tap on different parts of the island: The raycaster projects the touch into 3D world space and the character walks there.
+- Ultra: extra props + wandering NPC. Water bump is off so the phone stays live on stage.
 - "This is running directly on the GPU via Flutter's low-level graphics pipeline. 
   Inside your native iOS app, without importing Unity, Unreal, or maintaining separate SceneKit and Vulkan codebases."
 -->

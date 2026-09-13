@@ -172,6 +172,50 @@ Talking Points:
 
 ---
 
+# Three ways a screen draws.
+## Widgets. Web. Owned canvas.
+
+<div class="visual-card">
+  <strong>Board:</strong> Three columns. (1) UIKit/Compose owns layout and a11y. (2) DOM for weekly copy. (3) UIView/Surface you paint — Unity, Metal, Flutter Add-to-App.
+</div>
+
+<!--
+Talking Points:
+- Flutter Add-to-App is column 3: give me a canvas.
+- Do not put login or Home on a canvas. You will lose VoiceOver.
+-->
+
+---
+
+# 8.3 milliseconds.
+## That is the entire 120 Hz budget.
+
+<div class="visual-card">
+  <strong>Board:</strong> 60 Hz = 16.6 ms. 120 Hz = 8.3 ms. UI isolate + Raster/Impeller. HUD is native CADisplayLink / Choreographer. Flutter only reports batches.
+</div>
+
+<!--
+Talking Points:
+- If Flutter graded itself, the meter is rigged.
+- Jank is two clocks. Read both.
+-->
+
+---
+
+# Identical pixels is architecture.
+## Two shaders is two bugs.
+
+<div class="visual-card">
+  <strong>Board:</strong> Metal + AGSL "equivalent" → looks close enough. One owned canvas → one picture. Stop before Impeller internals.
+</div>
+
+<!--
+Talking Points:
+- Game studios already paid this tax. A promo screen is the same problem.
+-->
+
+---
+
 # Enter the Middle Ground.
 ## Introducing Flutter for offloading complex UI.
 
@@ -233,6 +277,21 @@ Talking Points:
 - This pattern is called Add-to-App.
 - Keep your native navigation, push notifications, Bluetooth, and standard forms.
 - When you reach that one screen with impossible animation requirements, hand the canvas to Flutter.
+-->
+
+---
+
+# One group. Three lazy engines.
+## Hidden tabs pause. First visit shows the cost.
+
+<div class="visual-card">
+  <strong>Board:</strong> Native HUD over Tab 1 Home, Tab 2 WebView, and FlutterEngineGroup("hybrid-demo") spawning /game, /glass, /scene on first visit.
+</div>
+
+<!--
+Talking Points:
+- Do not pre-warm at launch.
+- Quote 4–6 MB bundle, ~13–19 MB first engine, ~180 KB / 1.4 MB extras, then move.
 -->
 
 ---
@@ -403,6 +462,7 @@ Talking Points:
 - Orbit around the 3D island with your finger.
 - Drag the Day/Night slider.
 - Tap the ground: The raycaster unprojects screen touch into 3D world space and the character walks there.
+- Ultra: extra props + wandering NPC. Water bump is off so the phone stays live.
 - Full 3D graphics inside your native tab without Unity.
 -->
 
