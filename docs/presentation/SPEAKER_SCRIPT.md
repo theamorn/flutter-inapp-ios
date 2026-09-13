@@ -7,12 +7,12 @@ Word counts are spoken text only.
 | Act | Clock | Words | Read time @ 130 wpm |
 |---|---|---|---|
 | 1 Open | 0:00–3:00 | ~430 | ~3:20 |
-| 2 Identical UI | 3:00–10:00 | ~820 | ~6:20 |
+| 2 Identical UI | 3:00–10:00 | ~880 | ~6:45 |
 | 3 Foundation | 10:00–20:00 | ~1,100 | ~8:30 |
 | 4 Add-to-App | 20:00–28:00 | ~770 | ~5:55 |
 | 5 Heartbreak | 28:00–33:00 | ~520 | ~4:00 |
-| Spoken 1–5 | | **~3,640** | **~28:00** |
-| Stage business | hands, board drawing, pauses | | **~5:00** |
+| Spoken 1–5 | | **~3,700** | **~28:30** |
+| Stage business | hands, board drawing, pauses | | **~4:30** |
 | **Acts 1–5** | **0:00–33:00** | | **~33:00** |
 
 Then switch to the phone and [DEMO_SCRIPT.md](DEMO_SCRIPT.md). Draw the boards from [THEORY_BOARDS.md](THEORY_BOARDS.md) while you talk Act 3 and Act 4.
@@ -57,9 +57,21 @@ So what is Flutter for? When do we actually need identical UI? What difference i
 
 Not the login. Not the tab bar. Not a settings toggle. Those should look like the OS. Your user expects that. Difference there is a feature.
 
-The difference that is not acceptable is custom motion that *is* the product. Design ships a physics-heavy interaction. A spring. A dissolve. A card that feels like it has weight. iOS spends two weeks in Core Animation. Maybe a custom `CADisplayLink` driver. It ships. It is gorgeous. Then the ticket hits Android: three sprints, and it might drop frames on the phones you actually have in market, not the flagship on the poster. “Just port the animation” is not a ticket. It is a second product. The PM does the rational thing under a parity constraint. Cut it. Make a static card. Ship both stores equally beige.
+The difference that is not acceptable is a picture that *is* the product.
 
-That is the case for an owned canvas. Not “make every screen identical.” The case is: this interaction is why someone opens the app, we cannot afford to build it twice, and we will not ship delight on one store.
+Animation is one. Design ships a spring, a dissolve, a card that feels like it has weight. iOS spends a few days in Core Animation. It ships. It is gorgeous. Android gets a whole sprint — and no guarantee it holds 120 on the phones you actually have in market, not the flagship on the poster. “Just port the animation” is not a ticket. It is a second GPU path.
+
+A game is another. Physics, particles, a death effect that has to feel the same on both stores.
+
+What else? Not the checkout. Not the API. Not the score rules. Business logic copies. AI will draft it by Friday. Two GPU pipelines will not.
+
+A live shader — glass over a scrolling tree, a dissolve, particles that have to feel expensive on both phones.
+A 3D view — a product you can orbit, an island you can walk. Two lighting models is two movies.
+A branded promo that is a picture, not a form. Onboarding that is a performance, not a checklist.
+
+The PM does the rational thing under a parity constraint. Cut it. Make a static card. Ship both stores equally beige.
+
+That is the case for an owned canvas. Not “make every screen identical.” The case is: this picture is why someone opens the app, we cannot afford to build it twice, and we will not ship delight on one store.
 
 Games already voted. Apple has SceneKit and Metal. Google has Vulkan and Filament. More than seventy percent of the top thousand mobile games still run on Unity. One picture. One team. Steal the lesson, not the 100-megabyte crate.
 
@@ -137,9 +149,9 @@ You already heard the ticket in Act 2. Here is the full story so it sticks. I am
 
 Design ships a physics-heavy interaction. A spring. A dissolve. A card that feels like it has weight. It is beautiful in the prototype. It is the reason someone would open the app instead of the competitor. The room gets quiet in the good way.
 
-iOS spends two weeks in Core Animation. Maybe a custom `CADisplayLink` driver. It ships. It is gorgeous. The designer hugs the iOS engineer. This is the part of the job we actually like.
+iOS spends a few days in Core Animation. Maybe a custom `CADisplayLink` driver. It ships. It is gorgeous. The designer hugs the iOS engineer. This is the part of the job we actually like.
 
-Android looks at the same spec and says the true thing: three sprints, and it might drop frames on the devices we actually have in market, not the flagship on the poster. There is no shame in that sentence. The platforms are different. The APIs are different. The GPU story is different. “Just port the animation” is not a ticket. It is a second product.
+Android looks at the same spec and says the true thing: a whole sprint, and no guarantee it holds on the devices you actually have in market, not the flagship on the poster. There is no shame in that sentence. The platforms are different. The APIs are different. The GPU story is different. “Just port the animation” is not a ticket. It is a second product. Same story for a mini-game, a live shader, a 3D view. Not for the checkout. Business logic copies. Pictures do not.
 
 The product owner does the rational thing under a parity constraint. We cannot ship delight on one store and a static card on the other. Cut the animation. Make it a card. Ship both platforms looking equally boring. The ticket closes. The app gets a little more beige. Nobody writes a postmortem for a feature that never shipped.
 
@@ -176,6 +188,8 @@ Someone will say: we have Copilot / Gemini / Claude. Point it at the Swift, get 
 **Say this, then sit down. Do not debate models.**
 
 > AI is a fine intern for a port. It is a bad renderer.
+>
+> Business logic? Copy it. AI is a fine intern for that. Checkout, APIs, score rules — draft them.
 >
 > It can turn a UIKit animation into something that *looks like* Compose. It cannot give you the same picture. You still have two implementations: two timing curves, two GPU paths, two hitch profiles. “Looks close enough in the PR screenshot” is how we got the static card.
 >

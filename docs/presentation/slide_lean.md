@@ -103,7 +103,7 @@ Talking Points:
 
 <!--
 Talking Points:
-- Ask for a show of hands: "Who has spent 2 weeks perfecting a custom animation in Swift, only for Product to ask when Android gets it?"
+- Ask for a show of hands: "Who shipped a proud iOS animation in a few days, then heard Android would take a sprint with no device guarantee?"
 - The real enemy isn't native or cross-platform. The enemy is wasting sprints duplicating pixel-pushing.
 -->
 
@@ -336,7 +336,7 @@ Talking Points:
 ## The heartbreak of dual native development.
 
 <div class="visual-card">
-  <strong>Visual:</strong> Comic strip: Designer presents an incredible fluid UI prototype. iOS finishes in 2 weeks. Android says "3 sprints". A red "FEATURE CANCELLED" stamp hits the desk.
+  <strong>Visual:</strong> Comic strip: Designer presents an incredible fluid UI prototype. iOS finishes in a few days. Android says "a sprint, no device guarantee". A red "FEATURE CANCELLED" stamp hits the desk.
 </div>
 
 <!--

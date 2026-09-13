@@ -23,7 +23,7 @@ Do not relitigate these.
 | Cons | Spoken after the 20s production names. **No new slide.** |
 | AI | No on-device AI tab. Q&A only: AI drafts a second implementation; it does not share a renderer. |
 | Demo | Airplane mode, release, native HUD. Ultra: extra props + NPC; no water-bump. Android optional for Home + game only. |
-| Act 2 | Native engines differ — that is fine. Flutter owns a renderer for nearly the same picture. Trade-off is codecs/chrome, not “can’t do 120 fps.” Point: identical *motion* that would be cancelled on Android. |
+| Act 2 | Native engines differ — that is fine. Flutter owns a renderer for nearly the same picture. Trade-off is codecs/chrome, not “can’t do 120 fps.” Identical applies to pictures: animation, games, live shaders, 3D, branded promo. Not business logic — AI copies that. Timing: a few days on iOS vs a sprint on Android, no device guarantee. |
 | If over 33:00 | Cut Unity-vs-Flutter comparison first. Then Duo from the cons beat. Keep the 8.3 ms board. |
 
 ---
@@ -122,9 +122,10 @@ Logic, in this order:
 2. **Users accept platform chrome.** They are not holding two phones side by side. Testers will compare; customers will not.
 3. **Flutter’s different POV:** it owns the renderer (Impeller → Metal / Vulkan). Nearly the same picture. Do **not** promise pixel-perfect.
 4. **Trade-off is not “can’t do 120 fps.”** It can. The tax is codecs (Dart `image` vs `libjpeg-turbo`), OS chrome (Liquid Glass, Duo), first-engine RAM.
-5. **When is identical UI the point?** Not login/tabs/settings. Custom motion that *is* the product.
-6. **Use case:** cool iOS Core Animation, Android is three sprints / maybe jank, PM cuts it to a static card.
-7. **Supporting votes, short:** games → Unity (one picture); Help → WebView (difference is fine). Then names + cons.
+5. **When is identical UI the point?** Pictures, not business logic. AI copies checkout and APIs. It does not share a GPU path.
+6. **The list:** custom animation · mini-game · live shader / VFX · 3D view · branded promo that is a picture. Not login, tabs, settings, score rules.
+7. **Use case timing (do not overclaim):** a few days of Core Animation on iOS. A whole sprint on Android, no guarantee on every device. PM cuts it to a static card.
+8. **Supporting votes, short:** games → Unity (one picture); Help → WebView (difference is fine). Then names + cons.
 
 If over: cut Duo, then the Unity/WebView votes. Keep the cancelled-animation case and “not 120 fps.”
 
@@ -153,10 +154,12 @@ Leave the Native / WebView / Flutter cheat sheet up.
 Five beats, not a slide dump:
 
 1. Design ships a physics-heavy interaction  
-2. iOS spends two weeks in Core Animation  
-3. Android: three sprints, maybe jank  
+2. iOS spends a few days in Core Animation  
+3. Android: a whole sprint, no guarantee on every device  
 4. PM: cut it, make a static card  
 5. App gets boring  
+
+Same shape for a game, a shader, a 3D view. Not for business logic.  
 
 Punch: build that interaction once on the canvas; keep login and Home native.
 
@@ -199,6 +202,8 @@ One-breath counters (full wording in [SPEAKER_SCRIPT.md](SPEAKER_SCRIPT.md)):
 - **Wrong:** “None of those cross-platform stacks ever worked” — they failed as *replacements*
 - **Wrong:** “Flutter cannot do 120 fps” — it can; the tax is codecs and chrome
 - **Wrong:** “pixel-perfect on every device” — say nearly the same picture
+- **Wrong:** “two weeks of Core Animation / three sprints on Android” — a few days vs a sprint, no device guarantee
+- **Wrong:** identical UI for business logic — AI copies that; pictures do not
 
 ---
 

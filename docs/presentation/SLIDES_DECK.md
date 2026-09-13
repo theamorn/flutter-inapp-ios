@@ -297,8 +297,8 @@ Talking Points:
 ## The Real Pain Point Behind Two Apps
 
 - **Design:** Creates a gorgeous, fluid, physics-driven animation
-- **iOS:** Spends 2 weeks building it in CoreAnimation
-- **Android:** "This will take 3 sprints and might drop frames"
+- **iOS:** A few days in Core Animation
+- **Android:** A whole sprint, no guarantee on every device
 - **Product Owner:** "Cut the feature. We'll make it static."
 
 > **Image Prompt:**  
