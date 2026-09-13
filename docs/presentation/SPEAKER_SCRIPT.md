@@ -61,6 +61,8 @@ You will feel the ceiling in a specific way, and I want you to watch for it in t
 
 So we have a missing middle. Pure native: peak OS integration, terrible duplication cost for identical canvas work. WebView: cheap and dynamic, hard performance ceiling. Where does the branded promo go? The in-app game? The liquid glass that design saw in a keynote? The 3D configurator? That is the gap. The rest of this hour is how we fill it without burning the native app down.
 
+Twenty seconds, then I will stop naming Flutter. This is not a sales slide. I need you to know the canvas I am about to recommend is not a weekend experiment. Apptopia — quoted by the Flutter team — saw Flutter in about ten percent of tracked free iOS apps in 2021 and nearly thirty percent in 2024. BMW ships My BMW on it. Alibaba’s Xianyu, Google Pay, NotebookLM, eBay Motors, Nubank, Toyota infotainment, LG on webOS. I am not asking you to become those companies. I am asking you to treat an embedded canvas as a known production tool, the way you already treat Unity and WKWebView. Then we go back to architecture.
+
 ---
 
 ## Act 3 — Foundation (10:00–20:00)
@@ -156,3 +158,24 @@ I am going to pick up the phone now. Release build. Airplane mode. The HUD you w
 - [ ] If under 31:00: add one concrete “cancelled animation” from your own team at the start of Act 5, and slow the board drawing — do not improvise new architecture
 - [ ] Confirm you can draw all four boards in [THEORY_BOARDS.md](THEORY_BOARDS.md) without looking
 - [ ] Stage business that is already in the clock: show of hands (~20s), four boards drawn while talking (do not add a silent drawing act), one sip of water after Act 3
+- [ ] If the “safe to use” names in Act 2 run long, keep Apptopia 10%→30% and **two** logos (BMW + Google Pay). Cut the rest.
+
+---
+
+## Q&A card — “Why not AI-port iOS to Android?”
+
+Someone will say: we have Copilot / Gemini / Claude. Point it at the Swift, get Kotlin. Why a runtime?
+
+**Say this, then sit down. Do not debate models.**
+
+> AI is a fine intern for a port. It is a bad renderer.
+>
+> It can turn a UIKit animation into something that *looks like* Compose. It cannot give you the same picture. You still have two implementations: two timing curves, two GPU paths, two hitch profiles. “Looks close enough in the PR screenshot” is how we got the static card.
+>
+> Identical pixels is not “the AI matched the mock.” Identical pixels is one canvas, one shader, one 8.3-millisecond budget, measured on both phones by a native HUD.
+>
+> Use AI to write the *one* canvas faster. Do not use it to fork the pixels. That is two bugs with better autocomplete.
+
+If they push: “We measured the AI port and it was fine.”
+
+> Great — then you did not need this talk for that screen. Keep native. This hour is for the screen where fine-on-Android is still a different movie.

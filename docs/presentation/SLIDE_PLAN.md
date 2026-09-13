@@ -63,8 +63,9 @@ If the room is hungry for theory, steal 2 minutes from demo tab 3. If the room i
 | Extra engine | **~180 KB iOS / ~1.4 MB Android** via `FlutterEngineGroup` | Same |
 | Unity as library | 3–6 s load, 50–100 MB+ | Engine telemetry (cut this beat first if over) |
 | Flutter spawn | Hundreds of ms cold, ~5–15 ms cached spawn | Demo + docs |
+| Flutter in the wild (20 seconds, then stop) | Apptopia via Flutter/Google: ~**10% → ~30%** of tracked free iOS apps (2021→2024). Names only: BMW, Alibaba Xianyu, Google Pay, NotebookLM, eBay Motors, Nubank, Toyota infotainment, LG webOS. Do **not** quote unofficial “500k Play apps” counts. | [I/O 2025](https://flutter.dev/blog/dart-flutter-momentum-at-google-i-o-2025), [Production era](https://developers.googleblog.com/celebrating-flutters-production-era/) |
 
-Do not invent HUD numbers on stage. Read what the phone shows.
+Do not invent HUD numbers on stage. Read what the phone shows. Do not linger on the adoption names — two logos + the 10%→30% line is enough.
 
 ---
 
@@ -89,6 +90,8 @@ Holy war is the wrong question. The waste is duplicating custom graphics twice.
 **WebView:** Settings, Help, legal. Concede this hard. Right tool when copy changes weekly.
 
 **Missing middle:** Native is too expensive for identical canvas work. WebView has a ceiling. Where do mini-games, liquid glass, and a 3D island go?
+
+**Safe-to-use, then stop:** Apptopia 10%→30% of tracked free iOS apps. BMW, Google Pay, Xianyu. Then back to architecture — this is not a Flutter keynote.
 
 ### Act 3 — Foundation (10:00–20:00)
 
@@ -132,7 +135,9 @@ Decision matrix. Punchline:
 
 > Software engineers solve problems with software. If the tool helps the user, use it.
 
-Expected Qs: binary size, KMP/CMP, can we delete Flutter later, 3D on older phones.
+Expected Qs: binary size, KMP/CMP, can we delete Flutter later, 3D on older phones, **“why not AI-port iOS to Android?”**
+
+AI counter (one breath): AI can draft a port. It cannot share a renderer. Two implementations still means two hitch profiles. Use AI to write the *one* canvas faster; do not use it to fork the pixels. Full wording in [SPEAKER_SCRIPT.md](SPEAKER_SCRIPT.md).
 
 ---
 
