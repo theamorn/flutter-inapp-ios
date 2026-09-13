@@ -21,7 +21,9 @@ Do not relitigate these.
 | Login title | **Mobile Native Meetup** (whole line), native UIKit + Compose. |
 | Add-to-app | A **pattern**, not a Flutter trademark. Name RN brownfield and Unity as a Library in Act 1, then move. |
 | Cons | Spoken after the 20s production names. **No new slide.** |
-| AI | No on-device AI tab. Q&A only: AI drafts a second implementation; it does not share a renderer. |
+| Identical pictures | Custom animation · mini-game · live shader / VFX · 3D view · branded promo that is a picture. **Not** login, tabs, settings, checkout, APIs, or score rules — business logic copies; AI will draft it. |
+| Use-case timing | **A few days** of Core Animation on iOS. **A whole sprint** on Android, **no guarantee on every device.** Do not say two weeks / three sprints. |
+| AI | No on-device AI tab. Q&A only: AI copies business logic. It does not share a renderer. |
 | Demo | Airplane mode, release, native HUD. Ultra: extra props + NPC; no water-bump. Android optional for Home + game only. |
 | Act 2 | Native engines differ — that is fine. Flutter owns a renderer for nearly the same picture. Trade-off is codecs/chrome, not “can’t do 120 fps.” Identical applies to pictures: animation, games, live shaders, 3D, branded promo. Not business logic — AI copies that. Timing: a few days on iOS vs a sprint on Android, no device guarantee. |
 | If over 33:00 | Cut Unity-vs-Flutter comparison first. Then Duo from the cons beat. Keep the 8.3 ms board. |
@@ -39,7 +41,9 @@ Do not relitigate these.
         │
 [Trade-off is codecs/chrome, not 120 fps]
         │
-[Use case: iOS animation, Android too slow, cut it]
+[Pictures that must match: animation, game, shader, 3D, promo]
+        │
+[A few days on iOS vs a sprint on Android → cut it]
         │
 [Games/WebView as votes, then names + cons]
         │
@@ -47,7 +51,7 @@ Do not relitigate these.
         │
 [Add-to-App, Impeller, FlutterEngineGroup]
         │
-[The cancelled-animation heartbreak]
+[The cancelled-picture heartbreak]
         │
 [Live five-tab proof + MethodChannel score]
         │
@@ -63,14 +67,14 @@ If the room is hungry for theory, steal 2 minutes from demo tab 3. If the room i
 | Clock | Act | Goal |
 |---|---|---|
 | 0:00–3:00 | 1 Open | 18 years of native; replace failed; Flutter cooperates |
-| 3:00–10:00 | 2 Identical UI | Native difference OK; Flutter when motion must match |
+| 3:00–10:00 | 2 Identical UI | Native difference OK; Flutter when the *picture* must match |
 | 10:00–20:00 | 3 Foundation | Three drawing models + 8.3 ms budget |
 | 20:00–28:00 | 4 Add-to-App theory | Engine group, memory, Impeller in one sentence |
-| 28:00–33:00 | 5 Heartbreak | Five-beat cancelled-animation story |
+| 28:00–33:00 | 5 Heartbreak | Same shape for animation, game, shader, 3D — not business logic |
 | 33:00–45:00 | 6 Live demo | Tabs 1–5 + score back on Home |
 | 45:00–50:00 | 7 Close + Q&A | Decision matrix and punchline |
 
-**Rehearsal gate:** Acts 1–5 must finish by **33:00**. Script word counts in [SPEAKER_SCRIPT.md](SPEAKER_SCRIPT.md) target ~130 words/minute (~3,640 spoken words + ~5:00 stage).
+**Rehearsal gate:** Acts 1–5 must finish by **33:00**. Script word counts in [SPEAKER_SCRIPT.md](SPEAKER_SCRIPT.md) target ~130 words/minute (~3,700 spoken words + ~4:30 stage).
 
 ---
 
@@ -91,6 +95,8 @@ If the room is hungry for theory, steal 2 minutes from demo tab 3. If the room i
 | Add-to-app is not unique | React Native: official [Integration with Existing Apps](https://reactnative.dev/docs/integration-with-existing-apps); Expo brownfield (integrated + isolated AAR/XCFramework). Unity as a Library. WebView. Distinctive here: owned canvas + `FlutterEngineGroup`. | RN docs; Expo brownfield; Unity UaaL |
 | Flutter in the wild (20 seconds, then stop) | Apptopia via Flutter/Google: ~**10% → ~30%** of tracked free iOS apps (2021→2024). Names only: BMW, Alibaba Xianyu, Google Pay, NotebookLM, eBay Motors, Nubank, Toyota infotainment, LG webOS. Do **not** quote unofficial “500k Play apps” counts. | [I/O 2025](https://flutter.dev/blog/dart-flutter-momentum-at-google-i-o-2025), [Production era](https://developers.googleblog.com/celebrating-flutters-production-era/) |
 | Flutter cons (~60–90s, no new slide) | **iOS 26:** Flutter *runs* on it. Missing is Cupertino / Liquid Glass parity ([flutter#170310](https://github.com/flutter/flutter/issues/170310)), not the OS target. Wait or fake; not Settings. **Duo:** layout reflow is fine; `AppBar` / `CupertinoNavigationBar` will not go vertical like Apple chrome. `displayFeatures` is Android-shaped / empty on Duo. **Compress:** Dart `image` is ~20–35× slower than `libjpeg-turbo`. Isolates ≠ speed. Call the platform. | Official iOS 26 docs; Apple Duo chrome; speaker KBTG / `theamorn/flutter-rust-image` |
+| Identical pictures (say these, then stop) | Animation · game · live shader / VFX · 3D · branded promo. Demo maps: Tab 3 game, Tab 4 shader, Tab 5 3D. Not business logic. | This talk’s thesis |
+| Port timing (do not overclaim) | iOS: **a few days.** Android: **a whole sprint**, no guarantee on every device. | Room reality, not a lab study |
 
 Do not invent HUD numbers on stage. Read what the phone shows. Do not linger on the adoption names — two logos + the 10%→30% line is enough. After the names, spend one breath on the tax, then leave Flutter-as-product.
 
@@ -127,7 +133,7 @@ Logic, in this order:
 7. **Use case timing (do not overclaim):** a few days of Core Animation on iOS. A whole sprint on Android, no guarantee on every device. PM cuts it to a static card.
 8. **Supporting votes, short:** games → Unity (one picture); Help → WebView (difference is fine). Then names + cons.
 
-If over: cut Duo, then the Unity/WebView votes. Keep the cancelled-animation case and “not 120 fps.”
+If over: cut Duo, then the Unity/WebView votes. Keep the picture list, the few-days-vs-sprint timing, and “not 120 fps.”
 
 ### Act 3 — Foundation (10:00–20:00)
 
@@ -135,7 +141,7 @@ Whiteboard / theory slides only. No code.
 
 1. **Three ways a mobile screen draws** — platform widgets, Web DOM, owned canvas.
 2. **Frame budget** — 8.3 ms at 120 Hz; UI thread + Raster/Impeller; HUD is native-owned.
-3. **Identical pixels is an architecture choice** — two teams, two bugs, two “looks close enough.”
+3. **Identical pixels is an architecture choice** — two teams, two bugs, two “looks close enough.” Applies to pictures (animation, game, shader, 3D, promo), not business logic.
 
 Stop. Do not explain Impeller internals yet.
 
@@ -167,6 +173,8 @@ Punch: build that interaction once on the canvas; keep login and Home native.
 
 See [DEMO_SCRIPT.md](DEMO_SCRIPT.md). Airplane mode. Release. Native HUD visible.
 
+Point at the picture list while you walk: Tab 3 = game, Tab 4 = live shader, Tab 5 = 3D. Tab 1 is the shell (difference is fine). Tab 2 is Help (difference is fine).
+
 ### Act 7 — Close (45:00–50:00)
 
 Decision matrix. Punchline:
@@ -179,7 +187,7 @@ One-breath counters (full wording in [SPEAKER_SCRIPT.md](SPEAKER_SCRIPT.md)):
 
 | Q | Say |
 |---|---|
-| AI-port iOS → Android? | AI drafts a second implementation. It cannot share a renderer or an 8.3 ms budget. Use AI to write the *one* canvas. |
+| AI-port iOS → Android? | Business logic? Copy it. AI is fine for checkout and APIs. It cannot share a renderer or an 8.3 ms budget. Use AI to write the *one* canvas. |
 | iOS 26 / Liquid Glass? | Flutter runs. Gap is Cupertino visual parity, not the OS target. Wait or fake. Not Settings. |
 | iPhone Duo? | Layout reflow is fine. Apple chrome goes vertical; a Flutter `AppBar` will not. Detect or wait. Flutter still runs. |
 | Image compress? | Dart `image` ≠ `libjpeg-turbo`. Isolates fix jank, not speed. Call the platform. |
@@ -216,3 +224,5 @@ One-breath counters (full wording in [SPEAKER_SCRIPT.md](SPEAKER_SCRIPT.md)):
 - [ ] Walk [DEMO_SCRIPT.md](DEMO_SCRIPT.md) once on the device you will present
 - [ ] If names run long: Apptopia 10%→30% + BMW + Google Pay only
 - [ ] If cons run long: cut Duo first
+- [ ] Do not say two weeks / three sprints. Say a few days vs a sprint, no device guarantee.
+- [ ] Picture list only: animation, game, shader, 3D, promo. If asked about business logic: AI copies that.
