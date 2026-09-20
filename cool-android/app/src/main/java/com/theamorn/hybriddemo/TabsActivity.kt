@@ -1,17 +1,13 @@
 package com.theamorn.hybriddemo
 
-import android.content.Context
 import android.os.Bundle
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material.icons.Icons
@@ -38,9 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.dp
@@ -67,7 +61,7 @@ import io.flutter.embedding.android.TransparencyMode
  *       ├── WebTab (WebView)                 ← GONE when inactive
  *       ├── ComposeView (bodyView / Home)    ← GONE when inactive
  *       ├── ComposeView (chromeView)         ← Material 3 NavigationBar, bottom-aligned
- *       └── PassThroughHost (hudHost)        ← HUD overlay, top-right, touch-transparent
+ *       └── ComposeView (HUD)                ← wrap-content, top-end (not a full-screen overlay)
  *
  * Distinct views rather than a single full-screen Compose view ensure touches
  * fall through to Flutter surfaces and WebViews without being swallowed by Compose.
@@ -180,18 +174,16 @@ class TabsActivity : FragmentActivity() {
             ),
         )
 
-        val hudHost = PassThroughHost(this).apply {
-            addView(
-                ComposeView(context).apply {
-                    setContent { HybridDemoTheme { HudOverlay() } }
-                },
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ),
-            )
-        }
-        root.addView(hudHost, matchParent())
+        root.addView(
+            ComposeView(this).apply {
+                setContent { HybridDemoTheme { HudOverlay() } }
+            },
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP or Gravity.END,
+            ),
+        )
 
         setContentView(root)
 
@@ -353,32 +345,6 @@ class TabsActivity : FragmentActivity() {
     }
 }
 
-/**
- * A container that routes touches to the HUD when tapping inside its bounds
- * (allowing collapse/expand), while letting touches anywhere else fall
- * cleanly through to the underlying tab views (game, scene, web, home).
- */
-private class PassThroughHost(context: Context) : FrameLayout(context) {
-    private var trackingHudTouch = false
-
-    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
-            val bounds = PerformanceHudState.hudBoundsInRoot
-            trackingHudTouch = bounds != null && bounds.contains(Offset(ev.x, ev.y))
-        }
-        if (trackingHudTouch) {
-            val handled = super.dispatchTouchEvent(ev)
-            if (ev.actionMasked == MotionEvent.ACTION_UP || ev.actionMasked == MotionEvent.ACTION_CANCEL) {
-                trackingHudTouch = false
-            }
-            return handled
-        }
-        return false
-    }
-
-    override fun onTouchEvent(event: MotionEvent): Boolean = false
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeTab() {
@@ -470,15 +436,11 @@ private fun TabBar(
 
 @Composable
 private fun HudOverlay() {
-    Box(modifier = Modifier.fillMaxSize()) {
-        PerformanceHud(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(
-                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp,
-                    end = 8.dp,
-                    start = 8.dp,
-                ),
-        )
-    }
+    PerformanceHud(
+        modifier = Modifier.padding(
+            top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp,
+            end = 8.dp,
+            start = 8.dp,
+        ),
+    )
 }

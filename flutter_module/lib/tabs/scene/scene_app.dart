@@ -278,7 +278,6 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
                     autofocus: false,
                     child: SceneView(
                       _island.scene,
-                      camera: _island.camera,
                       onTick: _onTick,
                       warmUp: true,
                     ),

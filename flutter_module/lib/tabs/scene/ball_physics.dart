@@ -253,10 +253,15 @@ class BallPhysicsWorld {
   /// Adds or removes the Ultra-only obstacle hulls so balls bounce off the
   /// extra trees and rocks that exist only in that mode.
   void setUltraObstaclesEnabled(bool enabled) {
+    replaceUltraObstacles(
+      enabled ? IslandObstacle.ultraObstacles() : const <IslandObstacle>[],
+    );
+  }
+
+  /// Replaces every `ultra_*` hull with [extra] (Poisson scatter, or none).
+  void replaceUltraObstacles(Iterable<IslandObstacle> extra) {
     obstacles.removeWhere((obstacle) => obstacle.name.startsWith('ultra_'));
-    if (enabled) {
-      obstacles.addAll(IslandObstacle.ultraObstacles());
-    }
+    obstacles.addAll(extra);
   }
 
   /// Configures the world with [count] balls (e.g. 1 in Normal mode, 8 in Ultra mode).

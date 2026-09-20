@@ -45,8 +45,6 @@ class PipePair extends PositionComponent {
     active = true;
     moving = true;
     _layoutSegments();
-    _topPipe.setCollidable(true);
-    _bottomPipe.setCollidable(true);
   }
 
   void relayout({required double playHeight}) {
@@ -58,10 +56,14 @@ class PipePair extends PositionComponent {
     active = false;
     moving = false;
     position.setValues(-10000, 0);
-    if (isLoaded) {
-      _topPipe.setCollidable(false);
-      _bottomPipe.setCollidable(false);
+  }
+
+  @override
+  void renderTree(Canvas canvas) {
+    if (!active) {
+      return;
     }
+    super.renderTree(canvas);
   }
 
   void _layoutSegments() {
@@ -110,15 +112,15 @@ class PipeSegment extends PositionComponent {
   final Paint _shinePaint = Paint()..color = const Color(0xFF71DD77);
 
   late final RectangleHitbox _hitbox;
-  RRect _body = RRect.zero;
-  RRect _lip = RRect.zero;
+  Rect _body = Rect.zero;
+  Rect _lip = Rect.zero;
   Rect _shadow = Rect.zero;
   Rect _shine = Rect.zero;
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-    _hitbox = RectangleHitbox(collisionType: CollisionType.inactive);
+    _hitbox = RectangleHitbox(collisionType: CollisionType.passive);
     await add(_hitbox);
   }
 
@@ -128,32 +130,19 @@ class PipeSegment extends PositionComponent {
     final lipY = isTop ? height - lipHeight : 0.0;
     final bodyTop = isTop ? 0.0 : lipHeight - 3;
     final bodyBottom = isTop ? lipY + 3 : height;
-    final radius = const Radius.circular(7);
 
-    _body = RRect.fromRectAndRadius(
-      Rect.fromLTRB(6, bodyTop, width - 6, bodyBottom),
-      radius,
-    );
-    _lip = RRect.fromRectAndRadius(
-      Rect.fromLTWH(0, lipY, width, lipHeight),
-      radius,
-    );
+    _body = Rect.fromLTRB(6, bodyTop, width - 6, bodyBottom);
+    _lip = Rect.fromLTWH(0, lipY, width, lipHeight);
     _shadow = Rect.fromLTWH(width - 13, bodyTop, 7, bodyBottom - bodyTop);
     _shine = Rect.fromLTWH(13, bodyTop + 4, 6, bodyBottom - bodyTop - 8);
   }
 
-  void setCollidable(bool value) {
-    _hitbox.collisionType = value
-        ? CollisionType.passive
-        : CollisionType.inactive;
-  }
-
   @override
   void render(Canvas canvas) {
-    canvas.drawRRect(_body, _bodyPaint);
+    canvas.drawRect(_body, _bodyPaint);
     canvas.drawRect(_shadow, _darkPaint);
     canvas.drawRect(_shine, _shinePaint);
-    canvas.drawRRect(_lip, _bodyPaint);
+    canvas.drawRect(_lip, _bodyPaint);
     super.render(canvas);
   }
 }

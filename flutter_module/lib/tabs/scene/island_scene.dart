@@ -12,6 +12,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_scene/kit.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:flutter_module/tabs/scene/ball_physics.dart';
+import 'package:flutter_module/tabs/scene/island_components.dart';
 import 'package:flutter_module/tabs/scene/tap_to_move.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
@@ -82,25 +83,32 @@ class IslandScene {
   late final Node campfireNode;
   late final Node _flameNode;
   late final PhysicallyBasedMaterial _flameMaterial;
+  ParticleEmitterComponent? _flameEmitter;
+  Node? _flameEmitterNode;
+  ParticleEmitterComponent? _smokeEmitter;
+  Node? _smokeEmitterNode;
+  ParticleEmitterComponent? _sparkEmitter;
+  Node? _sparkEmitterNode;
   bool campfireLit = true;
-  double _campfireIntensity = 1.0;
-  double _flickerPhase = 0.0;
 
   late final Node cameraNode;
   late final CameraComponent _cameraComponent;
   late final OrbitCameraController orbit;
+  OtsCameraComponent? _otsCamera;
 
   IslandCameraMode _cameraMode = IslandCameraMode.orbit;
   IslandCameraMode get cameraMode => _cameraMode;
 
   final OtsCameraRig _otsRig = const OtsCameraRig();
   final FrustumCuller _culler = const FrustumCuller();
+  int _cullHudFrame = 0;
   final List<_PropInstance> _props = <_PropInstance>[];
   final List<_PropInstance> _ultraProps = <_PropInstance>[];
+  Node? _groundCoverRoot;
+  Node? _ultraScatterRoot;
+  Node? _sandRoot;
   Map<String, Node>? _propSources;
   int culledMeshCount = 0;
-  vm.Vector3? _otsEye;
-  vm.Vector3? _otsTarget;
   double _otsOrbitAngle = 0.0;
   double _otsPitch = 0.0;
 
@@ -122,32 +130,42 @@ class IslandScene {
   double _punchTimer = 0.0;
   static const double _punchDuration = 0.45;
 
-  final WalkerMotion npcWalker = WalkerMotion(
+  final NpcSteeringMotion npcSteering = NpcSteeringMotion(
     position: vm.Vector3(-4.2, IslandDimensions.groundY, 3.6),
-    speed: 1.4,
+    maxSpeed: 1.4,
     groundY: IslandDimensions.groundY,
   );
   Node? _npcPivot;
   AnimationClip? _npcIdleClip;
   AnimationClip? _npcWalkClip;
-  double _npcWalkBlend = 0;
-  double _npcWanderTimer = 0.0;
+  NpcWanderComponent? _npcWander;
   final math.Random _npcRandom = math.Random();
+  Node? _flockRoot;
+  SeagullFlockComponent? _flock;
 
   final BallPhysicsWorld physicsWorld = BallPhysicsWorld(
     groundY: IslandDimensions.groundY,
   );
-  final List<Node> _ballNodes = <Node>[];
-  final Map<int, Mesh> _ballMeshCache = <int, Mesh>{};
+  InstancedMesh? _ballBatch;
+  Node? _ballRoot;
+  NodePool? _debrisPool;
+  Node? _debrisRoot;
+  DebrisSimComponent? _debrisSim;
+  final Map<Node, DebrisChipMotion> _debris = <Node, DebrisChipMotion>{};
+  Mesh? _chipMesh;
 
   late final Node _waterNode;
   late final PhysicallyBasedMaterial _normalSeaMaterial;
   late final PhysicallyBasedMaterial _ultraSeaMaterial;
+  WaterSurfaceComponent? _waterSurface;
+  GerstnerDisplaceComponent? _waterDisplace;
+  final List<_Buoy> _buoys = <_Buoy>[];
 
   bool _ultraMode = false;
   bool get isUltraMode => _ultraMode;
 
-  _TapMarker? _marker;
+  TapMarkerComponent? _marker;
+  CampfireFlickerComponent? _campfireFlicker;
 
   /// Triangles submitted by the scene graph, counted at build time.
   int triangleCount = 0;
@@ -164,7 +182,19 @@ class IslandScene {
 
   /// Time of day, 0..24. The slider writes straight to this.
   double get timeOfDay => dayNight.timeOfDay;
-  set timeOfDay(double value) => dayNight.timeOfDay = value.clamp(0.0, 24.0);
+  set timeOfDay(double value) {
+    final next = value.clamp(0.0, 24.0);
+    if (next == dayNight.timeOfDay) {
+      return;
+    }
+    dayNight.timeOfDay = next;
+    // Aim the sun and refresh IBL only when the clock actually moves. The
+    // component is not ticked by Scene.render (see [_buildEnvironment]), so
+    // an idle island does not dirty the light basis or rebake every frame.
+    dayNight.update(0.0);
+    scene.skyEnvironment?.invalidate();
+    _applyLighting();
+  }
 
   /// 0 in full daylight, 1 in full night. Drives the particle cross-fade.
   double get nightBlend {
@@ -186,12 +216,27 @@ class IslandScene {
     await _buildNpc();
 
     physicsWorld.setupBalls(1);
-    _syncBallNodes();
+    _ensureBalls();
 
-    _marker = _TapMarker(scene);
+    final markerMaterial = UnlitMaterial()
+      ..alphaMode = AlphaMode.blend
+      ..baseColorFactor = vm.Vector4(1.0, 0.95, 0.55, 0.0);
+    final markerNode = Node(
+      name: 'tap_marker',
+      mesh: Mesh(
+        RingGeometry(innerRadius: 0.34, outerRadius: 0.42, segments: 48),
+        markerMaterial,
+      ),
+    )
+      ..castsShadows = false
+      ..visible = false;
+    _marker = TapMarkerComponent(markerMaterial);
+    markerNode.addComponent(_marker!);
+    scene.add(markerNode);
     // Aim the sun and the sky once before the first frame, for the same
     // reason as the camera above.
     dayNight.update(0.0);
+    _applyLighting();
     _recount();
     _loaded = true;
   }
@@ -200,13 +245,13 @@ class IslandScene {
 
   void _buildEnvironment() {
     scene.skybox = Skybox(sky);
-    // The sun moves continuously while the slider is swept, so the baked IBL
-    // has to be refreshed. `interval` at a low face resolution keeps that to a
-    // fraction of a frame instead of a full bake every frame.
+    // Manual IBL: bake once on bind, then only when [timeOfDay] changes.
+    // `interval` rebake (even at 200ms) keeps a SkyBakeJob in flight on an
+    // idle clock and showed up as raster jank on device (release gfxinfo:
+    // 55% missed deadlines, GPU p50 17ms).
     scene.skyEnvironment = SkyEnvironment(
       sky,
-      refresh: SkyEnvironmentRefresh.interval,
-      interval: const Duration(milliseconds: 200),
+      refresh: SkyEnvironmentRefresh.manual,
       faceResolution: 64,
       equirectWidth: 256,
     );
@@ -219,9 +264,9 @@ class IslandScene {
     // that actually produces a sunset.
     sunLight = DirectionalLight(
       castsShadow: true,
-      shadowMaxDistance: 48.0,
-      shadowCascadeCount: 2,
-      shadowMapResolution: 1024,
+      shadowMaxDistance: 24.0,
+      shadowCascadeCount: 1,
+      shadowMapResolution: 512,
       shadowSoftness: 0.06,
       shadowAmbientStrength: 0.35,
     );
@@ -257,7 +302,10 @@ class IslandScene {
       // ambient term can be given a floor and the moon can be blended in.
       applyLightingToTarget: false,
     );
-    scene.root.addComponent(dayNight);
+    // Do not mount this on the graph. Its update() rewrites the sun node's
+    // transform every frame even at timeSpeed 0, which trips
+    // DirectionalShadowCache's light-basis check and rebuilds static shadow
+    // tiles. [timeOfDay] calls update() when the clock actually moves.
 
     _applyEnvironmentSettings();
   }
@@ -297,62 +345,187 @@ class IslandScene {
       );
     _flameNode.castsShadows = false;
     scene.add(_flameNode);
+
+    _flameEmitter = ParticleEmitterComponent(
+      system: ParticleSystem(
+        maxParticles: 20,
+        shape: const ConeEmitterShape(angle: 0.38, radius: 0.07),
+        spawner: Spawner(rate: 16),
+        modules: <ParticleModule>[
+          ColorOverLifeModule(
+            GradientColor(
+              ColorGradient(<ColorStop>[
+                ColorStop(0.0, vm.Vector4(1.0, 0.88, 0.28, 1.0)),
+                ColorStop(0.28, vm.Vector4(1.0, 0.42, 0.06, 0.95)),
+                ColorStop(0.7, vm.Vector4(0.18, 0.04, 0.01, 0.28)),
+                ColorStop(1.0, vm.Vector4(0.0, 0.0, 0.0, 0.0)),
+              ]),
+            ),
+          ),
+          SizeOverLifeModule(
+            CurveFloat(ParticleCurve.linear(from: 1.0, to: 0.12)),
+          ),
+        ],
+        lifetime: const UniformFloat(0.35, 0.7),
+        startSpeed: const UniformFloat(0.85, 1.55),
+        startSize: const UniformFloat(0.11, 0.2),
+        gravity: vm.Vector3(0, 0.55, 0),
+        prewarm: 0.7,
+      ),
+      material: SpriteMaterial()..blendMode = SpriteBlendMode.additive,
+    )..paused = true;
+    _flameEmitterNode = Node(name: 'campfire_particles')
+      ..position = vm.Vector3(
+        IslandDimensions.campfireX,
+        0.28,
+        IslandDimensions.campfireZ,
+      )
+      ..visible = false
+      ..castsShadows = false
+      ..addComponent(_flameEmitter!);
+    scene.add(_flameEmitterNode!);
+
+    _smokeEmitter = ParticleEmitterComponent(
+      system: ParticleSystem(
+        maxParticles: 8,
+        shape: const ConeEmitterShape(angle: 0.2, radius: 0.05),
+        spawner: Spawner(rate: 6),
+        modules: <ParticleModule>[
+          ColorOverLifeModule(
+            GradientColor(
+              ColorGradient(<ColorStop>[
+                ColorStop(0.0, vm.Vector4(0.55, 0.52, 0.48, 0.35)),
+                ColorStop(0.45, vm.Vector4(0.32, 0.32, 0.34, 0.22)),
+                ColorStop(1.0, vm.Vector4(0.18, 0.18, 0.2, 0.0)),
+              ]),
+            ),
+          ),
+          SizeOverLifeModule(
+            CurveFloat(ParticleCurve.linear(from: 1.0, to: 2.4)),
+          ),
+        ],
+        lifetime: const UniformFloat(1.1, 1.9),
+        startSpeed: const UniformFloat(0.32, 0.55),
+        startSize: const UniformFloat(0.2, 0.36),
+        gravity: vm.Vector3(0, 0.38, 0),
+        prewarm: 1.6,
+      ),
+      material: SpriteMaterial()..blendMode = SpriteBlendMode.alpha,
+    )..paused = true;
+    _smokeEmitterNode = Node(name: 'campfire_smoke')
+      ..position = vm.Vector3(
+        IslandDimensions.campfireX,
+        0.42,
+        IslandDimensions.campfireZ,
+      )
+      ..visible = false
+      ..castsShadows = false
+      ..addComponent(_smokeEmitter!);
+    scene.add(_smokeEmitterNode!);
+
+    _sparkEmitter = ParticleEmitterComponent(
+      system: ParticleSystem(
+        maxParticles: 4,
+        shape: const ConeEmitterShape(angle: 0.55, radius: 0.03),
+        spawner: Spawner(rate: 6),
+        modules: <ParticleModule>[
+          ColorOverLifeModule(
+            GradientColor(
+              ColorGradient(<ColorStop>[
+                ColorStop(0.0, vm.Vector4(1.0, 0.85, 0.35, 1.0)),
+                ColorStop(0.5, vm.Vector4(1.0, 0.35, 0.05, 0.8)),
+                ColorStop(1.0, vm.Vector4(0.1, 0.02, 0.0, 0.0)),
+              ]),
+            ),
+          ),
+          SizeOverLifeModule(
+            CurveFloat(ParticleCurve.linear(from: 1.0, to: 0.05)),
+          ),
+        ],
+        lifetime: const UniformFloat(0.22, 0.45),
+        startSpeed: const UniformFloat(1.6, 2.8),
+        startSize: const UniformFloat(0.035, 0.06),
+        gravity: vm.Vector3(0, -1.4, 0),
+        prewarm: 0.4,
+      ),
+      material: SpriteMaterial()..blendMode = SpriteBlendMode.additive,
+    )..paused = true;
+    _sparkEmitterNode = Node(name: 'campfire_sparks')
+      ..position = vm.Vector3(
+        IslandDimensions.campfireX,
+        0.34,
+        IslandDimensions.campfireZ,
+      )
+      ..visible = false
+      ..castsShadows = false
+      ..addComponent(_sparkEmitter!);
+    scene.add(_sparkEmitterNode!);
+
+    _campfireFlicker = CampfireFlickerComponent(
+      light: campfireLight,
+      flameNode: _flameNode,
+      flameMaterial: _flameMaterial,
+      isLit: () => campfireLit,
+      isUltra: () => _ultraMode,
+      flameEmitter: _flameEmitter,
+      flameEmitterNode: _flameEmitterNode,
+      smokeEmitter: _smokeEmitter,
+      smokeEmitterNode: _smokeEmitterNode,
+      sparkEmitter: _sparkEmitter,
+      sparkEmitterNode: _sparkEmitterNode,
+    );
+    campfireNode.addComponent(_campfireFlicker!);
   }
 
   void toggleCampfire() {
     campfireLit = !campfireLit;
   }
 
-  void _tickCampfire(double deltaSeconds) {
-    _flickerPhase += deltaSeconds;
-    final target = campfireLit ? 1.0 : 0.0;
-    _campfireIntensity +=
-        (target - _campfireIntensity) * math.min(1.0, deltaSeconds * 6.0);
-
-    if (_campfireIntensity > 0.01) {
-      _flameNode.visible = true;
-      final flicker = 1.0 +
-          0.20 * math.sin(_flickerPhase * 15.0) +
-          0.10 * math.cos(_flickerPhase * 27.0);
-      campfireLight.intensity = 5.5 * _campfireIntensity * flicker;
-      final s = 0.22 * _campfireIntensity * flicker;
-      _flameNode.scale = vm.Vector3(s, s * 1.25, s);
-      _flameMaterial.emissiveStrength = 5.0 * _campfireIntensity * flicker;
-    } else {
-      _flameNode.visible = false;
-      campfireLight.intensity = 0.0;
-    }
-  }
-
-  Mesh _getBallMesh(int index) {
-    return _ballMeshCache.putIfAbsent(index, () {
-      final color = BallPhysicsWorld.ballPalettes[
-          index % BallPhysicsWorld.ballPalettes.length];
-      final mat = PhysicallyBasedMaterial()
-        ..baseColorFactor = vm.Vector4(color[0], color[1], color[2], color[3])
+  void _ensureBalls() {
+    _ballBatch ??= InstancedMesh(
+      geometry: SphereGeometry(radius: 0.32, segments: 24, rings: 16),
+      material: PhysicallyBasedMaterial()
         ..metallicFactor = 0.05
-        ..roughnessFactor = 0.30;
-      return Mesh(
-        SphereGeometry(radius: 0.32, segments: 24, rings: 16),
-        mat,
-      );
-    });
+        ..roughnessFactor = 0.30,
+    );
+    if (_ballRoot == null) {
+      _ballRoot = Node(name: 'physics_balls')
+        ..castsShadows = true
+        ..addComponent(InstancedMeshComponent(_ballBatch!))
+        ..addComponent(
+          PhysicsBallVisualComponent(
+            world: physicsWorld,
+            batch: _ballBatch!,
+          ),
+        );
+      scene.add(_ballRoot!);
+    }
+    _fillBallInstances();
   }
 
-  void _syncBallNodes() {
-    final needed = physicsWorld.balls.length;
-    while (_ballNodes.length < needed) {
-      final index = _ballNodes.length;
-      final node = Node(
-        name: 'physics_ball_$index',
-        mesh: _getBallMesh(index),
-      );
-      node.castsShadows = true;
-      scene.add(node);
-      _ballNodes.add(node);
+  void _syncBallInstances() {
+    if (_ballBatch == null) {
+      _ensureBalls();
+      return;
     }
-    for (var i = 0; i < _ballNodes.length; i++) {
-      _ballNodes[i].visible = i < needed;
+    _fillBallInstances();
+  }
+
+  void _fillBallInstances() {
+    final batch = _ballBatch!;
+    batch.clearInstances();
+    for (var i = 0; i < physicsWorld.balls.length; i++) {
+      final color = BallPhysicsWorld.ballPalettes[
+          i % BallPhysicsWorld.ballPalettes.length];
+      final ball = physicsWorld.balls[i];
+      batch.addInstance(
+        vm.Matrix4.compose(
+          ball.position,
+          ball.rotation,
+          vm.Vector3.all(1.0),
+        ),
+        color: vm.Vector4(color[0], color[1], color[2], color[3]),
+      );
     }
   }
 
@@ -362,14 +535,19 @@ class IslandScene {
     }
     _ultraMode = ultra;
     physicsWorld.setupBalls(ultra ? 8 : 1);
-    physicsWorld.setUltraObstaclesEnabled(ultra);
-    _syncBallNodes();
-    _waterNode.mesh = Mesh(
-      DiscGeometry(radius: IslandDimensions.seaRadius, segments: 64),
-      ultra ? _ultraSeaMaterial : _normalSeaMaterial,
-    );
+    physicsWorld.replaceUltraObstacles(const <IslandObstacle>[]);
+    _syncBallInstances();
     _syncUltraProps(ultra);
+    _syncUltraGroundCover(ultra);
+    _syncUltraSand(ultra);
+    _syncUltraWater(ultra);
     _syncNpc(ultra);
+    _syncFlock(ultra);
+    if (!ultra) {
+      _clearDebris();
+    } else {
+      _ensureDebrisPool();
+    }
     _applyEnvironmentSettings();
     if (_cameraMode == IslandCameraMode.orbit) {
       _recount();
@@ -378,45 +556,50 @@ class IslandScene {
 
   void resetBalls() {
     physicsWorld.setupBalls(_ultraMode ? 8 : 1);
-    _syncBallNodes();
+    _syncBallInstances();
   }
 
   void _applyEnvironmentSettings() {
+    sunLight.shadowCascadeCount = 1;
+    sunLight.shadowMapResolution = 512;
+    sunLight.shadowMaxDistance = 24.0;
     if (_ultraMode) {
+      scene.renderScale = 0.85;
+      scene.antiAliasingMode = AntiAliasingMode.msaa;
       scene.environmentSettings = EnvironmentSettings(
         toneMapping: ToneMappingMode.aces,
-        exposure: 0.82,
         colorGradingEnabled: true,
-        saturation: 1.45,
-        contrast: 1.2,
-        brightness: 1.0,
+        saturation: 1.25,
+        contrast: 1.1,
+        brightness: 1.05,
         temperature: 0.1,
         bloomEnabled: true,
-        bloomThreshold: 0.82,
-        bloomIntensity: 0.44,
-        bloomScatter: 0.82,
+        bloomThreshold: 1.2,
+        bloomIntensity: 0.12,
+        bloomScatter: 0.4,
+        lensFlareEnabled: false,
         vignetteEnabled: true,
-        vignetteIntensity: 0.22,
+        vignetteIntensity: 0.2,
+        exposure: 0.82,
         ambientOcclusionEnabled: true,
-        ambientOcclusionMethod: AmbientOcclusionMethod.groundTruth,
-        ambientOcclusionRadius: 0.45,
-        ambientOcclusionIntensity: 1.3,
-        ambientOcclusionSampleCount: 24,
+        ambientOcclusionMethod: AmbientOcclusionMethod.obscurance,
+        ambientOcclusionHalfResolution: true,
+        ambientOcclusionIntensity: 1.0,
         screenSpaceReflectionsEnabled: true,
-        screenSpaceReflectionsMaxSteps: 90,
-        godRaysEnabled: true,
-        godRaysIntensity: 1.15,
-        depthOfFieldEnabled: true,
-        depthOfFieldQuality: DepthOfFieldQuality.medium,
+        screenSpaceReflectionsIntensity: 1.0,
+        screenSpaceReflectionsMaxDistance: 28.0,
+        screenSpaceReflectionsMaxSteps: 24,
+        screenSpaceReflectionsResolutionScale: 0.4,
       );
     } else {
+      scene.renderScale = 0.75;
+      scene.antiAliasingMode = AntiAliasingMode.auto;
       scene.environmentSettings = EnvironmentSettings(
         toneMapping: ToneMappingMode.aces,
-        exposure: 0.8,
         colorGradingEnabled: true,
-        saturation: 1.4,
-        contrast: 1.18,
-        brightness: 1.0,
+        saturation: 1.25,
+        contrast: 1.1,
+        brightness: 1.05,
         temperature: 0.1,
         bloomEnabled: true,
         bloomThreshold: 0.9,
@@ -424,10 +607,10 @@ class IslandScene {
         bloomScatter: 0.8,
         vignetteEnabled: true,
         vignetteIntensity: 0.2,
-        ambientOcclusionEnabled: false,
-        screenSpaceReflectionsEnabled: false,
-        godRaysEnabled: false,
-        depthOfFieldEnabled: false,
+        exposure: 0.8,
+        ambientOcclusionEnabled: true,
+        ambientOcclusionHalfResolution: true,
+        ambientOcclusionIntensity: 0.8,
       );
     }
   }
@@ -541,6 +724,18 @@ class IslandScene {
     cameraNode = Node(name: 'camera')
       ..addComponent(_cameraComponent)
       ..addComponent(orbit);
+    _otsCamera = OtsCameraComponent(
+      rig: _otsRig,
+      characterPosition: () => walker.position,
+      characterYaw: () => walker.yaw,
+      isMoving: () => walker.isMoving,
+      orbitAngle: () => _otsOrbitAngle,
+      pitch: () => _otsPitch,
+      setOrbitAngle: (value) => _otsOrbitAngle = value,
+      setPitch: (value) => _otsPitch = value,
+      groundY: IslandDimensions.groundY,
+    )..enabled = false;
+    cameraNode.addComponent(_otsCamera!);
     scene.add(cameraNode);
     // Place the rig before the first frame. Without this the camera node is
     // still identity for one frame — at the origin, inside the island.
@@ -570,13 +765,17 @@ class IslandScene {
     _cameraMode = mode;
     if (mode == IslandCameraMode.overTheShoulder) {
       _detachOrbit();
-      _otsEye = null;
-      _otsTarget = null;
       _otsOrbitAngle = 0.0;
       _otsPitch = 0.0;
+      _otsCamera?.resetSmoothing();
+      _otsCamera?.enabled = true;
     } else {
+      _otsCamera?.enabled = false;
       _attachOrbit();
       _restoreAllVisibility();
+    }
+    if (_ultraMode) {
+      _applyEnvironmentSettings();
     }
   }
 
@@ -586,6 +785,10 @@ class IslandScene {
 
   void _cullOffscreenNodes(ui.Size viewportSize) {
     if (_cameraMode != IslandCameraMode.overTheShoulder) {
+      return;
+    }
+    _cullHudFrame = (_cullHudFrame + 1) & 7;
+    if (_cullHudFrame != 0) {
       return;
     }
     final frustum = camera.getFrustum(viewportSize);
@@ -607,9 +810,7 @@ class IslandScene {
       }
     }
 
-    final needed = physicsWorld.balls.length;
-    for (var i = 0; i < needed && i < _ballNodes.length; i++) {
-      final ball = physicsWorld.balls[i];
+    for (final ball in physicsWorld.balls) {
       final inView = _culler.isSphereVisible(
         frustum,
         ball.position,
@@ -620,7 +821,7 @@ class IslandScene {
       }
     }
 
-    if (campfireLit && _campfireIntensity > 0.01) {
+    if (campfireLit && (_campfireFlicker?.intensity ?? 0) > 0.01) {
       final flameInView = _culler.isSphereVisible(
         frustum,
         _flameNode.position,
@@ -650,39 +851,6 @@ class IslandScene {
     _otsPitch = (_otsPitch - deltaY * 0.005).clamp(-0.25, 0.55);
   }
 
-  void _tickOtsCamera(double deltaSeconds) {
-    if (walker.isMoving) {
-      final recenterRate = math.min(1.0, deltaSeconds * 3.5);
-      _otsOrbitAngle += (0.0 - _otsOrbitAngle) * recenterRate;
-      _otsPitch += (0.0 - _otsPitch) * recenterRate;
-    }
-
-    final totalYaw = walker.yaw + _otsOrbitAngle;
-    final (targetEye, targetLookAt) = _otsRig.compute(
-      characterPosition: walker.position,
-      yaw: totalYaw,
-      pitchOffset: _otsPitch,
-      groundY: IslandDimensions.groundY,
-    );
-
-    if (_otsEye == null || _otsTarget == null) {
-      _otsEye = targetEye.clone();
-      _otsTarget = targetLookAt.clone();
-    } else {
-      final eyeSpeed = math.min(1.0, deltaSeconds * 12.0);
-      final targetSpeed = math.min(1.0, deltaSeconds * 16.0);
-      _otsEye!.x += (targetEye.x - _otsEye!.x) * eyeSpeed;
-      _otsEye!.y += (targetEye.y - _otsEye!.y) * eyeSpeed;
-      _otsEye!.z += (targetEye.z - _otsEye!.z) * eyeSpeed;
-
-      _otsTarget!.x += (targetLookAt.x - _otsTarget!.x) * targetSpeed;
-      _otsTarget!.y += (targetLookAt.y - _otsTarget!.y) * targetSpeed;
-      _otsTarget!.z += (targetLookAt.z - _otsTarget!.z) * targetSpeed;
-    }
-
-    cameraNode.lookAtFrom(_otsEye!, _otsTarget!);
-  }
-
   // ------------------------------------------------------------------ props
 
   Future<void> _buildProps() async {
@@ -697,30 +865,7 @@ class IslandScene {
     // back of a room beats a scatter that might clump on the night of.
     // XZ is the original layout scaled 3x so the same composition fills the
     // larger island in both modes.
-    const placements = <_Placement>[
-      _Placement('palm', 6.15, -3.75, 0.7, 1.05),
-      _Placement('palm', -6.75, 2.55, -2.1, 0.92),
-      _Placement('palm', 1.35, -7.35, 2.4, 0.85),
-      _Placement('pine', -4.65, -5.85, 1.2, 1.0),
-      _Placement('pine', -1.65, -7.65, -0.35, 0.8),
-      _Placement('pine', 7.05, 4.05, -1.9, 0.9),
-      _Placement('rockLarge', 3.3, 5.85, 1.55, 1.0),
-      _Placement('rockLarge', -7.8, -1.05, 1.35, 0.75),
-      _Placement('rockSmall', 5.25, 1.65, -0.4, 1.0),
-      _Placement('rockSmall', -3.45, 3.45, 2.6, 1.2),
-      _Placement('rockSmall', 2.85, -2.25, -2.3, 0.9),
-      _Placement(
-        'campfire',
-        IslandDimensions.campfireX,
-        IslandDimensions.campfireZ,
-        -0.15,
-        1.3,
-      ),
-      _Placement('bush', 4.05, 7.05, 0.9, 1.1),
-      _Placement('bush', -6.15, 5.55, 2.2, 0.9),
-      _Placement('bush', 8.25, -1.35, -1.1, 1.0),
-      _Placement('bush', -2.55, -3.15, 0.4, 0.8),
-    ];
+    const placements = _normalPlacements;
 
     _propSources = <String, Node>{
       'palm': palm,
@@ -736,21 +881,40 @@ class IslandScene {
     }
   }
 
-  static const List<_Placement> _ultraPlacements = <_Placement>[
-    _Placement('palm', 8.2, 2.4, 1.1, 1.0),
-    _Placement('palm', -8.0, -3.2, 0.4, 0.95),
-    _Placement('palm', 3.8, 8.1, -1.4, 1.1),
-    _Placement('pine', -3.2, 7.8, 2.0, 0.95),
-    _Placement('pine', 7.6, -5.4, 0.6, 0.88),
-    _Placement('pine', -7.4, 6.2, -0.8, 1.05),
-    _Placement('rockLarge', 0.8, 7.4, 0.3, 0.9),
-    _Placement('rockLarge', -5.6, -7.0, 1.8, 0.85),
-    _Placement('rockSmall', 6.4, 6.6, -2.2, 1.1),
-    _Placement('rockSmall', -8.4, 0.6, 1.4, 0.95),
-    _Placement('bush', 8.6, -0.2, 0.9, 1.05),
-    _Placement('bush', -1.2, 8.4, -1.6, 0.9),
-    _Placement('bush', 4.8, -8.0, 2.3, 1.0),
-    _Placement('bush', -6.8, -6.4, 0.2, 0.85),
+  static const List<_Placement> _normalPlacements = <_Placement>[
+    _Placement('palm', 6.15, -3.75, 0.7, 1.05),
+    _Placement('palm', -6.75, 2.55, -2.1, 0.92),
+    _Placement('palm', 1.35, -7.35, 2.4, 0.85),
+    _Placement('pine', -4.65, -5.85, 1.2, 1.0),
+    _Placement('pine', -1.65, -7.65, -0.35, 0.8),
+    _Placement('pine', 7.05, 4.05, -1.9, 0.9),
+    _Placement('rockLarge', 3.3, 5.85, 1.55, 1.0),
+    _Placement('rockLarge', -7.8, -1.05, 1.35, 0.75),
+    _Placement('rockSmall', 5.25, 1.65, -0.4, 1.0),
+    _Placement('rockSmall', -3.45, 3.45, 2.6, 1.2),
+    _Placement('rockSmall', 2.85, -2.25, -2.3, 0.9),
+    _Placement(
+      'campfire',
+      IslandDimensions.campfireX,
+      IslandDimensions.campfireZ,
+      -0.15,
+      1.3,
+    ),
+    _Placement('bush', 4.05, 7.05, 0.9, 1.1),
+    _Placement('bush', -6.15, 5.55, 2.2, 0.9),
+    _Placement('bush', 8.25, -1.35, -1.1, 1.0),
+    _Placement('bush', -2.55, -3.15, 0.4, 0.8),
+  ];
+
+  static const List<String> _ultraScatterKinds = <String>[
+    'palm',
+    'pine',
+    'bush',
+    'rockSmall',
+    'palm',
+    'pine',
+    'bush',
+    'rockLarge',
   ];
 
   void _instantiatePlacement(
@@ -799,20 +963,292 @@ class IslandScene {
 
   void _syncUltraProps(bool ultra) {
     if (!ultra) {
+      _ultraScatterRoot?.detach();
+      _ultraScatterRoot = null;
       for (final prop in _ultraProps) {
-        prop.node.detach();
         _props.remove(prop);
       }
       _ultraProps.clear();
+      physicsWorld.replaceUltraObstacles(const <IslandObstacle>[]);
       return;
     }
     if (_ultraProps.isNotEmpty || _propSources == null) {
       return;
     }
-    for (final placement in _ultraPlacements) {
-      _instantiatePlacement(placement, dest: _ultraProps);
+    const radius = IslandDimensions.walkableRadius;
+    final samples = PoissonDiscSampler.sampleRect(
+      radius * 2,
+      radius * 2,
+      2.35,
+      seed: 47,
+    );
+    final occupied = <vm.Vector2>[
+      for (final placement in _normalPlacements)
+        vm.Vector2(placement.x, placement.z),
+    ];
+    final points = filterIslandScatterPoints(
+      samples: samples,
+      rectOrigin: radius,
+      walkableRadius: radius,
+      campfire: vm.Vector2(
+        IslandDimensions.campfireX,
+        IslandDimensions.campfireZ,
+      ),
+      campfireAvoidRadius: 1.6,
+      occupied: occupied,
+      occupiedRadius: 1.6,
+      maxCount: 20,
+    );
+    final hulls = <IslandObstacle>[];
+    final byKind = <String, List<_Placement>>{};
+    for (var i = 0; i < points.length; i++) {
+      final point = points[i];
+      final kind = _ultraScatterKinds[i % _ultraScatterKinds.length];
+      final yaw = (i * 2.399) % (math.pi * 2.0);
+      final scale = 0.82 + (i % 5) * 0.06;
+      byKind.putIfAbsent(kind, () => <_Placement>[]).add(
+            _Placement(kind, point.x, point.y, yaw, scale),
+          );
+      hulls.add(
+        IslandObstacle(
+          name: 'ultra_$i',
+          x: point.x,
+          z: point.y,
+          radius: switch (kind) {
+            'rockLarge' => 0.6,
+            'rockSmall' => 0.4,
+            _ => 0.35,
+          },
+        ),
+      );
     }
+
+    final root = Node(name: 'ultra_scatter');
+    root.shadowStatic = true;
+    for (final entry in byKind.entries) {
+      _addInstancedKind(root, entry.key, entry.value);
+    }
+    scene.add(root);
+    _ultraScatterRoot = root;
+
+    for (final entry in byKind.entries) {
+      for (final placement in entry.value) {
+        final (heightOffset, radiusHull) = switch (placement.kind) {
+          'palm' => (1.8 * placement.scale, 2.6 * placement.scale),
+          'pine' => (1.4 * placement.scale, 2.2 * placement.scale),
+          'rockLarge' => (0.6 * placement.scale, 1.8 * placement.scale),
+          'rockSmall' => (0.3 * placement.scale, 1.2 * placement.scale),
+          _ => (0.5 * placement.scale, 1.4 * placement.scale),
+        };
+        _ultraProps.add(
+          _PropInstance(
+            node: root,
+            center: vm.Vector3(
+              placement.x,
+              IslandDimensions.groundY + heightOffset,
+              placement.z,
+            ),
+            radius: radiusHull,
+          ),
+        );
+      }
+    }
+    physicsWorld.replaceUltraObstacles(hulls);
     _props.addAll(_ultraProps);
+  }
+
+  void _addInstancedKind(Node root, String kind, List<_Placement> placements) {
+    final primitives = _flattenMeshPrimitives(_propSources?[kind]);
+    if (primitives.isEmpty) {
+      return;
+    }
+    for (final primitive in primitives) {
+      final batch = InstancedMesh(
+        geometry: primitive.geometry,
+        material: primitive.material,
+      );
+      for (final placement in placements) {
+        final model = vm.Matrix4.compose(
+          vm.Vector3(
+            placement.x,
+            IslandDimensions.groundY,
+            placement.z,
+          ),
+          vm.Quaternion.axisAngle(vm.Vector3(0, 1, 0), placement.yaw),
+          vm.Vector3.all(placement.scale),
+        )..multiply(primitive.local);
+        batch.addInstance(model);
+      }
+      root.addComponent(InstancedMeshComponent(batch));
+    }
+  }
+
+  void _syncUltraGroundCover(bool ultra) {
+    if (!ultra) {
+      _groundCoverRoot?.detach();
+      _groundCoverRoot = null;
+      return;
+    }
+    if (_groundCoverRoot != null) {
+      return;
+    }
+
+    const radius = IslandDimensions.walkableRadius;
+    final occupied = <vm.Vector2>[
+      for (final placement in _normalPlacements)
+        vm.Vector2(placement.x, placement.z),
+      for (final prop in _ultraProps) vm.Vector2(prop.center.x, prop.center.z),
+    ];
+    final samples = PoissonDiscSampler.sampleRect(
+      radius * 2,
+      radius * 2,
+      1.05,
+      seed: 91,
+    );
+    final points = filterIslandScatterPoints(
+      samples: samples,
+      rectOrigin: radius,
+      walkableRadius: radius - 0.35,
+      campfire: vm.Vector2(
+        IslandDimensions.campfireX,
+        IslandDimensions.campfireZ,
+      ),
+      campfireAvoidRadius: 1.8,
+      occupied: occupied,
+      occupiedRadius: 1.35,
+      maxCount: 32,
+      innerClearRadius: 3.2,
+    );
+
+    final primitives = _flattenMeshPrimitives(_propSources?['bush']);
+    if (primitives.isEmpty) {
+      primitives.add(
+        (
+          geometry: CylinderGeometry(
+            bottomRadius: 0.22,
+            topRadius: 0.05,
+            height: 0.62,
+            radialSegments: 8,
+          ),
+          material: _flatMaterial(0.12, 0.34, 0.14, roughness: 0.94),
+          local: vm.Matrix4.translation(vm.Vector3(0, 0.31, 0)),
+        ),
+      );
+    }
+
+    final root = Node(name: 'ultra_ground_cover');
+    root.shadowStatic = true;
+    root.castsShadows = false;
+
+    for (final primitive in primitives) {
+      final batch = InstancedMesh(
+        geometry: primitive.geometry,
+        material: primitive.material,
+      );
+      for (var i = 0; i < points.length; i++) {
+        final point = points[i];
+        final yaw = (i * 1.618) % (math.pi * 2.0);
+        final scale = 0.42 + (i % 5) * 0.055;
+        final tint = 0.88 + (i % 4) * 0.05;
+        final model = vm.Matrix4.compose(
+          vm.Vector3(point.x, IslandDimensions.groundY, point.y),
+          vm.Quaternion.axisAngle(vm.Vector3(0, 1, 0), yaw),
+          vm.Vector3.all(scale),
+        )..multiply(primitive.local);
+        batch.addInstance(
+          model,
+          color: vm.Vector4(tint * 0.92, tint, tint * 0.82, 1.0),
+        );
+      }
+      root.addComponent(InstancedMeshComponent(batch));
+    }
+
+    scene.add(root);
+    _groundCoverRoot = root;
+  }
+
+  void _syncUltraSand(bool ultra) {
+    if (!ultra) {
+      _sandRoot?.detach();
+      _sandRoot = null;
+      return;
+    }
+    if (_sandRoot != null) {
+      return;
+    }
+
+    final dry = _flatMaterial(0.76, 0.61, 0.38, roughness: 0.9);
+    final wet = _flatMaterial(0.48, 0.36, 0.24, roughness: 0.42);
+    const collarHeight = 0.42;
+
+    final beach = Node(
+      name: 'sand_beach',
+      mesh: Mesh(
+        RingGeometry(
+          innerRadius: IslandDimensions.walkableRadius - 0.55,
+          outerRadius: IslandDimensions.topRadius + 0.08,
+          segments: 48,
+        ),
+        dry,
+      ),
+    )
+      ..position = vm.Vector3(0, IslandDimensions.groundY + 0.012, 0)
+      ..shadowStatic = true;
+
+    final collar = Node(
+      name: 'sand_collar',
+      mesh: Mesh(
+        CylinderGeometry(
+          bottomRadius: IslandDimensions.topRadius - 0.28,
+          topRadius: IslandDimensions.topRadius + 0.06,
+          height: collarHeight,
+          radialSegments: 48,
+          bottomCap: false,
+          topCap: false,
+        ),
+        wet,
+      ),
+    )
+      ..position = vm.Vector3(
+        0,
+        IslandDimensions.groundY - collarHeight / 2 + 0.02,
+        0,
+      )
+      ..shadowStatic = true;
+
+    final root = Node(name: 'ultra_sand')
+      ..add(beach)
+      ..add(collar)
+      ..shadowStatic = true;
+    scene.add(root);
+    _sandRoot = root;
+  }
+
+  List<({Geometry geometry, Material material, vm.Matrix4 local})>
+      _flattenMeshPrimitives(Node? root) {
+    final out = <({Geometry geometry, Material material, vm.Matrix4 local})>[];
+    if (root == null) {
+      return out;
+    }
+    void visit(Node node, vm.Matrix4 parent) {
+      final local = parent * node.localTransform;
+      final mesh = node.mesh;
+      if (mesh != null) {
+        for (final primitive in mesh.primitives) {
+          out.add((
+            geometry: primitive.geometry,
+            material: primitive.material,
+            local: local.clone(),
+          ));
+        }
+      }
+      for (final child in node.children) {
+        visit(child, local);
+      }
+    }
+
+    visit(root, vm.Matrix4.identity());
+    return out;
   }
 
   Future<Node> _loadProp(String assetPath) async {
@@ -883,9 +1319,9 @@ class IslandScene {
 
     final pivot = Node(name: 'npc')..add(inner);
     pivot.position = vm.Vector3(
-      npcWalker.position.x,
+      npcSteering.position.x,
       IslandDimensions.groundY,
-      npcWalker.position.z,
+      npcSteering.position.z,
     );
     pivot.visible = false;
     scene.add(pivot);
@@ -905,21 +1341,36 @@ class IslandScene {
         ..weight = 0.0
         ..play();
     }
+    _npcWander = NpcWanderComponent(
+      motion: npcSteering,
+      playerPosition: () => walker.position,
+      isActive: () => _ultraMode,
+      pickTarget: _pickNpcWanderTarget,
+      walkableRadius: IslandDimensions.walkableRadius,
+      campfire: vm.Vector3(
+        IslandDimensions.campfireX,
+        IslandDimensions.groundY,
+        IslandDimensions.campfireZ,
+      ),
+      campfireAvoidRadius: 1.4,
+      idleClip: _npcIdleClip,
+      walkClip: _npcWalkClip,
+    )..enabled = false;
+    pivot.addComponent(_npcWander!);
   }
 
   void _syncNpc(bool ultra) {
+    final wander = _npcWander;
     final pivot = _npcPivot;
-    if (pivot == null) {
+    if (wander == null || pivot == null) {
       return;
     }
+    wander.enabled = ultra;
     if (!ultra) {
-      npcWalker.stop();
-      _npcWanderTimer = 0.0;
-      pivot.visible = false;
+      wander.stopAndHide();
       return;
     }
-    pivot.visible = true;
-    _pickNpcWanderTarget();
+    wander.activate();
   }
 
   void _pickNpcWanderTarget() {
@@ -934,34 +1385,64 @@ class IslandScene {
       avoidRadius: 1.4,
       groundY: IslandDimensions.groundY,
     );
-    npcWalker.moveTo(target);
-    _npcWanderTimer = 4.0 + _npcRandom.nextDouble() * 3.0;
+    npcSteering.moveTo(target);
+    _npcWander?.wanderTimer = 4.0 + _npcRandom.nextDouble() * 3.0;
   }
 
-  void _tickNpc(double deltaSeconds) {
-    final pivot = _npcPivot;
-    if (!_ultraMode || pivot == null) {
+  void _syncFlock(bool ultra) {
+    if (!ultra) {
+      _flockRoot?.detach();
+      _flockRoot = null;
+      _flock = null;
       return;
     }
-
-    _npcWanderTimer -= deltaSeconds;
-    if (!npcWalker.isMoving || _npcWanderTimer <= 0) {
-      _pickNpcWanderTarget();
+    if (_flockRoot != null) {
+      return;
     }
-    npcWalker.advance(deltaSeconds);
-
-    pivot.position = vm.Vector3(
-      npcWalker.position.x,
-      npcWalker.position.y,
-      npcWalker.position.z,
+    final feather = PhysicallyBasedMaterial()
+      ..baseColorFactor = vm.Vector4(0.96, 0.97, 1.0, 1.0)
+      ..metallicFactor = 0.0
+      ..roughnessFactor = 0.55;
+    const count = 4;
+    final batch = InstancedMesh(
+      geometry: CuboidGeometry(vm.Vector3(3.2, 0.12, 0.9)),
+      material: feather,
     );
-    pivot.rotation = vm.Quaternion.axisAngle(vm.Vector3(0, 1, 0), npcWalker.yaw);
-
-    final wanted = npcWalker.isMoving ? 1.0 : 0.0;
-    final rate = math.min(1.0, deltaSeconds * 8.0);
-    _npcWalkBlend += (wanted - _npcWalkBlend) * rate;
-    _npcWalkClip?.weight = _npcWalkBlend;
-    _npcIdleClip?.weight = 1.0 - _npcWalkBlend;
+    final birds = <FlockBirdMotion>[];
+    final phases = <double>[];
+    for (var i = 0; i < count; i++) {
+      final angle = i / count * math.pi * 2.0;
+      final radius = 11.4 + (i % 3) * 0.7;
+      final height = 5.2 + (i % 4) * 0.45;
+      final origin = vm.Vector3(
+        math.sin(angle) * radius,
+        height,
+        math.cos(angle) * radius,
+      );
+      final tangent = vm.Vector3(math.cos(angle), 0, -math.sin(angle));
+      birds.add(
+        FlockBirdMotion(
+          position: origin,
+          velocity: tangent * 6.2,
+          orbitRadius: radius,
+          cruiseHeight: height,
+        ),
+      );
+      phases.add(i * 0.9);
+      batch.addInstance(
+        vm.Matrix4.compose(origin, vm.Quaternion.identity(), vm.Vector3.all(1)),
+      );
+    }
+    _flock = SeagullFlockComponent(
+      batch: batch,
+      birds: birds,
+      phases: phases,
+    );
+    _flockRoot = Node(name: 'seagull_flock')
+      ..castsShadows = false
+      ..addComponent(InstancedMeshComponent(batch))
+      ..addComponent(_flock!);
+    scene.add(_flockRoot!);
   }
 
   static const double _characterScale = 0.5;
@@ -971,15 +1452,209 @@ class IslandScene {
   int punch() {
     _punchTimer = _punchDuration;
     _punchClip?.replay();
-    return physicsWorld.handleCharacterPunch(
+    final hits = physicsWorld.handleCharacterPunch(
       characterPosition: walker.position,
       characterYaw: walker.yaw,
     );
+    if (_ultraMode) {
+      _spawnPunchDebris();
+    }
+    return hits;
   }
 
   /// Initiates a jump arc for the character.
   bool jump() {
     return walker.jump();
+  }
+
+  void _syncUltraWater(bool ultra) {
+    if (!ultra) {
+      final water = _waterSurface;
+      if (water != null) {
+        _waterNode.removeComponent(water);
+      }
+      final displace = _waterDisplace;
+      if (displace != null) {
+        _waterNode.removeComponent(displace);
+        _waterDisplace = null;
+      }
+      _waterNode.mesh = Mesh(
+        DiscGeometry(radius: IslandDimensions.seaRadius, segments: 64),
+        _normalSeaMaterial,
+      );
+      for (final buoy in _buoys) {
+        buoy.root.detach();
+      }
+      _buoys.clear();
+      return;
+    }
+    _waterSurface ??= WaterSurfaceComponent(
+      waves: <GerstnerWave>[
+        GerstnerWave(
+          direction: vm.Vector2(1.0, 0.2)..normalize(),
+          amplitude: 0.16,
+          wavelength: 14.0,
+          speed: 1.0,
+        ),
+        GerstnerWave(
+          direction: vm.Vector2(0.5, 0.8)..normalize(),
+          amplitude: 0.08,
+          wavelength: 7.0,
+          speed: 1.4,
+        ),
+      ],
+    );
+    if (_waterNode.getComponent<WaterSurfaceComponent>() == null) {
+      _waterNode.addComponent(_waterSurface!);
+    }
+    if (_waterDisplace == null) {
+      final grid = buildSeaGrid(
+        size: IslandDimensions.seaRadius * 2,
+        segments: 16,
+      );
+      _waterDisplace = GerstnerDisplaceComponent(
+        geometry: grid.geometry,
+        restPositions: grid.rest,
+        livePositions: grid.live,
+        liveNormals: grid.normals,
+      );
+      _waterNode
+        ..mesh = Mesh(grid.geometry, _ultraSeaMaterial)
+        ..addComponent(_waterDisplace!);
+    }
+    if (_buoys.isNotEmpty) {
+      return;
+    }
+    final crateMat = _flatMaterial(0.42, 0.28, 0.14, roughness: 0.86);
+    final crateMesh = Mesh(
+      CuboidGeometry(vm.Vector3(0.42, 0.32, 0.5)),
+      crateMat,
+    );
+    const spots = <List<double>>[
+      <double>[12.2, 1.8],
+      <double>[-11.4, 4.6],
+      <double>[8.6, -12.0],
+      <double>[-13.0, -5.4],
+    ];
+    for (var i = 0; i < spots.length; i++) {
+      final x = spots[i][0];
+      final z = spots[i][1];
+      final body = Node(
+        name: 'buoy_body_$i',
+        mesh: crateMesh,
+      )
+        ..castsShadows = false
+        ..addComponent(
+          FloatingMotionComponent(
+            hoverAmplitude: 0.05,
+            hoverFrequency: 0.55,
+            wobbleDegrees: 7.0,
+            wobbleFrequency: 0.7,
+            spinSpeed: 0.35,
+          ),
+        );
+      final root = Node(name: 'buoy_$i')
+        ..position = vm.Vector3(x, IslandDimensions.seaY + 0.18, z)
+        ..add(body)
+        ..addComponent(
+          BuoyFloatComponent(
+            waterNode: _waterNode,
+            x: x,
+            z: z,
+            seaY: IslandDimensions.seaY,
+          ),
+        );
+      scene.add(root);
+      _buoys.add(_Buoy(root: root));
+    }
+  }
+
+  void _sitBallsOnWaves() {
+    final water = _waterSurface;
+    if (!_ultraMode || water == null) {
+      return;
+    }
+    for (final ball in physicsWorld.balls) {
+      final radius = math.sqrt(
+        ball.position.x * ball.position.x + ball.position.z * ball.position.z,
+      );
+      if (radius <= IslandDimensions.walkableRadius) {
+        continue;
+      }
+      final sample = water.evaluateAt(
+        vm.Vector2(ball.position.x, ball.position.z),
+      );
+      final minY =
+          IslandDimensions.seaY + sample.displacement.y + ball.radius;
+      if (ball.position.y < minY) {
+        ball.position.y = minY;
+        if (ball.velocity.y < 0) {
+          ball.velocity.y *= -0.18;
+        }
+      }
+    }
+  }
+
+  void _ensureDebrisPool() {
+    _debrisRoot ??= Node(name: 'ultra_debris')..castsShadows = false;
+    if (_debrisRoot!.parent == null) {
+      scene.add(_debrisRoot!);
+    }
+    _chipMesh ??= Mesh(
+      CuboidGeometry(vm.Vector3(0.08, 0.05, 0.07)),
+      _flatMaterial(0.38, 0.3, 0.22, roughness: 0.95),
+    );
+    _debrisPool ??= NodePool(
+      () => Node(name: 'punch_chip', mesh: _chipMesh)
+        ..castsShadows = false,
+      initialSize: 8,
+      maxSize: 16,
+    );
+    _debrisSim ??= DebrisSimComponent(
+      debris: _debris,
+      pool: () => _debrisPool,
+      groundY: IslandDimensions.groundY,
+    );
+    if (_debrisRoot!.getComponent<DebrisSimComponent>() == null) {
+      _debrisRoot!.addComponent(_debrisSim!);
+    }
+  }
+
+  void _spawnPunchDebris() {
+    _ensureDebrisPool();
+    final pool = _debrisPool!;
+    final parent = _debrisRoot!;
+    final origin = vm.Vector3(
+      walker.position.x,
+      walker.position.y + 0.55,
+      walker.position.z,
+    );
+    final forward = vm.Vector3(math.sin(walker.yaw), 0, math.cos(walker.yaw));
+    for (var i = 0; i < 8; i++) {
+      final node = pool.spawn(parent: parent);
+      final sprayYaw = walker.yaw + (i - 3.5) * 0.18;
+      final velocity = vm.Vector3(
+        math.sin(sprayYaw) * (3.2 + i * 0.12) + forward.x * 1.4,
+        2.4 + (i % 3) * 0.35,
+        math.cos(sprayYaw) * (3.2 + i * 0.12) + forward.z * 1.4,
+      );
+      final motion = DebrisChipMotion(
+        position: origin + forward * 0.35,
+        velocity: velocity,
+      );
+      node.visible = true;
+      node.position = motion.position;
+      node.scale = vm.Vector3.all(0.7 + (i % 3) * 0.15);
+      _debris[node] = motion;
+    }
+  }
+
+  void _clearDebris() {
+    final pool = _debrisPool;
+    if (pool != null) {
+      pool.despawnAll();
+    }
+    _debris.clear();
   }
 
   // ------------------------------------------------------------------ input
@@ -999,17 +1674,20 @@ class IslandScene {
     final dzCamp = hit.z - IslandDimensions.campfireZ;
     if (math.sqrt(dxCamp * dxCamp + dzCamp * dzCamp) <= 0.85) {
       toggleCampfire();
-      _marker?.pingAt(vm.Vector3(
-        IslandDimensions.campfireX,
-        IslandDimensions.groundY,
-        IslandDimensions.campfireZ,
-      ));
+      _marker?.pingAt(
+        vm.Vector3(
+          IslandDimensions.campfireX,
+          IslandDimensions.groundY,
+          IslandDimensions.campfireZ,
+        ),
+        groundY: IslandDimensions.groundY,
+      );
       return hit;
     }
 
     final point = clampToIsland(hit, radius: IslandDimensions.walkableRadius);
     walker.moveTo(point);
-    _marker?.pingAt(point);
+    _marker?.pingAt(point, groundY: IslandDimensions.groundY);
     return point;
   }
 
@@ -1028,16 +1706,13 @@ class IslandScene {
 
   // ------------------------------------------------------------------- tick
 
-  /// Advances everything this class owns by [deltaSeconds]. The scene's own
-  /// components (camera orbit, day/night) are ticked by `Scene.render`.
+  /// Advances game-wide simulation. Per-object behaviour (campfire, NPC,
+  /// flock, debris, OTS camera, water, tap marker) lives on Components.
   void tick(double deltaSeconds, {ui.Size? viewportSize}) {
     if (!_loaded) {
       return;
     }
-    _applyLighting();
     walker.advance(deltaSeconds);
-    _tickNpc(deltaSeconds);
-    _tickCampfire(deltaSeconds);
 
     final pivot = _characterPivot;
     if (pivot != null) {
@@ -1070,27 +1745,17 @@ class IslandScene {
       _idleClip?.weight = 1.0 - _walkBlend;
     }
 
-    // Step physics world and handle character kick
     physicsWorld.update(deltaSeconds);
     physicsWorld.handleCharacterKick(
       characterPosition: walker.position,
       characterRadius: 0.42,
       characterSpeed: walker.isMoving ? walker.speed : 0.0,
     );
-    for (var i = 0;
-        i < physicsWorld.balls.length && i < _ballNodes.length;
-        i++) {
-      final ball = physicsWorld.balls[i];
-      _ballNodes[i].position = ball.position;
-      _ballNodes[i].rotation = ball.rotation;
-    }
+    _sitBallsOnWaves();
 
     if (_cameraMode == IslandCameraMode.overTheShoulder) {
-      _tickOtsCamera(deltaSeconds);
       _cullOffscreenNodes(viewportSize ?? const ui.Size(393, 852));
     }
-
-    _marker?.advance(deltaSeconds);
   }
 
   /// Applies the day/night model's evaluated lighting, with two departures
@@ -1126,6 +1791,12 @@ class IslandScene {
             draws += 1;
             triangles += _trianglesOf(primitive.geometry);
           }
+        }
+        for (final batch in node.getComponents<InstancedMeshComponent>()) {
+          draws += 1;
+          triangles +=
+              _trianglesOf(batch.instancedMesh.geometry) *
+              batch.instancedMesh.instanceCount;
         }
       }
       for (final child in node.children) {
@@ -1196,58 +1867,10 @@ class _Placement {
   final double scale;
 }
 
-/// The expanding ring dropped where the presenter tapped.
-///
-/// A 3D ring lying on the ground, not a 2D marker: it has to sit in the scene
-/// and track the camera, or it proves nothing about the render being live.
-class _TapMarker {
-  _TapMarker(Scene scene) {
-    _material = UnlitMaterial()
-      ..alphaMode = AlphaMode.blend
-      ..baseColorFactor = vm.Vector4(1.0, 0.95, 0.55, 0.0);
-    _node = Node(
-      name: 'tap_marker',
-      mesh: Mesh(
-        RingGeometry(innerRadius: 0.34, outerRadius: 0.42, segments: 48),
-        _material,
-      ),
-    );
-    _node.castsShadows = false;
-    _node.visible = false;
-    scene.add(_node);
-  }
+class _Buoy {
+  const _Buoy({required this.root});
 
-  static const double _lifetime = 0.85;
-
-  late final Node _node;
-  late final UnlitMaterial _material;
-  double _age = _lifetime;
-
-  void pingAt(vm.Vector3 point) {
-    _age = 0;
-    _node.visible = true;
-    _node.position = vm.Vector3(
-      point.x,
-      IslandDimensions.groundY + 0.03,
-      point.z,
-    );
-  }
-
-  void advance(double deltaSeconds) {
-    if (_age >= _lifetime) {
-      return;
-    }
-    _age += deltaSeconds;
-    final t = (_age / _lifetime).clamp(0.0, 1.0);
-    if (t >= 1.0) {
-      _node.visible = false;
-      return;
-    }
-    final alpha = (1.0 - t) * (1.0 - t);
-    _material.baseColorFactor = vm.Vector4(1.0, 0.95, 0.55, alpha * 0.95);
-    final scale = 1.0 + t * 0.45;
-    _node.scale = vm.Vector3(scale, 1.0, scale);
-  }
+  final Node root;
 }
 
 class _PropInstance {

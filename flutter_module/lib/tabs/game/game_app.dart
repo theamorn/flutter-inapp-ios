@@ -16,20 +16,14 @@ class FlappyCatApp extends StatefulWidget {
   State<FlappyCatApp> createState() => _FlappyCatAppState();
 }
 
-class _FlappyCatAppState extends State<FlappyCatApp>
-    with SingleTickerProviderStateMixin {
+class _FlappyCatAppState extends State<FlappyCatApp> {
   static const _gameChannel = MethodChannel('com.theamorn.hybrid/game');
   late final FlappyCatGame _game;
-  late final AnimationController _skyClock;
 
   @override
   void initState() {
     super.initState();
     _game = FlappyCatGame(onScoreChanged: _reportScore);
-    _skyClock = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 60),
-    )..repeat();
   }
 
   void _reportScore(int score) {
@@ -40,12 +34,6 @@ class _FlappyCatAppState extends State<FlappyCatApp>
     } on PlatformException {
       // Catch platform exceptions safely.
     }
-  }
-
-  @override
-  void dispose() {
-    _skyClock.dispose();
-    super.dispose();
   }
 
   @override
@@ -69,14 +57,13 @@ class _FlappyCatAppState extends State<FlappyCatApp>
 
   Widget _buildBody() {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFF73C9F4),
       body: ClipRect(
         child: Stack(
           fit: StackFit.expand,
           children: [
             GameWidget<FlappyCatGame>(
               game: _game,
-              backgroundBuilder: (_) => _SkyShader(clock: _skyClock),
               loadingBuilder: (_) => const ColoredBox(
                 color: Color(0xFF73C9F4),
                 child: Center(child: CircularProgressIndicator()),
@@ -90,56 +77,6 @@ class _FlappyCatAppState extends State<FlappyCatApp>
   }
 }
 
-class _SkyShader extends StatelessWidget {
-  const _SkyShader({required this.clock});
-
-  final Animation<double> clock;
-
-  @override
-  Widget build(BuildContext context) {
-    return ShaderBuilder(
-      (context, shader, child) => AnimatedBuilder(
-        animation: clock,
-        builder: (context, child) => CustomPaint(
-          painter: _SkyPainter(shader, clock.value * 60),
-          child: const SizedBox.expand(),
-        ),
-      ),
-      assetKey: 'shaders/sky.glsl',
-      child: const ColoredBox(color: Color(0xFF73C9F4)),
-    );
-  }
-}
-
-class _SkyPainter extends CustomPainter {
-  _SkyPainter(this.shader, this.elapsed);
-
-  final ui.FragmentShader shader;
-  final double elapsed;
-  final Paint _paint = Paint();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    shader
-      ..setFloat(0, size.width)
-      ..setFloat(1, size.height)
-      ..setFloat(2, elapsed);
-    _paint.shader = shader;
-
-    // Fragment coordinates are bottom-up; rotate the existing shader so its
-    // lighter horizon sits next to the ground.
-    canvas
-      ..save()
-      ..translate(size.width, size.height)
-      ..rotate(math.pi)
-      ..drawRect(Offset.zero & size, _paint)
-      ..restore();
-  }
-
-  @override
-  bool shouldRepaint(_SkyPainter oldDelegate) => oldDelegate.elapsed != elapsed;
-}
-
 class _DeathShader extends StatelessWidget {
   const _DeathShader({required this.game});
 
@@ -148,17 +85,21 @@ class _DeathShader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Keep the registered program warm from launch so dying never creates a
-    // shader-compilation hitch. The layer only repaints during the 620ms burn.
+    // shader-compilation hitch. The overlay is empty until the 620ms burn.
     return ShaderBuilder(
       (context, shader, child) => ValueListenableBuilder<double>(
         valueListenable: game.deathEffect,
-        builder: (context, amount, child) => CustomPaint(
-          painter: _DeathPainter(shader, amount),
-          child: const SizedBox.expand(),
-        ),
+        builder: (context, amount, child) {
+          if (amount <= 0) {
+            return const SizedBox.shrink();
+          }
+          return CustomPaint(
+            painter: _DeathPainter(shader, amount),
+            child: const SizedBox.expand(),
+          );
+        },
       ),
       assetKey: 'shaders/flame.glsl',
-      child: const SizedBox.expand(),
     );
   }
 }
@@ -173,9 +114,6 @@ class _DeathPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (amount <= 0) {
-      return;
-    }
     shader
       ..setFloat(0, size.width)
       ..setFloat(1, size.height)

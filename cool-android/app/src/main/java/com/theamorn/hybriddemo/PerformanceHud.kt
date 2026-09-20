@@ -2,9 +2,10 @@ package com.theamorn.hybriddemo
 
 import android.content.Context
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.view.Choreographer
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,16 +29,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
+import java.util.concurrent.Executors
 
 /**
  * Host-side telemetry, owned by the native app and never by Flutter.
@@ -55,7 +54,6 @@ object PerformanceHudState {
     }
 
     var displayMode by mutableStateOf(DisplayMode.EXPANDED)
-    var hudBoundsInRoot by mutableStateOf<Rect?>(null)
 
     fun toggleDisplayMode() {
         displayMode = if (displayMode == DisplayMode.EXPANDED) {
@@ -95,6 +93,8 @@ object PerformanceHudState {
     private var sampleStartNanos: Long? = null
     private var lastMemorySampleNanos = 0L
     private var running = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val memoryExecutor = Executors.newSingleThreadExecutor()
 
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
@@ -120,11 +120,15 @@ object PerformanceHudState {
             frameCount = 0
 
             // Debug.getMemoryInfo walks /proc and costs single-digit
-            // milliseconds; sampling it once a second keeps the HUD from
-            // becoming part of the load it is measuring.
+            // milliseconds; never do it on the thread that feeds Flutter vsync.
             if (frameTimeNanos - lastMemorySampleNanos >= MEMORY_SAMPLE_INTERVAL_NANOS) {
                 lastMemorySampleNanos = frameTimeNanos
-                memoryBytes = MemoryProbe.footprintBytes()
+                memoryExecutor.execute {
+                    val bytes = MemoryProbe.footprintBytes()
+                    mainHandler.post {
+                        if (running) memoryBytes = bytes
+                    }
+                }
             }
         }
     }
@@ -252,11 +256,7 @@ fun PerformanceHud(modifier: Modifier = Modifier) {
     val panelText = PerformanceHudState.panelDescription
 
     Box(
-        modifier = modifier
-            .onGloballyPositioned { coordinates ->
-                PerformanceHudState.hudBoundsInRoot = coordinates.boundsInRoot()
-            }
-            .animateContentSize(),
+        modifier = modifier,
     ) {
         if (mode == PerformanceHudState.DisplayMode.MINIMIZED) {
             Row(

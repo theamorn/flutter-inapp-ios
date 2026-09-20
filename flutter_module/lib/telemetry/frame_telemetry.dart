@@ -6,6 +6,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 /// Batches Flutter frame timings so telemetry does not become part of the load.
+///
+/// Sends only from [SchedulerBinding.addTimingsCallback], never from a
+/// [Timer] — an off-vsync timer fights Flame's [Ticker] on the merged
+/// UI/platform thread and shows up as a hitch while batch averages stay tiny.
 final class FrameTelemetryReporter with WidgetsBindingObserver {
   FrameTelemetryReporter(this.route);
 
@@ -25,7 +29,6 @@ final class FrameTelemetryReporter with WidgetsBindingObserver {
   bool _sendInProgress = false;
   bool _started = false;
   bool _active = true;
-  Timer? _timer;
 
   void start() {
     if (_started) return;
@@ -40,7 +43,6 @@ final class FrameTelemetryReporter with WidgetsBindingObserver {
   void stop() {
     if (!_started) return;
     _started = false;
-    _timer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     SchedulerBinding.instance.removeTimingsCallback(_onFrameTimings);
     _resetWindow();
@@ -51,15 +53,9 @@ final class FrameTelemetryReporter with WidgetsBindingObserver {
     _active =
         state == AppLifecycleState.resumed ||
         state == AppLifecycleState.inactive;
-    _timer?.cancel();
     _resetWindow();
     if (!_started || !_active) return;
     _batchAge.start();
-    _timer = Timer.periodic(_maximumBatchAge, (_) {
-      if (_frameCount > 0 && !_sendInProgress) {
-        unawaited(_sendBatch());
-      }
-    });
   }
 
   void _resetWindow() {

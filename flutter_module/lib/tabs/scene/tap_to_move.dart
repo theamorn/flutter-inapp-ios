@@ -72,6 +72,443 @@ vm.Vector3 pickWanderTarget({
   );
 }
 
+/// Filters Poisson-disc samples (in a square of side `2 * rectOrigin`) down to
+/// extra foliage points that sit on the island, miss the campfire, and miss
+/// already-placed props.
+List<vm.Vector2> filterIslandScatterPoints({
+  required List<vm.Vector2> samples,
+  required double rectOrigin,
+  required double walkableRadius,
+  required vm.Vector2 campfire,
+  required double campfireAvoidRadius,
+  required List<vm.Vector2> occupied,
+  required double occupiedRadius,
+  required int maxCount,
+  double innerClearRadius = 0.0,
+}) {
+  final walkableSq = walkableRadius * walkableRadius;
+  final campfireSq = campfireAvoidRadius * campfireAvoidRadius;
+  final occupiedSq = occupiedRadius * occupiedRadius;
+  final innerSq = innerClearRadius * innerClearRadius;
+  final kept = <vm.Vector2>[];
+  for (final sample in samples) {
+    if (kept.length >= maxCount) {
+      break;
+    }
+    final world = vm.Vector2(sample.x - rectOrigin, sample.y - rectOrigin);
+    if (world.length2 > walkableSq) {
+      continue;
+    }
+    if (innerSq > 0.0 && world.length2 < innerSq) {
+      continue;
+    }
+    final toFireX = world.x - campfire.x;
+    final toFireY = world.y - campfire.y;
+    if (toFireX * toFireX + toFireY * toFireY < campfireSq) {
+      continue;
+    }
+    var blocked = false;
+    for (final other in occupied) {
+      final dx = world.x - other.x;
+      final dy = world.y - other.y;
+      if (dx * dx + dy * dy < occupiedSq) {
+        blocked = true;
+        break;
+      }
+    }
+    if (blocked) {
+      continue;
+    }
+    kept.add(world);
+  }
+  return kept;
+}
+
+/// Clamps [vector] to length [max].
+vm.Vector3 truncateSteering(vm.Vector3 vector, double max) {
+  if (vector.length2 > max * max) {
+    return vector.normalized() * max;
+  }
+  return vector;
+}
+
+/// Kit `Steering.arrive` — GPU-free copy so NPC motion can be unit-tested.
+vm.Vector3 steeringArrive(
+  vm.Vector3 currentPos,
+  vm.Vector3 currentVel,
+  vm.Vector3 targetPos, {
+  double slowingRadius = 3.0,
+  double maxSpeed = 5.0,
+  double maxForce = 10.0,
+}) {
+  final toTarget = targetPos - currentPos;
+  final distance = toTarget.length;
+  if (distance < 0.001) {
+    return -currentVel;
+  }
+  final rampedSpeed = maxSpeed * (distance / slowingRadius);
+  final targetSpeed = math.min(rampedSpeed, maxSpeed);
+  final desiredVel = (toTarget / distance) * targetSpeed;
+  return truncateSteering(desiredVel - currentVel, maxForce);
+}
+
+/// Kit `Steering.separation` — GPU-free copy so NPC motion can be unit-tested.
+vm.Vector3 steeringSeparation(
+  vm.Vector3 currentPos,
+  vm.Vector3 currentVel,
+  List<vm.Vector3> neighbors, {
+  double desiredDistance = 2.0,
+  double maxSpeed = 5.0,
+  double maxForce = 10.0,
+}) {
+  var pushDir = vm.Vector3.zero();
+  var count = 0;
+  for (final other in neighbors) {
+    final diff = currentPos - other;
+    final dist = diff.length;
+    if (dist > 0.001 && dist < desiredDistance) {
+      pushDir += diff.normalized() / dist;
+      count++;
+    }
+  }
+  if (count == 0) {
+    return vm.Vector3.zero();
+  }
+  pushDir /= count.toDouble();
+  if (pushDir.length2 == 0) {
+    return vm.Vector3.zero();
+  }
+  final desiredVel = pushDir.normalized() * maxSpeed;
+  return truncateSteering(desiredVel - currentVel, maxForce);
+}
+
+/// Kit `Steering.seek`.
+vm.Vector3 steeringSeek(
+  vm.Vector3 currentPos,
+  vm.Vector3 currentVel,
+  vm.Vector3 targetPos, {
+  double maxSpeed = 5.0,
+  double maxForce = 10.0,
+}) {
+  final desired = targetPos - currentPos;
+  if (desired.length2 == 0) {
+    return vm.Vector3.zero();
+  }
+  final desiredVel = desired.normalized() * maxSpeed;
+  return truncateSteering(desiredVel - currentVel, maxForce);
+}
+
+/// Kit `Steering.alignment`.
+vm.Vector3 steeringAlignment(
+  vm.Vector3 currentVel,
+  List<vm.Vector3> neighborVelocities, {
+  double maxSpeed = 5.0,
+  double maxForce = 10.0,
+}) {
+  if (neighborVelocities.isEmpty) {
+    return vm.Vector3.zero();
+  }
+  var avgVel = vm.Vector3.zero();
+  for (final v in neighborVelocities) {
+    avgVel += v;
+  }
+  avgVel /= neighborVelocities.length.toDouble();
+  if (avgVel.length2 == 0) {
+    return vm.Vector3.zero();
+  }
+  final desired = avgVel.normalized() * maxSpeed;
+  return truncateSteering(desired - currentVel, maxForce);
+}
+
+/// Kit `Steering.cohesion`.
+vm.Vector3 steeringCohesion(
+  vm.Vector3 currentPos,
+  vm.Vector3 currentVel,
+  List<vm.Vector3> neighborPositions, {
+  double maxSpeed = 5.0,
+  double maxForce = 10.0,
+}) {
+  if (neighborPositions.isEmpty) {
+    return vm.Vector3.zero();
+  }
+  var center = vm.Vector3.zero();
+  for (final p in neighborPositions) {
+    center += p;
+  }
+  center /= neighborPositions.length.toDouble();
+  return steeringSeek(
+    currentPos,
+    currentVel,
+    center,
+    maxSpeed: maxSpeed,
+    maxForce: maxForce,
+  );
+}
+
+/// Velocity-based NPC walk used in Ultra: arrive at a wander target and keep
+/// a little space from the player, without leaving the island or the campfire.
+class NpcSteeringMotion {
+  NpcSteeringMotion({
+    vm.Vector3? position,
+    this.yaw = 0.0,
+    this.maxSpeed = 1.4,
+    this.maxForce = 8.0,
+    this.slowingRadius = 1.6,
+    this.arriveRadius = 0.18,
+    this.separationDistance = 1.8,
+    this.groundY = 0.0,
+  }) : position = position?.clone() ?? vm.Vector3(0, groundY, 0),
+       velocity = vm.Vector3.zero();
+
+  vm.Vector3 position;
+  vm.Vector3 velocity;
+  double yaw;
+  double maxSpeed;
+  double maxForce;
+  double slowingRadius;
+  double arriveRadius;
+  double separationDistance;
+  final double groundY;
+
+  vm.Vector3? _target;
+
+  vm.Vector3? get target => _target?.clone();
+
+  bool get isMoving {
+    final horizontal = math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+    return _target != null || horizontal > 0.08;
+  }
+
+  void moveTo(vm.Vector3 target) {
+    _target = vm.Vector3(target.x, groundY, target.z);
+  }
+
+  void stop() {
+    _target = null;
+    velocity.setZero();
+  }
+
+  void advance(
+    double deltaSeconds, {
+    required vm.Vector3 playerPosition,
+    required double walkableRadius,
+    required vm.Vector3 campfire,
+    required double campfireAvoidRadius,
+  }) {
+    var force = vm.Vector3.zero();
+    final target = _target;
+    if (target != null) {
+      force += steeringArrive(
+        position,
+        velocity,
+        target,
+        slowingRadius: slowingRadius,
+        maxSpeed: maxSpeed,
+        maxForce: maxForce,
+      );
+    }
+    force += steeringSeparation(
+      position,
+      velocity,
+      <vm.Vector3>[playerPosition],
+      desiredDistance: separationDistance,
+      maxSpeed: maxSpeed,
+      maxForce: maxForce * 0.65,
+    );
+    integrate(
+      force,
+      deltaSeconds,
+      walkableRadius: walkableRadius,
+      campfire: campfire,
+      campfireAvoidRadius: campfireAvoidRadius,
+    );
+  }
+
+  /// Applies a kit (or GPU-free) steering [force] and keeps the NPC on the island.
+  void integrate(
+    vm.Vector3 force,
+    double deltaSeconds, {
+    required double walkableRadius,
+    required vm.Vector3 campfire,
+    required double campfireAvoidRadius,
+  }) {
+    if (deltaSeconds <= 0) {
+      return;
+    }
+    final dt = math.min(deltaSeconds, 0.1);
+    velocity += force * dt;
+    velocity = truncateSteering(velocity, maxSpeed);
+    position = vm.Vector3(
+      position.x + velocity.x * dt,
+      groundY,
+      position.z + velocity.z * dt,
+    );
+    position = clampToIsland(position, radius: walkableRadius);
+
+    final fireDx = position.x - campfire.x;
+    final fireDz = position.z - campfire.z;
+    final fireDist = math.sqrt(fireDx * fireDx + fireDz * fireDz);
+    if (fireDist < campfireAvoidRadius) {
+      final scale = fireDist < 1e-5
+          ? campfireAvoidRadius
+          : campfireAvoidRadius / fireDist;
+      position = vm.Vector3(
+        campfire.x + fireDx * scale,
+        groundY,
+        campfire.z + fireDz * scale,
+      );
+      position = clampToIsland(position, radius: walkableRadius);
+      velocity.x += fireDx * 2.0;
+      velocity.z += fireDz * 2.0;
+      velocity = truncateSteering(velocity, maxSpeed);
+    }
+
+    final speed = math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+    if (speed > 0.04) {
+      yaw = math.atan2(velocity.x, velocity.z);
+    }
+
+    final target = _target;
+    if (target != null) {
+      final dx = target.x - position.x;
+      final dz = target.z - position.z;
+      if (math.sqrt(dx * dx + dz * dz) <= arriveRadius) {
+        position = vm.Vector3(target.x, groundY, target.z);
+        stop();
+      }
+    }
+  }
+}
+
+/// Tiny ballistic chip flung by an Ultra punch; lives ~1.2s then despawns.
+class DebrisChipMotion {
+  DebrisChipMotion({
+    required vm.Vector3 position,
+    required vm.Vector3 velocity,
+    this.lifetime = 1.2,
+  }) : position = position.clone(),
+       velocity = velocity.clone();
+
+  vm.Vector3 position;
+  vm.Vector3 velocity;
+  double age = 0.0;
+  final double lifetime;
+
+  static const double gravity = -14.0;
+
+  bool get isDead => age >= lifetime;
+
+  void advance(double deltaSeconds, {required double groundY}) {
+    if (deltaSeconds <= 0 || isDead) {
+      return;
+    }
+    final dt = math.min(deltaSeconds, 0.1);
+    age += dt;
+    velocity.y += gravity * dt;
+    position += velocity * dt;
+    final floor = groundY + 0.04;
+    if (position.y < floor) {
+      position.y = floor;
+      velocity.y *= -0.28;
+      velocity.x *= 0.72;
+      velocity.z *= 0.72;
+    }
+  }
+}
+
+/// A sky-path bird that orbits the island: seek a point ahead on a ring,
+/// plus a light flocking mix so a group stays together without stacking.
+class FlockBirdMotion {
+  FlockBirdMotion({
+    required vm.Vector3 position,
+    vm.Vector3? velocity,
+    this.maxSpeed = 7.0,
+    this.maxForce = 14.0,
+    this.orbitRadius = 12.0,
+    this.cruiseHeight = 5.5,
+    this.separationDistance = 2.2,
+  }) : position = position.clone(),
+       velocity = velocity?.clone() ?? vm.Vector3.zero();
+
+  vm.Vector3 position;
+  vm.Vector3 velocity;
+  double yaw = 0.0;
+  double pitch = 0.0;
+  double maxSpeed;
+  double maxForce;
+  double orbitRadius;
+  double cruiseHeight;
+  double separationDistance;
+
+  void advance(
+    double deltaSeconds, {
+    required List<vm.Vector3> neighborPositions,
+    required List<vm.Vector3> neighborVelocities,
+  }) {
+    if (deltaSeconds <= 0) {
+      return;
+    }
+    final dt = math.min(deltaSeconds, 0.1);
+    final angle = math.atan2(position.x, position.z);
+    final ahead = angle + 0.55;
+    final seekTarget = vm.Vector3(
+      math.sin(ahead) * orbitRadius,
+      cruiseHeight,
+      math.cos(ahead) * orbitRadius,
+    );
+    var force = steeringSeek(
+      position,
+      velocity,
+      seekTarget,
+      maxSpeed: maxSpeed,
+      maxForce: maxForce,
+    );
+    force += steeringSeparation(
+      position,
+      velocity,
+      neighborPositions,
+      desiredDistance: separationDistance,
+      maxSpeed: maxSpeed,
+      maxForce: maxForce * 0.8,
+    );
+    force += steeringAlignment(
+      velocity,
+      neighborVelocities,
+      maxSpeed: maxSpeed,
+      maxForce: maxForce * 0.35,
+    );
+    force += steeringCohesion(
+      position,
+      velocity,
+      neighborPositions,
+      maxSpeed: maxSpeed,
+      maxForce: maxForce * 0.25,
+    );
+
+    velocity += force * dt;
+    velocity = truncateSteering(velocity, maxSpeed);
+    position += velocity * dt;
+    position.y = position.y.clamp(3.4, 8.0);
+
+    final xz = math.sqrt(position.x * position.x + position.z * position.z);
+    if (xz < 9.0 && xz > 1e-5) {
+      final scale = 9.0 / xz;
+      position.x *= scale;
+      position.z *= scale;
+    } else if (xz > 16.5 && xz > 1e-5) {
+      final scale = 16.5 / xz;
+      position.x *= scale;
+      position.z *= scale;
+    }
+
+    final speed = velocity.length;
+    if (speed > 0.08) {
+      yaw = math.atan2(velocity.x, velocity.z);
+      pitch = math.asin((velocity.y / speed).clamp(-1.0, 1.0));
+    }
+  }
+}
+
 /// The walkable point a tap selects, or null if the tap missed the ground.
 vm.Vector3? pickIslandPoint(
   vm.Ray ray, {
