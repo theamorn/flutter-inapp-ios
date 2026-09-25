@@ -1,17 +1,21 @@
 import Flutter
 import QuartzCore
 
-/// Owns the demo's single engine group and its three long-lived, lazily-created engines.
+/// Owns the demo's single engine group and its long-lived, lazily-created engines.
 final class AppEngines {
     static let shared = AppEngines()
 
     static let gameRoute = "/game"
     static let glassRoute = "/glass"
+    static let promoRoute = "/promo"
     static let sceneRoute = "/scene"
     static let telemetryChannelName = "com.theamorn.hybrid/telemetry"
     static let gameChannelName = "com.theamorn.hybrid/game"
+    static let promoChannelName = "com.theamorn.hybrid/promo"
 
-    private static let supportedRoutes = [gameRoute, glassRoute, sceneRoute]
+    /// `/glass` has no tab since Shop replaced it, but stays supported so the
+    /// Glass tab can come back with one line in `MainTabBarController`.
+    private static let supportedRoutes = [gameRoute, glassRoute, promoRoute, sceneRoute]
 
     private let group = FlutterEngineGroup(name: "hybrid-demo", project: nil)
     private var engines: [String: FlutterEngine] = [:]

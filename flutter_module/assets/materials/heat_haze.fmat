@@ -1,0 +1,75 @@
+// Heat shimmer above the campfire: a camera-facing quad that shows the scene
+// behind it, displaced by rising noise. Shows nothing but distortion.
+//
+// The quad is authored in the XY plane with its base at y = 0 and uv.y = 0 at
+// the bottom; the vertex block turns it to face the camera around world Y.
+// The node must carry translation only (no rotation or scale).
+material {
+  name: "HeatHaze",
+  shading_model: lit,
+  blending: alpha,
+  culling: none,
+  engine_inputs: [scene_color],
+  parameters: [
+    { type: float, name: time, default: 0.0 },
+    // x = displacement (screen uv), y = opacity (fire intensity).
+    { type: vec4, name: haze, default: [0.006, 1.0, 0.0, 0.0] },
+  ],
+}
+
+vertex {
+  void Vertex(inout VertexInputs vertex) {
+    vec3 centre = vertex.world_position - vertex.position;
+    vec3 to_camera = vertex.camera_position - centre;
+    to_camera.y = 0.0;
+    float length_xz = length(to_camera);
+    vec3 facing = length_xz > 0.0001 ? to_camera / length_xz : vec3(0.0, 0.0, 1.0);
+    vec3 right = vec3(facing.z, 0.0, -facing.x);
+    vertex.world_position = centre + right * vertex.position.x +
+                            vec3(0.0, vertex.position.y, 0.0);
+    vertex.world_normal = facing;
+  }
+}
+
+fragment {
+  // Local hash noise rather than <noise.glsl>, whose large constant tables
+  // fail to link on some GLES drivers (see island_sky.fmat).
+  float Hash12(vec2 p) {
+    vec3 q = fract(vec3(p.xyx) * 0.1031);
+    q += dot(q, q.yzx + 33.33);
+    return fract((q.x + q.y) * q.z);
+  }
+
+  vec2 Hash22(vec2 p) {
+    vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+    q += dot(q, q.yzx + 33.33);
+    return fract((q.xx + q.yz) * q.zy);
+  }
+
+  // Value noise, -1..1.
+  float ValueNoise2(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    float a = Hash12(i);
+    float b = Hash12(i + vec2(1.0, 0.0));
+    float c = Hash12(i + vec2(0.0, 1.0));
+    float d = Hash12(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * 2.0 - 1.0;
+  }
+
+  void Surface(inout MaterialInputs material) {
+    vec2 uv = GetUV0();
+    float time = material_params.time;
+    float mask = smoothstep(0.0, 0.3, uv.x) * (1.0 - smoothstep(0.7, 1.0, uv.x)) *
+                 smoothstep(0.0, 0.2, uv.y) * (1.0 - smoothstep(0.45, 1.0, uv.y));
+    float n1 = ValueNoise2(vec2(uv.x * 5.0, uv.y * 3.0 - time * 2.6) + 11.0);
+    float n2 = ValueNoise2(vec2(uv.x * 4.0 + 3.1, uv.y * 3.5 - time * 3.1) + 29.0);
+    vec2 offset = vec2(n1, n2) * material_params.haze.x * mask;
+    material.base_color = vec4(0.0, 0.0, 0.0, mask * material_params.haze.y);
+    material.metallic = 0.0;
+    material.roughness = 1.0;
+    material.specular = 0.0;
+    material.emissive = GetSceneColor(offset);
+  }
+}

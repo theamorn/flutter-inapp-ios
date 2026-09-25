@@ -1,0 +1,159 @@
+// Super Ultra simple sea: the effects menu's cheap stand-in for ocean.fmat.
+//
+// Opaque, so it reads nothing back from the frame: no scene colour (which
+// splits the scene pass and copies it), no scene depth, no planar
+// reflection (a second render of the whole scene). The seabed under it is
+// hidden, so it is never shaded either.
+//
+// Vertex: the same four Gerstner waves as ocean.fmat. Keep the two copies
+// identical; the buoys on the CPU ride this surface too.
+//
+// Fragment: water colour from the depth baked into the mesh (vertex red, see
+// buildSimpleSeaMeshData) instead of the scene depth, the engine's sky
+// reflection instead of the planar capture, and the same ripples and foam.
+material {
+  name: "IslandOceanSimple",
+  shading_model: lit,
+  culling: back,
+  parameters: [
+    { type: float, name: time, default: 0.0 },
+    // Column i: (dir.x, dir.z, amplitude, k) of wave i.
+    { type: mat4, name: wave_shape },
+    // Column i: (omega, q * amplitude, q * k * amplitude, 0) of wave i.
+    { type: mat4, name: wave_motion },
+    // x = fade start radius, y = fade end radius (waves).
+    { type: vec4, name: fade, default: [70.0, 150.0, 250.0, 318.0] },
+    // Linear body colours of shallow and deep water (before lighting).
+    { type: vec4, name: shallow_color, default: [0.03, 0.30, 0.30, 1.0] },
+    { type: vec4, name: deep_color, default: [0.004, 0.035, 0.075, 1.0] },
+    // rgb = absorption per metre, w = in-scatter density per metre.
+    { type: vec4, name: absorption, default: [0.42, 0.075, 0.05, 0.11] },
+    // rgb = light reaching the water body (sun + sky), set from Dart.
+    { type: vec4, name: water_light, default: [1.0, 1.0, 1.0, 1.0] },
+    // x = ripple strength.
+    { type: vec4, name: ripple, default: [0.34, 0.06, 0.018, 0.0] },
+    // x = surf-line width (m of depth; narrower than ocean.fmat's, whose
+    // thickness runs along the view ray), y = crest foam height, z = foam
+    // amount.
+    { type: vec4, name: foam, default: [0.3, 0.13, 1.0, 0.0] },
+    // rgb = seabed sand seen through the water, times water_light;
+    // w = metres of water per unit of vertex red (kSimpleSeaDepthScale).
+    { type: vec4, name: seabed, default: [0.55, 0.5, 0.36, 16.0] },
+    { type: sampler2d, name: ripple_normal, hint: default_normal },
+    { type: sampler2d, name: foam_texture, hint: default_black },
+  ],
+  varyings: [
+    { type: float, name: v_crest },
+  ],
+}
+
+vertex {
+  void GerstnerWave(vec4 shape, vec4 motion, vec2 p, float time,
+                    inout vec3 displacement, inout vec3 tangent,
+                    inout vec3 binormal) {
+    if (shape.z <= 0.0) {
+      return;
+    }
+    float phase = shape.w * dot(shape.xy, p) - motion.x * time;
+    float c = cos(phase);
+    float s = sin(phase);
+    displacement += vec3(motion.y * shape.x * c, shape.z * s,
+                         motion.y * shape.y * c);
+    float ka = shape.w * shape.z;
+    tangent += vec3(-motion.z * shape.x * shape.x * s, shape.x * ka * c,
+                    -motion.z * shape.x * shape.y * s);
+    binormal += vec3(-motion.z * shape.x * shape.y * s, shape.y * ka * c,
+                     -motion.z * shape.y * shape.y * s);
+  }
+
+  void Vertex(inout VertexInputs vertex) {
+    vec2 p = vertex.world_position.xz;
+    float time = material_params.time;
+    vec3 displacement = vec3(0.0);
+    vec3 tangent = vec3(1.0, 0.0, 0.0);
+    vec3 binormal = vec3(0.0, 0.0, 1.0);
+    GerstnerWave(material_params.wave_shape[0], material_params.wave_motion[0],
+                 p, time, displacement, tangent, binormal);
+    GerstnerWave(material_params.wave_shape[1], material_params.wave_motion[1],
+                 p, time, displacement, tangent, binormal);
+    GerstnerWave(material_params.wave_shape[2], material_params.wave_motion[2],
+                 p, time, displacement, tangent, binormal);
+    GerstnerWave(material_params.wave_shape[3], material_params.wave_motion[3],
+                 p, time, displacement, tangent, binormal);
+    // Far out the grid is too coarse to carry the waves; fade them so they do
+    // not alias into noise at the horizon.
+    float keep = 1.0 - smoothstep(material_params.fade.x, material_params.fade.y,
+                                  length(p));
+    displacement *= keep;
+    vec3 normal = normalize(cross(binormal, tangent));
+    vertex.world_position += displacement;
+    vertex.world_normal = normalize(mix(vec3(0.0, 1.0, 0.0), normal, keep));
+    v_crest = displacement.y;
+  }
+}
+
+fragment {
+  void Surface(inout MaterialInputs material) {
+    vec3 p = GetWorldPosition();
+    float time = material_params.time;
+    float view_distance = length(v_viewvector);
+    vec3 view = GetViewDirection();
+
+    // Ripples: two scrolling layers of the tileable wave normal map.
+    float near = 1.0 - smoothstep(20.0, 90.0, view_distance);
+    vec2 uv_a = p.xz * 0.085 + vec2(time * 0.021, time * 0.012);
+    vec2 uv_b = p.xz * 0.029 + vec2(-time * 0.010, time * 0.015);
+    vec3 ripple_a = texture(ripple_normal, uv_a).xyz * 2.0 - 1.0;
+    vec3 ripple_b = texture(ripple_normal, uv_b).xyz * 2.0 - 1.0;
+    vec2 slope = (ripple_a.xy * 0.6 + ripple_b.xy) * material_params.ripple.x *
+                 mix(0.3, 1.0, near);
+    vec3 normal = normalize(normalize(GetWorldNormal()) +
+                            vec3(slope.x, 0.0, slope.y));
+    // The engine adds the sky reflection (specular); the water's own colour
+    // gives way to it at grazing angles, as the planar mirror does in
+    // ocean.fmat.
+    float n_dot_v = clamp(dot(normal, view), 0.0, 1.0);
+    float fresnel = 0.02 + 0.98 * pow(1.0 - n_dot_v, 5.0);
+
+    // Water under this point, and roughly how much of it the eye looks
+    // through on the way down to the sand.
+    float depth = GetVertexColor().r * material_params.seabed.w;
+    float thickness = depth / max(view.y, 0.2);
+
+    vec3 transmittance = exp(-material_params.absorption.rgb * thickness);
+    float inscatter = 1.0 - exp(-material_params.absorption.w * thickness);
+    vec3 body = mix(material_params.shallow_color.rgb,
+                    material_params.deep_color.rgb,
+                    smoothstep(1.5, 14.0, thickness)) *
+                material_params.water_light.rgb;
+    vec3 sand = material_params.seabed.rgb * material_params.water_light.rgb;
+    vec3 water = sand * transmittance + body * inscatter;
+
+    // Foam: the same lace as ocean.fmat, along the surf line and on the
+    // tallest crests, fetched only where it can be non-zero.
+    vec2 dpdx = dFdx(p.xz);
+    vec2 dpdy = dFdy(p.xz);
+    float surf = 1.0 - smoothstep(0.0, material_params.foam.x, depth);
+    float crest = smoothstep(material_params.foam.y,
+                             material_params.foam.y + 0.09, v_crest);
+    float foam = 0.0;
+    if ((surf > 0.0 || crest > 0.0) && near > 0.0) {
+      float lace = textureGrad(foam_texture,
+                               p.xz * 0.33 + vec2(time * 0.031, -time * 0.018),
+                               dpdx * 0.33, dpdy * 0.33).b;
+      float breakup = textureGrad(foam_texture,
+                                  p.xz * 0.91 - vec2(time * 0.047, 0.0),
+                                  dpdx * 0.91, dpdy * 0.91).g;
+      foam = (surf * (0.35 + 1.1 * lace) + crest * lace * 1.4) *
+             smoothstep(0.25, 0.65, breakup + surf * 0.45);
+      foam = clamp(foam * material_params.foam.z * near, 0.0, 1.0);
+    }
+
+    material.base_color = vec4(vec3(0.92) * foam, 1.0);
+    material.normal = normal;
+    material.metallic = 0.0;
+    material.roughness = mix(0.05, 0.85, foam);
+    material.specular = 1.0 - foam;
+    material.emissive = water * (1.0 - fresnel) * (1.0 - foam);
+  }
+}

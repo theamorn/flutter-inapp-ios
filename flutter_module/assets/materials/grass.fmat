@@ -1,0 +1,71 @@
+// Super Ultra grass tufts, drawn as one InstancedMesh.
+//
+// Vertex: quadratic-cantilever wind (tips move, roots stay put), gusts that
+// travel across the lawn, and a push away from the player so the character
+// parts the grass as it walks.
+//
+// Fragment: base-to-tip colour from the vertex colour (times the per-instance
+// tint), darker roots, and a translucency glow when the low sun is behind
+// the blades.
+material {
+  name: "IslandGrass",
+  shading_model: lit,
+  culling: none,
+  parameters: [
+    { type: float, name: time, default: 0.0 },
+    // xy = wind direction * strength (m of tip travel), z = sway speed.
+    { type: vec4, name: wind, default: [0.16, 0.07, 1.0, 0.0] },
+    // xyz = player position, w = push radius (m).
+    { type: vec4, name: player, default: [0.0, -100.0, 0.0, 0.85] },
+    // xyz = direction toward the key light, w = wetness (rain).
+    { type: vec4, name: sun_dir, default: [0.4, 0.5, 0.6, 0.0] },
+    // rgb = key light colour * intensity.
+    { type: vec4, name: sun_color, default: [1.0, 1.0, 1.0, 0.0] },
+  ],
+  varyings: [
+    { type: float, name: v_height },
+  ],
+}
+
+vertex {
+  void Vertex(inout VertexInputs vertex) {
+    // Authored tufts are at most 0.6 m tall in object space.
+    float height = clamp(vertex.position.y / 0.6, 0.0, 1.0);
+    v_height = height;
+    vec3 root = vertex.world_position;
+    float time = material_params.time;
+    float phase = dot(root.xz, vec2(0.31, 0.23));
+    float gust = 0.55 + 0.45 * sin(time * 0.6 + root.x * 0.07 - root.z * 0.05);
+    float sway = 0.6 * sin(time * 1.9 * material_params.wind.z + phase) +
+                 0.2 * sin(time * 3.4 + phase * 2.3);
+    vec2 bend = material_params.wind.xy * (gust + sway);
+
+    vec2 away = root.xz - material_params.player.xz;
+    float distance = length(away);
+    float push = 1.0 - smoothstep(0.15, material_params.player.w, distance);
+    if (distance > 0.001) {
+      bend += away / distance * push * 0.45;
+    }
+
+    float k = height * height;
+    vertex.world_position.xz += bend * k;
+    // Keep blade length roughly constant as it leans.
+    vertex.world_position.y -= dot(bend, bend) * 0.4 * k;
+  }
+}
+
+fragment {
+  void Surface(inout MaterialInputs material) {
+    float wet = material_params.sun_dir.w;
+    vec3 albedo = GetVertexColor().rgb * (1.0 - 0.18 * wet);
+    material.base_color = vec4(albedo, 1.0);
+    material.metallic = 0.0;
+    material.roughness = mix(0.8, 0.38, wet);
+    material.specular = mix(0.3, 0.7, wet);
+    material.occlusion = mix(0.4, 1.0, v_height);
+    vec3 to_light = normalize(material_params.sun_dir.xyz);
+    float behind = pow(clamp(dot(-GetViewDirection(), to_light), 0.0, 1.0), 4.0);
+    material.emissive = albedo * material_params.sun_color.rgb * behind *
+                        v_height * 0.8;
+  }
+}

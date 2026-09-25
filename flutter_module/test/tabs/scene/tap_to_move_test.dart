@@ -425,4 +425,230 @@ void main() {
       );
     });
   });
+
+  group('filterIslandScatterPoints', () {
+    test('keeps walkable points and drops the sea, campfire, and occupied discs', () {
+      final kept = filterIslandScatterPoints(
+        samples: <vm.Vector2>[
+          vm.Vector2(9.0, 9.0 + 3.0), // walkable, clear of the campfire
+          vm.Vector2(9.0 + 8.5, 9.0), // still on the disc
+          vm.Vector2(9.0 + 12.0, 9.0), // sea
+          vm.Vector2(9.0, 9.0 - 0.45), // campfire
+          vm.Vector2(9.0 + 2.0, 9.0), // on top of an occupied prop
+        ],
+        rectOrigin: 9.0,
+        walkableRadius: 9.0,
+        campfire: vm.Vector2(0.0, -0.45),
+        campfireAvoidRadius: 1.4,
+        occupied: <vm.Vector2>[vm.Vector2(2.0, 0.0)],
+        occupiedRadius: 1.2,
+        maxCount: 20,
+      );
+
+      expect(kept, hasLength(2));
+      expect(kept[0].x, closeTo(0.0, 1e-5));
+      expect(kept[0].y, closeTo(3.0, 1e-5));
+      expect(kept[1].x, closeTo(8.5, 1e-5));
+      expect(kept[1].y, closeTo(0.0, 1e-5));
+    });
+
+    test('caps the extra scatter so Ultra foliage stays bounded', () {
+      final samples = <vm.Vector2>[
+        for (var i = 0; i < 40; i++) vm.Vector2(9.0 + i * 0.15, 9.0),
+      ];
+      final kept = filterIslandScatterPoints(
+        samples: samples,
+        rectOrigin: 9.0,
+        walkableRadius: 9.0,
+        campfire: vm.Vector2(0.0, -0.45),
+        campfireAvoidRadius: 1.4,
+        occupied: const <vm.Vector2>[],
+        occupiedRadius: 1.2,
+        maxCount: 20,
+      );
+      expect(kept, hasLength(20));
+    });
+
+    test('drops the inner walk disc so ground cover leaves a path', () {
+      final kept = filterIslandScatterPoints(
+        samples: <vm.Vector2>[
+          vm.Vector2(9.0 + 1.0, 9.0), // inside the clear radius
+          vm.Vector2(9.0 + 5.0, 9.0), // on the rim ring
+        ],
+        rectOrigin: 9.0,
+        walkableRadius: 9.0,
+        campfire: vm.Vector2(0.0, -0.45),
+        campfireAvoidRadius: 1.4,
+        occupied: const <vm.Vector2>[],
+        occupiedRadius: 1.2,
+        maxCount: 20,
+        innerClearRadius: 3.2,
+      );
+      expect(kept, hasLength(1));
+      expect(kept.single.x, closeTo(5.0, 1e-5));
+      expect(kept.single.y, closeTo(0.0, 1e-5));
+    });
+  });
+
+  group('NpcSteeringMotion', () {
+    test('arrives at a far target without leaving the island', () {
+      final npc = NpcSteeringMotion(
+        position: vm.Vector3(0, 0, 0),
+        maxSpeed: 1.4,
+        groundY: 0,
+      );
+      npc.moveTo(vm.Vector3(4, 0, 0));
+      for (var i = 0; i < 400; i++) {
+        npc.advance(
+          1 / 60,
+          playerPosition: vm.Vector3(-8, 0, 0),
+          walkableRadius: 9.0,
+          campfire: vm.Vector3(0, 0, -0.45),
+          campfireAvoidRadius: 1.4,
+        );
+      }
+      expect(npc.position.x, closeTo(4, 0.25));
+      expect(npc.position.z, closeTo(0, 0.25));
+      expect(npc.isMoving, isFalse);
+      expect(
+        math.sqrt(npc.position.x * npc.position.x + npc.position.z * npc.position.z),
+        lessThanOrEqualTo(9.0 + 1e-5),
+      );
+    });
+
+    test('separates away from the player when they stand too close', () {
+      final npc = NpcSteeringMotion(
+        position: vm.Vector3(0.2, 0, 0),
+        maxSpeed: 1.4,
+        groundY: 0,
+      );
+      final startX = npc.position.x;
+      for (var i = 0; i < 45; i++) {
+        npc.advance(
+          1 / 60,
+          playerPosition: vm.Vector3.zero(),
+          walkableRadius: 9.0,
+          campfire: vm.Vector3(0, 0, -8),
+          campfireAvoidRadius: 1.4,
+        );
+      }
+      expect(npc.position.x, greaterThan(startX + 0.15));
+    });
+
+    test('is pushed out of the campfire disc', () {
+      final npc = NpcSteeringMotion(
+        position: vm.Vector3(0.1, 0, -0.45),
+        maxSpeed: 1.4,
+        groundY: 0,
+      );
+      npc.advance(
+        1 / 60,
+        playerPosition: vm.Vector3(8, 0, 8),
+        walkableRadius: 9.0,
+        campfire: vm.Vector3(0, 0, -0.45),
+        campfireAvoidRadius: 1.4,
+      );
+      final dx = npc.position.x - 0.0;
+      final dz = npc.position.z - (-0.45);
+      expect(math.sqrt(dx * dx + dz * dz), greaterThanOrEqualTo(1.4 - 1e-4));
+    });
+  });
+
+  group('DebrisChipMotion', () {
+    test('follows a ballistic arc and dies after its lifetime', () {
+      final chip = DebrisChipMotion(
+        position: vm.Vector3(0, 0.4, 0),
+        velocity: vm.Vector3(2.0, 3.0, 0.5),
+        lifetime: 1.2,
+      );
+      chip.advance(0.1, groundY: 0.0);
+      expect(chip.position.y, greaterThan(0.4));
+      expect(chip.isDead, isFalse);
+
+      for (var i = 0; i < 80; i++) {
+        chip.advance(1 / 60, groundY: 0.0);
+      }
+      expect(chip.position.y, greaterThanOrEqualTo(0.0));
+      expect(chip.isDead, isTrue);
+    });
+  });
+
+  group('FlockBirdMotion', () {
+    test('cruises around the island rim instead of collapsing to the origin', () {
+      final bird = FlockBirdMotion(
+        position: vm.Vector3(12, 5.5, 0),
+        velocity: vm.Vector3(0, 0, 6),
+        maxSpeed: 7.0,
+        orbitRadius: 12.0,
+        cruiseHeight: 5.5,
+      );
+      for (var i = 0; i < 240; i++) {
+        bird.advance(
+          1 / 60,
+          neighborPositions: const <vm.Vector3>[],
+          neighborVelocities: const <vm.Vector3>[],
+        );
+      }
+      final radius = math.sqrt(
+        bird.position.x * bird.position.x + bird.position.z * bird.position.z,
+      );
+      expect(radius, inInclusiveRange(9.0, 16.0));
+      expect(bird.position.y, inInclusiveRange(3.5, 8.0));
+    });
+
+    test('banks into its orbit: the inner wing is the lower one', () {
+      final bird = FlockBirdMotion(
+        position: vm.Vector3(12, 5.5, 0),
+        velocity: vm.Vector3(0, 0, 6),
+        maxSpeed: 7.0,
+        orbitRadius: 12.0,
+        cruiseHeight: 5.5,
+      );
+      for (var i = 0; i < 300; i++) {
+        bird.advance(
+          1 / 60,
+          neighborPositions: const <vm.Vector3>[],
+          neighborVelocities: const <vm.Vector3>[],
+        );
+      }
+      // A steady ~7 m/s orbit of ~12 m is a gentle bank, not a knife edge.
+      expect(bird.roll.abs(), inInclusiveRange(0.1, 0.7));
+      // Through a matrix, as the engine applies a node's rotation:
+      // vector_math's `Quaternion.rotated` turns the opposite way.
+      final attitude = vm.Matrix4.compose(
+        vm.Vector3.zero(),
+        bird.attitude,
+        vm.Vector3.all(1),
+      );
+      final left = attitude.transform3(vm.Vector3(1, 0, 0));
+      final right = attitude.transform3(vm.Vector3(-1, 0, 0));
+      final toCentre = vm.Vector3(-bird.position.x, 0, -bird.position.z)
+        ..normalize();
+      final inner = left.dot(toCentre) > right.dot(toCentre) ? left : right;
+      final outer = identical(inner, left) ? right : left;
+      expect(inner.y, lessThan(outer.y));
+      // And the nose still points along the flight path.
+      final nose = attitude.transform3(vm.Vector3(0, 0, 1));
+      expect(nose.dot(bird.velocity.normalized()), greaterThan(0.99));
+    });
+
+    test('separates from a neighbor that is sitting on top of it', () {
+      final bird = FlockBirdMotion(
+        position: vm.Vector3(12.0, 5.5, 0.0),
+        velocity: vm.Vector3(0, 0, 1),
+        maxSpeed: 7.0,
+        orbitRadius: 12.0,
+        cruiseHeight: 5.5,
+      );
+      final start = bird.position.clone();
+      for (var i = 0; i < 40; i++) {
+        bird.advance(
+          1 / 60,
+          neighborPositions: <vm.Vector3>[vm.Vector3(12.0, 5.5, 0.0)],
+          neighborVelocities: <vm.Vector3>[vm.Vector3(0, 0, 1)],
+        );
+      }
+      expect((bird.position - start).length, greaterThan(0.35));
+    });
+  });
 }

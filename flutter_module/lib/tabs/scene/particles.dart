@@ -36,7 +36,7 @@ class Mote {
 ///
 /// Pure state with no Flutter or GPU dependency, so it is unit-testable.
 class ParticleField {
-  ParticleField({int count = 70, int seed = 0x15ea})
+  ParticleField({int count = 36, int seed = 0x15ea})
     : _random = math.Random(seed) {
     for (var i = 0; i < count; i++) {
       motes.add(_spawn(_random.nextDouble()));
@@ -105,7 +105,9 @@ class ParticleOverlayPainter extends CustomPainter {
     final dust = Paint()..color = _dustColor;
     final firefly = Paint()
       ..color = _fireflyColor
-      ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 2.4);
+      ..maskFilter = night > 0.01
+          ? const ui.MaskFilter.blur(ui.BlurStyle.normal, 1.2)
+          : null;
 
     for (final mote in field.motes) {
       final offset = Offset(mote.x * size.width, mote.y * size.height);

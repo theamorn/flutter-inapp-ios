@@ -266,7 +266,9 @@ final class PerformanceHUDView: UIView {
             flutterLabel.text = "FLUTTER  —  no active Flutter engine"
         }
 
-        let routeOrder = [AppEngines.gameRoute, AppEngines.glassRoute, AppEngines.sceneRoute]
+        let routeOrder = [
+            AppEngines.gameRoute, AppEngines.promoRoute, AppEngines.glassRoute, AppEngines.sceneRoute,
+        ]
         let summaries = routeOrder.compactMap { route -> String? in
             guard let spawn = engineSpawns[route] else { return nil }
             let deltaMB = Double(spawn.deltaBytes) / 1_048_576

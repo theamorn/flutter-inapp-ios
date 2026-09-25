@@ -6,6 +6,7 @@ import 'package:flutter_module/app_screen.dart';
 import 'package:flutter_module/game_screen.dart';
 import 'package:flutter_module/shader_screen.dart';
 import 'package:flutter_module/tabs/game/game_app.dart';
+import 'package:flutter_module/tabs/promo/promo_app.dart';
 import 'package:flutter_module/tabs/scene/scene_app.dart';
 import 'package:flutter_module/tabs/glass/glass_app.dart';
 import 'package:flutter_module/telemetry/frame_telemetry.dart';
@@ -13,13 +14,17 @@ import 'package:flutter_module/telemetry/frame_telemetry.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   final route = PlatformDispatcher.instance.defaultRouteName;
-  if (route == '/game' || route == '/glass' || route == '/scene') {
+  if (route == '/game' ||
+      route == '/glass' ||
+      route == '/promo' ||
+      route == '/scene') {
     FrameTelemetryReporter(route).start();
   }
 
   runApp(switch (route) {
     '/game' => const FlappyCatApp(),
     '/glass' => const LiquidGlassApp(),
+    '/promo' => const HoloPromoApp(),
     '/scene' => const IslandSceneApp(),
     _ => const MyApp(),
   });

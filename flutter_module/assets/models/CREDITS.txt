@@ -1,7 +1,7 @@
 3D source assets for tab 5 (the island scene).
 
-All models here are by Kenney (www.kenney.nl) and are released under
-Creative Commons Zero (CC0 1.0 Universal):
+All models here are released under Creative Commons Zero (CC0 1.0
+Universal). All but seagull.glb are by Kenney (www.kenney.nl):
 http://creativecommons.org/publicdomain/zero/1.0/
 
   tree_palm.glb   Nature Kit 2.1 -- tree_palmTall.glb
@@ -13,6 +13,20 @@ http://creativecommons.org/publicdomain/zero/1.0/
   character.glb   Blocky Characters 2.0 -- character-a.glb
 
 CC0 does not require attribution; Kenney is credited here anyway.
+
+  seagull.glb     Quaternius (quaternius.com), Ultimate Monsters -- Flying
+                  -- Pigeon, CC0 1.0 (listed as Public Domain on
+                  poly.pizza/m/9NGlBTpDEr). Rigged, 2,024 triangles, with
+                  Fast_Flying, Flying_Idle and six other clips.
+
+The seagull is a MODIFIED pigeon. The pack ships it as Pigeon.gltf with its
+buffer base64-embedded; it was repacked as a .glb (the build hook imports
+.glb) and its 32 x 32 palette atlas was repainted as a herring gull: the
+grey wings -> gull grey, the purple body and head -> white, the orange
+beak and feet -> yellow; the eyes are unchanged. Geometry, rig and animations are byte-identical to the
+original. (Poly Pizza's CDN served empty bodies to this network, so the
+source file came from a GitHub mirror of the pack; two independent
+mirrors are byte-identical, md5 3a12019cdd0c3edae9b04a6fbdded0ca.)
 
 The Nature Kit .glb files here have been PREPROCESSED. Kenney's exports
 carry an orphan node named "tmpParent" that is not in any glTF scene but

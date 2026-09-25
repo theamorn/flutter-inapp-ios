@@ -33,6 +33,7 @@ class FlappyCatGame extends FlameGame with HasCollisionDetection, TapCallbacks {
 
   late final CatPlayer player;
   late final Ground ground;
+  late final _SkyBackdrop _sky;
   late final List<PipePair> _pipePool;
   late final TextComponent<TextPaint> _scoreLabel;
   late final _MessagePanel _messagePanel;
@@ -54,7 +55,7 @@ class FlappyCatGame extends FlameGame with HasCollisionDetection, TapCallbacks {
   }
 
   @override
-  Color backgroundColor() => const Color(0x00000000);
+  Color backgroundColor() => const Color(0xFF73C9F4);
 
   @override
   Future<void> onLoad() async {
@@ -69,10 +70,7 @@ class FlappyCatGame extends FlameGame with HasCollisionDetection, TapCallbacks {
     // the responsive layout in _layoutGame already assumes.
     camera.viewfinder.anchor = Anchor.topLeft;
 
-    final loadedImages = await images.loadAll([
-      'cat_sprite_long.png',
-      'street.jpg',
-    ]);
+    final loadedImages = await images.loadAll(['cat_sprite_long.png']);
     final catSheet = SpriteSheet(
       image: loadedImages[0],
       srcSize: Vector2.all(50),
@@ -84,7 +82,8 @@ class FlappyCatGame extends FlameGame with HasCollisionDetection, TapCallbacks {
       stepTime: 0.075,
     );
 
-    ground = Ground(image: loadedImages[1]);
+    _sky = _SkyBackdrop();
+    ground = Ground();
     player = CatPlayer(animation: catAnimation, onHit: _onPlayerHit);
     _scoreLabel = TextComponent<TextPaint>(
       text: '0',
@@ -106,6 +105,7 @@ class FlappyCatGame extends FlameGame with HasCollisionDetection, TapCallbacks {
       growable: false,
     );
 
+    await world.add(_sky);
     await world.add(ground);
     for (final pipe in _pipePool) {
       await world.add(pipe);
@@ -128,8 +128,8 @@ class FlappyCatGame extends FlameGame with HasCollisionDetection, TapCallbacks {
   }
 
   void _layoutGame() {
+    _sky.layoutFor(size);
     ground.layoutFor(size);
-    ground.scrollSpeed = max(82, size.x * 0.21);
     _scoreLabel.position.setValues(size.x / 2, _topInset + 16);
     _messagePanel.layoutFor(size);
 
@@ -155,7 +155,6 @@ class FlappyCatGame extends FlameGame with HasCollisionDetection, TapCallbacks {
     _messagePanel
       ..setContent('FLAPPY CAT', 'Tap anywhere to flap')
       ..isVisible = true;
-    ground.scrolling = true;
     for (final pipe in _pipePool) {
       pipe.deactivate();
     }
@@ -170,7 +169,6 @@ class FlappyCatGame extends FlameGame with HasCollisionDetection, TapCallbacks {
     _spawnElapsed = 0.68;
     _deathElapsed = 0;
     _messagePanel.isVisible = false;
-    ground.scrolling = true;
     deathEffect.value = 0;
     for (final pipe in _pipePool) {
       pipe.deactivate();
@@ -243,7 +241,6 @@ class FlappyCatGame extends FlameGame with HasCollisionDetection, TapCallbacks {
     }
     score += 1;
     _scoreLabel.text = '$score';
-    onScoreChanged?.call(score);
   }
 
   void _onPlayerHit() {
@@ -259,7 +256,6 @@ class FlappyCatGame extends FlameGame with HasCollisionDetection, TapCallbacks {
   void _finishDeath() {
     phase = FlappyCatPhase.gameOver;
     deathEffect.value = 0;
-    ground.scrolling = false;
     player.freeze();
     for (final pipe in _pipePool) {
       pipe.moving = false;
@@ -274,6 +270,28 @@ class FlappyCatGame extends FlameGame with HasCollisionDetection, TapCallbacks {
   void onDispose() {
     deathEffect.dispose();
     super.onDispose();
+  }
+}
+
+class _SkyBackdrop extends PositionComponent {
+  _SkyBackdrop() : super(priority: -20);
+
+  final Paint _paint = Paint();
+  Rect _rect = Rect.zero;
+
+  void layoutFor(Vector2 gameSize) {
+    size.setValues(gameSize.x, gameSize.y);
+    _rect = Rect.fromLTWH(0, 0, gameSize.x, gameSize.y);
+    _paint.shader = Gradient.linear(
+      Offset.zero,
+      Offset(0, gameSize.y),
+      const [Color(0xFF4BA3E3), Color(0xFFD6F0FF)],
+    );
+  }
+
+  @override
+  void render(Canvas canvas) {
+    canvas.drawRect(_rect, _paint);
   }
 }
 

@@ -25,6 +25,8 @@
 		B20000000000000000000004 /* PerformanceHUDView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* PerformanceHUDView.swift */; };
 		B20000000000000000000005 /* HomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* HomeViewController.swift */; };
 		B20000000000000000000006 /* SettingsWebViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* SettingsWebViewController.swift */; };
+		B20000000000000000000009 /* ProductDetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* ProductDetailViewController.swift */; };
+		B2000000000000000000000A /* InlineFlutterCardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000A /* InlineFlutterCardViewController.swift */; };
 		B20000000000000000000007 /* settings.html in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* settings.html */; };
 /* End PBXBuildFile section */
 
@@ -75,6 +77,8 @@
 		A20000000000000000000004 /* PerformanceHUDView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceHUDView.swift; sourceTree = "<group>"; };
 		A20000000000000000000005 /* HomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewController.swift; sourceTree = "<group>"; };
 		A20000000000000000000006 /* SettingsWebViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWebViewController.swift; sourceTree = "<group>"; };
+		A20000000000000000000009 /* ProductDetailViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductDetailViewController.swift; sourceTree = "<group>"; };
+		A2000000000000000000000A /* InlineFlutterCardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineFlutterCardViewController.swift; sourceTree = "<group>"; };
 		A20000000000000000000007 /* settings.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = settings.html; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -163,6 +167,8 @@
 				A20000000000000000000004 /* PerformanceHUDView.swift */,
 				A20000000000000000000005 /* HomeViewController.swift */,
 				A20000000000000000000006 /* SettingsWebViewController.swift */,
+				A20000000000000000000009 /* ProductDetailViewController.swift */,
+				A2000000000000000000000A /* InlineFlutterCardViewController.swift */,
 				A20000000000000000000008 /* Resources */,
 				DF0D94872CEF817500E6C3B9 /* Main.storyboard */,
 				DF0D948A2CEF817600E6C3B9 /* Assets.xcassets */,
@@ -431,6 +437,8 @@
 				B20000000000000000000004 /* PerformanceHUDView.swift in Sources */,
 				B20000000000000000000005 /* HomeViewController.swift in Sources */,
 				B20000000000000000000006 /* SettingsWebViewController.swift in Sources */,
+				B20000000000000000000009 /* ProductDetailViewController.swift in Sources */,
+				B2000000000000000000000A /* InlineFlutterCardViewController.swift in Sources */,
 				DF0D94822CEF817500E6C3B9 /* AppDelegate.swift in Sources */,
 				DF0D94842CEF817500E6C3B9 /* SceneDelegate.swift in Sources */,
 			);

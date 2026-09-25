@@ -1,0 +1,333 @@
+// Super Ultra sky: the engine's physical daylight model, plus a visible sun
+// with a corona, a moon lit by the sun (so it shows a phase), stars and a
+// faint Milky Way that fade in at night.
+//
+// The daylight part is a port of flutter_scene 0.23.0's
+// shaders/flutter_scene_sky_physical.frag (MIT, Copyright (c) 2023 Brandon
+// DeRosier), after Preetham et al., so daytime matches the PhysicalSkySource
+// the Normal and Ultra modes use. Parameters are packed like
+// PhysicalSkyInfo so the numbers carry over one for one.
+material {
+  name: "IslandSky",
+  parameters: [
+    // xyz = direction toward the sun, w = sun angular radius (radians).
+    { type: vec4, name: sun_direction, default: [0.4, 0.5, 0.6, 0.028] },
+    // xyz = direction toward the moon, w = moon angular radius (radians).
+    { type: vec4, name: moon_direction, default: [0.0, 0.3, -0.95, 0.034] },
+    // rgb = Rayleigh tint, w = Rayleigh coefficient.
+    { type: vec4, name: rayleigh, default: [0.26, 0.41, 0.58, 2.0] },
+    // rgb = Mie tint, w = Mie coefficient.
+    { type: vec4, name: mie, default: [0.69, 0.73, 0.81, 0.005] },
+    // x = turbidity, y = Mie eccentricity, z = energy, w = night (0..1).
+    { type: vec4, name: sky_params, default: [10.0, 0.8, 1.0, 0.0] },
+    { type: vec4, name: ground_color, default: [0.12, 0.12, 0.13, 1.0] },
+    // x = time (s), y = moon brightness, z = sun corona, w = star brightness.
+    { type: vec4, name: extras, default: [0.0, 2.2, 1.0, 1.0] },
+    // x = daylight sky exposure (the sun disk is not scaled), y = knee
+    // shoulder for the daylight sky's luminance, z = overcast (rain).
+    { type: vec4, name: grade, default: [0.5, 0.9, 0.0, 0.0] },
+    // xyz = direction toward a lightning strike, w = flash (0..1).
+    { type: vec4, name: flash, default: [0.0, 0.6, -0.8, 0.0] },
+  ],
+}
+
+sky {
+  // Small local noise instead of <noise.glsl>. That library's large constant
+  // tables left this sky with no pipeline on the Android emulator's GLES
+  // (it silently drew nothing, and the lighting baked from it was garbage);
+  // a sky only needs cheap hash noise. Sine-free hashes after Dave Hoskins.
+  float Hash13(vec3 p) {
+    p = fract(p * 0.1031);
+    p += dot(p, p.zyx + 31.32);
+    return fract((p.x + p.y) * p.z);
+  }
+
+  float Hash12(vec2 p) {
+    vec3 q = fract(vec3(p.xyx) * 0.1031);
+    q += dot(q, q.yzx + 33.33);
+    return fract((q.x + q.y) * q.z);
+  }
+
+  vec2 Hash22(vec2 p) {
+    vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+    q += dot(q, q.yzx + 33.33);
+    return fract((q.xx + q.yz) * q.zy);
+  }
+
+  // Value noise, -1..1.
+  float ValueNoise2(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    float a = Hash12(i);
+    float b = Hash12(i + vec2(1.0, 0.0));
+    float c = Hash12(i + vec2(0.0, 1.0));
+    float d = Hash12(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * 2.0 - 1.0;
+  }
+
+  float ValueNoise3(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    vec3 u = f * f * (3.0 - 2.0 * f);
+    float n000 = Hash13(i);
+    float n100 = Hash13(i + vec3(1.0, 0.0, 0.0));
+    float n010 = Hash13(i + vec3(0.0, 1.0, 0.0));
+    float n110 = Hash13(i + vec3(1.0, 1.0, 0.0));
+    float n001 = Hash13(i + vec3(0.0, 0.0, 1.0));
+    float n101 = Hash13(i + vec3(1.0, 0.0, 1.0));
+    float n011 = Hash13(i + vec3(0.0, 1.0, 1.0));
+    float n111 = Hash13(i + vec3(1.0, 1.0, 1.0));
+    float x00 = mix(n000, n100, u.x);
+    float x10 = mix(n010, n110, u.x);
+    float x01 = mix(n001, n101, u.x);
+    float x11 = mix(n011, n111, u.x);
+    return mix(mix(x00, x10, u.y), mix(x01, x11, u.y), u.z) * 2.0 - 1.0;
+  }
+
+  float Fbm2(vec2 p) {
+    float sum = 0.0;
+    float amplitude = 0.5;
+    for (int i = 0; i < 4; i++) {
+      sum += amplitude * ValueNoise2(p);
+      p = p * 2.03 + vec2(17.1, 9.4);
+      amplitude *= 0.5;
+    }
+    return sum / 0.9375;
+  }
+
+  float Fbm3(vec3 p) {
+    float sum = 0.0;
+    float amplitude = 0.5;
+    for (int i = 0; i < 4; i++) {
+      sum += amplitude * ValueNoise3(p);
+      p = p * 2.03 + vec3(17.1, 9.4, 3.7);
+      amplitude *= 0.5;
+    }
+    return sum / 0.9375;
+  }
+
+  // Distance to the nearest jittered cell point (Worley F1), in cell units.
+  float Worley2(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    float nearest = 8.0;
+    for (int y = -1; y <= 1; y++) {
+      for (int x = -1; x <= 1; x++) {
+        vec2 cell = vec2(float(x), float(y));
+        vec2 point = cell + Hash22(i + cell);
+        nearest = min(nearest, length(point - f));
+      }
+    }
+    return nearest;
+  }
+
+  const vec3 kUp = vec3(0.0, 1.0, 0.0);
+  const float kRayleighZenithSize = 8400.0;
+  const float kMieZenithSize = 1250.0;
+
+  float HenyeyGreensteinPhase(float cos_theta, float g) {
+    return (1.0 / (4.0 * kPi)) *
+           ((1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * cos_theta, 1.5));
+  }
+
+  float Hash01(vec3 cell, float seed) {
+    return Hash13(cell + seed * 17.13);
+  }
+
+  // A sparse field of point stars: at most one per cell of a 3D grid over the
+  // view direction, jittered away from the cell edges so a single cell lookup
+  // is enough.
+  float Stars(vec3 dir) {
+    const float kCells = 170.0;
+    vec3 cell = floor(dir * kCells);
+    float present = Hash01(cell, 41.0);
+    if (present > 0.085) {
+      return 0.0;
+    }
+    vec3 jitter = vec3(Hash01(cell, 42.0), Hash01(cell, 43.0), Hash01(cell, 44.0));
+    vec3 star_dir = normalize((cell + 0.25 + 0.5 * jitter) / kCells);
+    // Angular size in (1 - cos) units: about a pixel on a phone at 58 deg.
+    // The window keeps the falloff well inside the cell, or a bright star is
+    // clipped into a square by the cell edge.
+    float distance = 1.0 - dot(dir, star_dir);
+    float size = 1.5e-7 + 3.0e-7 * Hash01(cell, 45.0);
+    float core = exp(-distance / size) *
+                 (1.0 - smoothstep(0.0, size * 10.0, distance));
+    float twinkle = 0.7 + 0.3 * sin(material_params.extras.x *
+                                     (1.7 + 3.1 * Hash01(cell, 46.0)) +
+                                     Hash01(cell, 47.0) * 40.0);
+    float magnitude = pow(Hash01(cell, 48.0), 3.0);
+    return core * twinkle * (0.25 + 2.2 * magnitude);
+  }
+
+  vec3 MilkyWay(vec3 dir) {
+    vec3 plane_normal = normalize(vec3(0.35, 0.55, 0.76));
+    // Squared by hand: GLSL pow() is undefined for a negative base, and a
+    // NaN here poisons the sky and, through the IBL bake, the whole scene.
+    float offset = dot(dir, plane_normal) / 0.2;
+    // Beyond 3.2 band-widths the band is below 4e-5 of its peak: skip the
+    // two fbm evaluations, which is most of the night sky.
+    if (abs(offset) > 3.2) {
+      return vec3(0.0);
+    }
+    float band = exp(-offset * offset);
+    float dust = 0.5 + 0.5 * Fbm3(dir * 3.5 + 91.0);
+    float lanes = smoothstep(-0.25, 0.35, Fbm3(dir * 7.0 + 92.0));
+    return vec3(0.010, 0.011, 0.018) * band * dust * mix(0.35, 1.0, lanes);
+  }
+
+  // The moon as a lit sphere seen from the centre of the sky. Returns its
+  // radiance in rgb and its coverage in a.
+  vec4 Moon(vec3 dir, vec3 moon_dir, float radius, vec3 sun_dir) {
+    float cos_angle = dot(dir, moon_dir);
+    if (cos_angle < cos(radius * 1.04)) {
+      return vec4(0.0);
+    }
+    vec3 right = normalize(cross(kUp, moon_dir) + vec3(1e-5, 0.0, 0.0));
+    vec3 up = cross(moon_dir, right);
+    vec3 offset = dir - moon_dir * cos_angle;
+    vec2 q = vec2(dot(offset, right), dot(offset, up)) / sin(radius);
+    float r2 = dot(q, q);
+    float coverage = 1.0 - smoothstep(0.93, 1.0, r2);
+    if (coverage <= 0.0) {
+      return vec4(0.0);
+    }
+    float z = sqrt(max(1.0 - r2, 0.0));
+    vec3 normal = normalize(right * q.x + up * q.y - moon_dir * z);
+    float lit = max(dot(normal, sun_dir), 0.0);
+    // Maria: large dark basins. Craters: small rims from Worley borders.
+    float maria = smoothstep(-0.1, 0.35, Fbm2(q * 1.6 + vec2(3.1, 7.4)));
+    float craters = Worley2(q * 7.0 + 8.0);
+    // Falling edges as 1 - smoothstep: a reversed smoothstep is undefined in
+    // GLSL ES.
+    float rim = 1.0 - smoothstep(0.02, 0.12, abs(craters - 0.32));
+    float albedo = 0.62 - 0.26 * maria + 0.08 * rim -
+                   0.05 * (1.0 - smoothstep(0.0, 0.3, craters));
+    // Earthshine keeps the unlit side just visible.
+    vec3 radiance = vec3(1.0, 0.97, 0.9) * albedo * (lit + 0.025) *
+                    material_params.extras.y;
+    return vec4(radiance, coverage);
+  }
+
+  vec3 Sky(vec3 direction) {
+    vec3 dir = normalize(direction);
+    vec3 sun_dir = normalize(material_params.sun_direction.xyz);
+    float night = material_params.sky_params.w;
+
+    // ---- Daylight (port of the engine's physical sky) ----
+    float sun_zenith_cos = clamp(dot(kUp, sun_dir), -1.0, 1.0);
+    float sun_energy =
+        max(0.0, 1.0 - exp(-((kPi * 0.5) - acos(sun_zenith_cos)))) * 60.0 *
+        material_params.sky_params.z;
+    float sun_fade = 1.0 - clamp(1.0 - exp(sun_dir.y), 0.0, 1.0);
+
+    vec3 rayleigh_beta =
+        max(material_params.rayleigh.w - (1.0 - sun_fade), 0.0) *
+        material_params.rayleigh.rgb * 0.0001;
+    vec3 mie_beta = material_params.sky_params.x * material_params.mie.w *
+                    material_params.mie.rgb * 0.000434;
+
+    // Clamped: a normalized dot can land a hair past 1, and acos() of that is
+    // NaN, which the lighting prefilter would smear over the whole scene.
+    float zenith = acos(clamp(dot(kUp, dir), 0.0, 1.0));
+    float optical_mass =
+        1.0 / (cos(zenith) + 0.00094 * pow(1.6386 - zenith, -1.253));
+    vec3 extinction = exp(-(rayleigh_beta * kRayleighZenithSize +
+                            mie_beta * kMieZenithSize) *
+                          optical_mass);
+
+    float cos_theta = clamp(dot(dir, sun_dir), -1.0, 1.0);
+    float rayleigh_phase =
+        (3.0 / (16.0 * kPi)) *
+        (1.0 + (cos_theta * 0.5 + 0.5) * (cos_theta * 0.5 + 0.5));
+    float mie_phase =
+        HenyeyGreensteinPhase(cos_theta, material_params.sky_params.y);
+    vec3 scatter = (rayleigh_beta * rayleigh_phase + mie_beta * mie_phase) /
+                   max(rayleigh_beta + mie_beta, vec3(1e-12));
+
+    vec3 inscatter =
+        pow(max(sun_energy * scatter * (1.0 - extinction), vec3(0.0)), vec3(1.5));
+    inscatter *= mix(vec3(1.0),
+                     sqrt(max(sun_energy * scatter * extinction, vec3(0.0))),
+                     clamp(pow(1.0 - sun_zenith_cos, 5.0), 0.0, 1.0));
+
+    float above = smoothstep(-0.1, 0.1, dir.y);
+    inscatter *= mix(material_params.ground_color.rgb, vec3(1.0), above);
+
+    // Toward a low sun this model's forward-scatter glow runs 4-50x the
+    // zenith, and a camera framed on that sun reads it as one white sheet.
+    // Compress the daylight sky's luminance above a knee at 1 (about the
+    // zenith): below it nothing changes, above it the glow rolls off toward
+    // 2, so it reads as a gradient and the sun disk, added after, still
+    // stands out for bloom.
+    float sky_luminance = dot(inscatter, vec3(0.2126, 0.7152, 0.0722));
+    float excess = max(sky_luminance - 1.0, 0.0);
+    float compressed = min(sky_luminance, 1.0) +
+                       excess / (1.0 + material_params.grade.y * excess);
+    inscatter *= compressed / max(sky_luminance, 1e-5);
+    // The model is tuned for a midday sky near 1.0; with the camera facing a
+    // low sun that is brighter than the sunlit ground the exposure is set
+    // for. Dim the sky (not the disk) so it reads blue and the glow reads as
+    // a highlight.
+    vec3 color = inscatter * material_params.grade.x;
+
+    // Rain clouds: a flat grey deck that keeps the sky's brightness but not
+    // its colour, and hides the sun, moon and stars behind it.
+    float overcast = material_params.grade.z;
+    float clear = 1.0 - 0.95 * overcast;
+    float deck = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    color = mix(color, vec3(0.9, 0.93, 0.97) * deck * 0.7, 0.9 * overcast);
+
+    // Lightning: the whole cloud deck flickers, brightest around the bolt.
+    float flash = material_params.flash.w;
+    if (flash > 0.0) {
+      float toward = max(dot(dir, normalize(material_params.flash.xyz)), 0.0);
+      float toward2 = toward * toward;
+      float glow = 0.35 + 1.8 * toward2 * toward2 + 3.0 * pow(toward, 48.0);
+      color += vec3(0.72, 0.8, 1.0) * flash * glow *
+               smoothstep(-0.1, 0.1, dir.y) * (0.3 + 0.7 * overcast);
+    }
+
+    // ---- Sun disk, limb darkening, corona ----
+    float sun_radius = material_params.sun_direction.w;
+    float disk = smoothstep(cos(sun_radius), cos(sun_radius * 0.85), cos_theta);
+    float limb = 0.55 + 0.45 * sqrt(clamp(
+        1.0 - (1.0 - cos_theta) / max(1.0 - cos(sun_radius), 1e-6), 0.0, 1.0));
+    vec3 sun_light = sun_energy * extinction * clear;
+    color += sun_light * disk * limb;
+    float glow = max(cos_theta, 0.0);
+    color += sun_light * material_params.extras.z *
+             (0.018 * pow(glow, 1400.0) + 0.0022 * pow(glow, 90.0)) * above;
+
+    // ---- Night: base glow, stars, Milky Way ----
+    float horizon_glow = 1.0 - smoothstep(0.0, 0.5, max(dir.y, 0.0));
+    // Moonlit navy. It also feeds the night lighting bake, so it is the
+    // island's ambient floor after dark.
+    vec3 night_sky = vec3(0.004, 0.0072, 0.021) * (0.7 + 0.8 * horizon_glow);
+    night_sky = mix(material_params.ground_color.rgb * 0.01, night_sky, above);
+    color += night_sky * night;
+    if (night > 0.01 && dir.y > -0.02) {
+      float star_fade = smoothstep(0.0, 0.18, dir.y) * night * clear;
+      color += vec3(0.85, 0.9, 1.0) * Stars(dir) * star_fade *
+               material_params.extras.w;
+      color += MilkyWay(dir) * star_fade;
+    }
+
+    // ---- Moon ----
+    vec3 moon_dir = normalize(material_params.moon_direction.xyz);
+    float moon_visible = smoothstep(-0.03, 0.03, moon_dir.y) * clear;
+    if (moon_visible > 0.0) {
+      vec4 moon = Moon(dir, moon_dir, material_params.moon_direction.w, sun_dir);
+      // The day sky's own light washes the moon out, like the real thing.
+      float contrast = mix(0.35, 1.0, night);
+      color = mix(color, color * 0.2 + moon.rgb * contrast,
+                  moon.a * moon_visible * above);
+      float cos_moon = max(dot(dir, moon_dir), 0.0);
+      float halo = 0.06 * pow(cos_moon, 900.0) + 0.006 * pow(cos_moon, 60.0);
+      color += vec3(0.7, 0.8, 1.0) * halo * material_params.extras.y * night *
+               moon_visible * above;
+    }
+    return color;
+  }
+}

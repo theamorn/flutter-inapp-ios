@@ -24,15 +24,18 @@ object AppEngines {
 
     const val GAME_ROUTE = "/game"
     const val GLASS_ROUTE = "/glass"
+    const val PROMO_ROUTE = "/promo"
     const val SCENE_ROUTE = "/scene"
     const val TELEMETRY_CHANNEL_NAME = "com.theamorn.hybrid/telemetry"
     const val GAME_CHANNEL_NAME = "com.theamorn.hybrid/game"
+    const val PROMO_CHANNEL_NAME = "com.theamorn.hybrid/promo"
 
     /**
-     * All three Flutter routes supported by the demo contract.
-     * Engines are created lazily on the tab's first appearance.
+     * The Flutter routes supported by the demo contract. Engines are created
+     * lazily on the tab's first appearance. `/glass` has no tab since Shop
+     * replaced it, but stays supported so the Glass tab can come back.
      */
-    private val supportedRoutes = setOf(GAME_ROUTE, GLASS_ROUTE, SCENE_ROUTE)
+    private val supportedRoutes = setOf(GAME_ROUTE, GLASS_ROUTE, PROMO_ROUTE, SCENE_ROUTE)
 
     /** Returns the engine for [route] if already created, or null. */
     fun getEngine(route: String): FlutterEngine? = engines[route]

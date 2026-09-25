@@ -8,11 +8,13 @@
 AppEngines.shared (iOS) / AppEngines singleton (Android)
   └── FlutterEngineGroup("hybrid-demo")     ← ONE group: shared snapshot, shared GPU context
         ├── engine A   initialRoute "/game"    ← spawned lazily on first tab-3 appearance
-        ├── engine B   initialRoute "/glass"   ← spawned lazily on first tab-4 appearance
+        ├── engine B   initialRoute "/promo"   ← spawned lazily on first tab-4 (Shop) appearance
         └── engine C   initialRoute "/scene"   ← spawned lazily on first tab-5 appearance
 ```
 
-This is the iOS topology. Android implements Home and Game only, and lazily creates just the `/game` engine. The other route names are reserved for parity; Android does not expose Glass or Island tabs.
+Both hosts use this topology and expose all five tabs. Tabs 3 and 5 give their engine the whole screen: `FlutterViewController` on iOS, `FlutterFragment` on Android. Tab 4 is different: a native product page with its engine **inline**, as one fixed-height tile in the page's scroll view. See [Inline tile](#inline-tile--route-promo) below.
+
+`/glass` (Liquid Glass, `05-liquid-glass.md`) no longer has a tab. The route and its Dart code stay supported, so tab 4 can go back to Glass with a one-line change in each host's tab list.
 
 **Why a group.** Group-created engines reuse resources such as the GPU context, font metrics, and isolate group snapshot. Each engine still owns separate Dart application state. The savings depend on the app and device; measure them before quoting a number. See Flutter's [multiple-engine documentation](https://docs.flutter.dev/add-to-app/multiple-flutters).
 
@@ -28,12 +30,16 @@ This is the iOS topology. Android implements Home and Game only, and lazily crea
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   final route = PlatformDispatcher.instance.defaultRouteName;
-  if (route == '/game' || route == '/glass' || route == '/scene') {
+  if (route == '/game' ||
+      route == '/glass' ||
+      route == '/promo' ||
+      route == '/scene') {
     FrameTelemetryReporter(route).start();
   }
   runApp(switch (route) {
     '/game'  => const FlappyCatApp(),
     '/glass' => const LiquidGlassApp(),
+    '/promo' => const HoloPromoApp(),
     '/scene' => const IslandSceneApp(),
     _        => const MyApp(),   // existing standalone demo home
   });
@@ -50,13 +56,41 @@ Each feature app creates exactly one initial Navigator route via `onGenerateInit
 |---|---|
 | Engine group name | `hybrid-demo` |
 | Route — Flappy Cat (tab 3) | `/game` |
-| Route — Liquid Glass (tab 4) | `/glass` |
+| Route — Shop promo tile (tab 4) | `/promo` |
+| Route — Liquid Glass (no tab; kept supported) | `/glass` |
 | Route — Island scene (tab 5) | `/scene` |
 | Route — standalone dev home | `/` |
 | Existing channel (**keep, do not remove**) | `com.theamorn.flutter` |
 | New telemetry channel | `com.theamorn.hybrid/telemetry` |
+| Inline promo tile channel | `com.theamorn.hybrid/promo` |
 
 `com.theamorn.flutter` remains in the standalone home in `flutter_module/lib/main.dart`. The current native login opens the tab shell and does not install the previous talk's counter handler. The old native wiring is preserved in the root README's integration guide; do not claim that the current login demonstrates that exchange.
+
+## Inline tile — route `/promo`
+
+Tab 4 is a native product page (UIKit `ProductDetailViewController` / Compose `ShopScreen`) with the `/promo` engine as a 340pt/dp tile halfway down. Flutter draws a holographic badge on a lanyard (Flame, a verlet strap, and `shaders/holo_foil.glsl`). The page owns everything else. Task doc: `09-inline-holo-badge.md`.
+
+**Units.** Everything on this channel is in Flutter logical pixels: iOS points, Android dp. Android converts to pixels with `displayMetrics.density`.
+
+| Direction | Method | Arguments / reply |
+|---|---|---|
+| native → Dart | `scroll` | `{progress, velocity}`. `progress` is the tile center's offset from the viewport center in half-viewport heights, clamped to ±1.5. `velocity` is the page's content-offset speed, positive toward the end of the page. Sent only while visible, at most once per actual scroll step. |
+| native → Dart | `visibility` | `{visible}`: the tile intersects the viewport grown by 120. Sent only on change. |
+| Dart → native | `ready` | Reply `{visible, progress}`. Dart **pulls** its starting state, because pushes sent before its handler exists can be dropped. |
+| Dart → native | `badgeBounds` | `{x, y, w, h}`: the badge's box in tile coordinates. At most 30 Hz, and only after moving more than 4, so nothing is sent while it hangs still. |
+| Dart → native | `claimPromo` | `{code}` when the badge is tapped. The host shows the code in its **native** promo field, validates it, and applies the discount. Flutter never touches the price. |
+
+**Who owns a touch.** A touch that *starts* inside the latest `badgeBounds`, grown by 16, belongs to Flutter, and the page must not scroll. Every other touch scrolls the page, including one on the tile's empty area. On iOS, `ProductScrollView.touchesShouldCancel(in:)` returns false for it, with `delaysContentTouches = false`. On Android, a wrapper view calls `requestDisallowInterceptTouchEvent(true)` on `ACTION_DOWN`, which Compose's `AndroidView` honors.
+
+**Pausing.** The engine spawns on the Shop tab's first appearance, never on scroll-into-view, because engine creation is synchronous. Off-screen pausing goes through `visibility`, not the lifecycle. Dart's `PromoRunGate` runs the game only while the host says the tile is visible **and** the app is in the foreground, because Flame's own background handling would resume a game that is still scrolled away. With the tile off screen, the HUD reads `/promo no recent frames` while host cadence continues.
+
+**Embedding differences.**
+
+- **iOS:** a child `FlutterViewController` in a stack view, never a reused table cell. The scroll view is pinned to the safe area, so the tile's safe-area insets, and therefore Flutter's viewport metrics, never change mid-scroll.
+- **Android:** a bare `FlutterView(context, FlutterTextureView(context))` inside a non-lazy `Column`. `TextureView` composites like a normal view, so it clips to rounded corners and moves with Compose scrolling, at the cost of a copy. With no fragment, the host supplies the rest itself:
+  - a `PlatformPlugin`, so `HapticFeedback` has a handler;
+  - consumed window insets;
+  - activity lifecycle and window focus, forwarded to the engine by `TabsActivity`.
 
 ## Telemetry — the HUD
 
@@ -123,7 +157,7 @@ The HUD also requests the screen's maximum refresh rate through `preferredFrameR
 Required for tab 5 (`flutter_scene`). Full detail and the casing trap are in `01-scene-spike.md`. Summary:
 
 - **iOS** — `FLTEnableFlutterGPU` = `true` in **both host plists**, `Info-Debug.plist` and `Info-Release.plist`.
-- **Android** — `<meta-data android:name="io.flutter.embedding.android.EnableFlutterGPU" android:value="true" />` in the host manifest. The bare key is silently ignored. Android reserves this flag for the scene contract even though this host currently exposes only Game.
+- **Android** — `<meta-data android:name="io.flutter.embedding.android.EnableFlutterGPU" android:value="true" />` in the host manifest. The bare key is silently ignored. Android needs it for the Island tab.
 
 Neither requires `flutter run --enable-flutter-gpu`, which is what makes add-to-app viable at all.
 
@@ -134,11 +168,13 @@ flutter_module/lib/
 ├── main.dart              ← route dispatch (modified)
 ├── tabs/
 │   ├── game/              ← 04-flappy-cat.md
-│   ├── glass/             ← 05-liquid-glass.md
+│   ├── glass/             ← 05-liquid-glass.md (route kept, no tab)
+│   ├── promo/             ← 09-inline-holo-badge.md
 │   └── scene/             ← 06-island-scene.md
 └── telemetry/             ← addTimingsCallback → method channel
 flutter_module/shaders/
-└── liquid_glass.glsl      ← 05-liquid-glass.md
+├── liquid_glass.glsl      ← 05-liquid-glass.md
+└── holo_foil.glsl         ← 09-inline-holo-badge.md
 
 cool-ios/cool-ios/
 ├── LoginViewController.swift     ← renamed from ViewController.swift
@@ -148,6 +184,8 @@ cool-ios/cool-ios/
 ├── PerformanceHUDView.swift
 ├── HomeViewController.swift
 ├── SettingsWebViewController.swift
+├── ProductDetailViewController.swift      ← 09: the Shop page + ProductScrollView
+├── InlineFlutterCardViewController.swift  ← 09: the /promo tile and its channel
 └── Resources/settings.html
 
 cool-android/                     ← new Gradle project, 07-android-host.md
