@@ -5,6 +5,7 @@
 /// (unit-testable, no GPU) and the 2D particle layer is in `particles.dart`.
 library;
 
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -13,6 +14,11 @@ import 'package:flutter_scene/kit.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:flutter_module/tabs/scene/ball_physics.dart';
 import 'package:flutter_module/tabs/scene/island_components.dart';
+import 'package:flutter_module/tabs/scene/super_ultra/lightning.dart';
+import 'package:flutter_module/tabs/scene/super_ultra/rain_collision.dart';
+import 'package:flutter_module/tabs/scene/super_ultra/sky_path.dart';
+import 'package:flutter_module/tabs/scene/super_ultra/super_ultra_effects.dart';
+import 'package:flutter_module/tabs/scene/super_ultra/super_ultra_rig.dart';
 import 'package:flutter_module/tabs/scene/tap_to_move.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
@@ -49,6 +55,20 @@ class IslandDimensions {
   static const double campfireZ = -0.45;
 }
 
+/// How much of the scene is switched on.
+enum IslandQuality {
+  /// One ball, the hand-placed props. The stage path.
+  normal,
+
+  /// Eight balls, scattered props, NPC, flock, buoys, CPU waves.
+  ultra,
+
+  /// Everything in [ultra], plus the headroom-spending look: sculpted shore
+  /// and seabed, clear reflective water, grass, VFX fire, and a sky with a
+  /// visible sun, moon and god rays. See `super_ultra/super_ultra_rig.dart`.
+  superUltra,
+}
+
 /// Modes for the 3D scene camera.
 enum IslandCameraMode {
   /// Wide cinematic overview of the whole island with orbit controls.
@@ -65,8 +85,10 @@ class IslandScene {
 
   final Scene scene = Scene();
 
-  /// One sky source drives the visible sky, the image-based lighting, and
-  /// (through [dayNight]) the sun's direction, colour and intensity.
+  /// The daylight model [dayNight] aims. Not displayed and not baked into
+  /// lighting in any mode (see [_buildEnvironment]); kept so the day/night
+  /// component has a sky to steer, and as the reference Super Ultra's own sky
+  /// is ported from.
   final PhysicalSkySource sky = PhysicalSkySource();
 
   /// Reused across every instance of a prop so triangles are counted once per
@@ -75,6 +97,17 @@ class IslandScene {
 
   late final DirectionalLight sunLight;
   late final Node sunNode;
+
+  /// Super Ultra draws the sun on a low arc so it is in frame, but takes the
+  /// light's colour and strength from this regular-latitude clock, so noon
+  /// still looks like noon. Never mounted; kept in step with [dayNight].
+  final DayNightCycleComponent _lightingClock = DayNightCycleComponent(
+    timeOfDay: 10.5,
+    latitude: _normalLatitude,
+    applyLightingToTarget: false,
+  );
+  static const double _normalLatitude = 26.0;
+  static final vm.Vector3 _normalMoonEye = vm.Vector3(-7, 9, 6);
   late final DirectionalLight moonLight;
   late final Node moonNode;
   late final DayNightCycleComponent dayNight;
@@ -93,7 +126,12 @@ class IslandScene {
 
   late final Node cameraNode;
   late final CameraComponent _cameraComponent;
-  late final OrbitCameraController orbit;
+
+  /// Replaced (not mutated) when entering or leaving Super Ultra: the
+  /// controller exposes no setters for its framing, so a fresh one is built
+  /// at the current pose and eased to the new framing. Read it afresh after
+  /// [setQuality].
+  late OrbitCameraController orbit;
   OtsCameraComponent? _otsCamera;
 
   IslandCameraMode _cameraMode = IslandCameraMode.orbit;
@@ -141,7 +179,6 @@ class IslandScene {
   NpcWanderComponent? _npcWander;
   final math.Random _npcRandom = math.Random();
   Node? _flockRoot;
-  SeagullFlockComponent? _flock;
 
   final BallPhysicsWorld physicsWorld = BallPhysicsWorld(
     groundY: IslandDimensions.groundY,
@@ -155,14 +192,210 @@ class IslandScene {
   Mesh? _chipMesh;
 
   late final Node _waterNode;
+  late final Node _capNode;
+  late final Node _coneNode;
   late final PhysicallyBasedMaterial _normalSeaMaterial;
   late final PhysicallyBasedMaterial _ultraSeaMaterial;
   WaterSurfaceComponent? _waterSurface;
   GerstnerDisplaceComponent? _waterDisplace;
   final List<_Buoy> _buoys = <_Buoy>[];
 
-  bool _ultraMode = false;
-  bool get isUltraMode => _ultraMode;
+  IslandQuality _quality = IslandQuality.normal;
+  IslandQuality get quality => _quality;
+  bool get isUltraMode => _quality != IslandQuality.normal;
+  bool get isSuperUltra => _quality == IslandQuality.superUltra;
+
+  late final SuperUltraRig _superRig = SuperUltraRig(
+    seaY: IslandDimensions.seaY,
+    campfireBase: vm.Vector3(
+      IslandDimensions.campfireX,
+      IslandDimensions.groundY,
+      IslandDimensions.campfireZ,
+    ),
+    playerPosition: () => walker.position,
+    campfireIntensity: () => _campfireFlicker?.intensity ?? 0.0,
+  );
+  int _qualityRequest = 0;
+  bool _buildingSuperUltra = false;
+
+  /// True while Super Ultra's content is being built for the first time.
+  bool get isBuildingSuperUltra => _buildingSuperUltra;
+
+  /// Grass tufts on the lawn, for the readout. Zero outside Super Ultra.
+  int get grassTufts => isSuperUltra ? _superRig.grassTufts : 0;
+
+  bool _rainWanted = false;
+  bool _preparingRain = false;
+  bool _stormWanted = true;
+  double _baseEnvironmentIntensity = 1.0;
+  double _baseRainLight = 1.0;
+  double _lastFlash = 0.0;
+
+  /// Debug only (`SCENE_LIGHTNING_HOLD`): hold each strike at its peak for
+  /// this many seconds so a screenshot can catch it.
+  double debugLightningHoldSeconds = 0.0;
+
+  /// Whether lightning strikes while it rains. On by default; off keeps the
+  /// rain without any flashing (for photosensitive audiences, or to read the
+  /// rain's cost on its own).
+  bool get isStorm => _stormWanted;
+
+  void setStorm(bool on) {
+    _stormWanted = on;
+    _superRig.lightning?.enabled = on;
+  }
+
+  /// Lightning strikes so far, for the readout.
+  int get lightningStrikes =>
+      isSuperUltra ? (_superRig.lightning?.strikes ?? 0) : 0;
+
+  /// 0 (dry) to 1 (full rain), eased toward the toggle over [_rainFade] s so
+  /// the sky clouds over and the ground wets gradually.
+  double _rainLevel = 0.0;
+  static const double _rainFade = 2.5;
+  double _skyRebakeIn = 0.0;
+  final List<RainProp> _scatterRainProps = <RainProp>[];
+  final List<RainProp> _coverRainProps = <RainProp>[];
+
+  /// Whether rain is switched on. Rain only falls in Super Ultra; the choice
+  /// is remembered across mode switches.
+  bool get isRaining => _rainWanted;
+
+  /// True while the rain is being built for the first time.
+  bool get isPreparingRain => _preparingRain;
+
+  /// Drops in flight, for the readout. Zero when it is not raining.
+  int get rainDrops => isSuperUltra ? (_superRig.rain?.dropsInFlight ?? 0) : 0;
+
+  /// Drops landing per second, for the readout.
+  double get rainHitsPerSecond =>
+      isSuperUltra ? (_superRig.rain?.hitsPerSecond ?? 0.0) : 0.0;
+
+  /// Turns rain on or off.
+  ///
+  /// Only Super Ultra has rain: in other modes the choice is remembered and
+  /// takes effect on entering it. The first time, the ground height grid the
+  /// drops collide with is built on an isolate. Off fades the shower out and
+  /// unmounts every rain node once the last drop has landed, so it then costs
+  /// nothing.
+  Future<void> setRain(bool on) async {
+    _rainWanted = on;
+    if (on) {
+      await _prepareRain();
+    }
+  }
+
+  Future<void> _prepareRain() async {
+    if (!isSuperUltra || !_superRig.isBuilt) {
+      return;
+    }
+    if (_superRig.rain == null) {
+      _preparingRain = true;
+      try {
+        await _superRig.ensureRain(
+          props: <RainProp>[
+            for (final placement in _normalPlacements)
+              RainProp(placement.kind, placement.x, placement.z, placement.scale),
+            ..._scatterRainProps,
+            ..._coverRainProps,
+          ],
+          fillDynamics: _fillRainDynamics,
+          cameraPose: _cameraPose,
+          lightningHoldSeconds: debugLightningHoldSeconds,
+        );
+        _superRig.lightning?.enabled = _stormWanted;
+      } finally {
+        _preparingRain = false;
+      }
+    }
+    if (_rainWanted && isSuperUltra) {
+      _superRig.mountRain();
+    }
+  }
+
+  /// Where the camera is and where it looks, for placing strikes in view.
+  CameraPose _cameraPose() {
+    final transform = cameraNode.globalTransform;
+    final forward = transform.getColumn(2).xyz;
+    return (
+      eye: transform.getTranslation(),
+      forward: forward.length2 > 0 ? forward.normalized() : vm.Vector3(0, 0, 1),
+    );
+  }
+
+  /// Carries the current lightning flash into the ambient light, the
+  /// clouds, and the rain streaks (which briefly catch the light). The
+  /// strike's own light and bolt are driven by the lightning itself.
+  void _tickLightning() {
+    final lightning = _superRig.lightning;
+    if (lightning == null || !isSuperUltra) {
+      return;
+    }
+    final flash = lightning.flash;
+    if (flash <= 0.0 && _lastFlash <= 0.0) {
+      return;
+    }
+    final lit = flash * lightning.strength;
+    scene.environmentIntensity = _baseEnvironmentIntensity + 1.0 * lit;
+    _superRig.setSkyFlash(lightning.strikeDirection, flash * (0.5 + 0.5 * lightning.strength));
+    _superRig.rain?.setLight(_baseRainLight + 0.9 * lit);
+    _lastFlash = flash;
+  }
+
+  /// The moving things rain lands on, refreshed every simulation step:
+  /// the player and NPC as 1 m capsules, balls, and the floating crates.
+  void _fillRainDynamics(RainDynamics dynamics) {
+    dynamics.clear();
+    final player = walker.position;
+    dynamics.addCapsule(player.x, player.y, player.z, 0.22, 1.0);
+    final npc = _npcPivot;
+    if (npc != null && npc.visible) {
+      final q = npcSteering.position;
+      dynamics.addCapsule(q.x, q.y, q.z, 0.22, 1.0);
+    }
+    for (final ball in physicsWorld.balls) {
+      dynamics.addSphere(
+        ball.position.x,
+        ball.position.y,
+        ball.position.z,
+        ball.radius,
+      );
+    }
+    for (final buoy in _buoys) {
+      final at = buoy.root.position;
+      dynamics.addSphere(at.x, at.y, at.z, 0.3);
+    }
+  }
+
+  /// Eases [_rainLevel] toward the toggle and carries it into the lighting,
+  /// the shaders and the spawn rate; unmounts the rain once it has fully
+  /// stopped.
+  void _tickRain(double deltaSeconds) {
+    final rain = _superRig.rain;
+    if (rain == null) {
+      return;
+    }
+    final target = _rainWanted && isSuperUltra ? 1.0 : 0.0;
+    if (_rainLevel != target) {
+      final step = deltaSeconds / _rainFade;
+      _rainLevel = target > _rainLevel
+          ? math.min(target, _rainLevel + step)
+          : math.max(target, _rainLevel - step);
+      rain.level = _rainLevel;
+      _superRig.weather = _rainLevel;
+      _applyLighting();
+      // The sky's lighting bake follows the clouds, a few times per fade
+      // rather than every frame.
+      _skyRebakeIn -= deltaSeconds;
+      if (_skyRebakeIn <= 0.0 || _rainLevel == target) {
+        scene.skyEnvironment?.invalidate();
+        _skyRebakeIn = 0.4;
+      }
+    }
+    if (target == 0.0 && rain.isIdle) {
+      _superRig.unmountRain();
+    }
+  }
 
   TapMarkerComponent? _marker;
   CampfireFlickerComponent? _campfireFlicker;
@@ -188,6 +421,7 @@ class IslandScene {
       return;
     }
     dayNight.timeOfDay = next;
+    _lightingClock.timeOfDay = next;
     // Aim the sun and refresh IBL only when the clock actually moves. The
     // component is not ticked by Scene.render (see [_buildEnvironment]), so
     // an idle island does not dirty the light basis or rebake every frame.
@@ -214,6 +448,7 @@ class IslandScene {
     await _buildProps();
     await _buildCharacter();
     await _buildNpc();
+    await _buildFlock();
 
     physicsWorld.setupBalls(1);
     _ensureBalls();
@@ -244,17 +479,12 @@ class IslandScene {
   // ---------------------------------------------------------------- sky/sun
 
   void _buildEnvironment() {
-    scene.skybox = Skybox(sky);
-    // Manual IBL: bake once on bind, then only when [timeOfDay] changes.
-    // `interval` rebake (even at 200ms) keeps a SkyBakeJob in flight on an
-    // idle clock and showed up as raster jank on device (release gfxinfo:
-    // 55% missed deadlines, GPU p50 17ms).
-    scene.skyEnvironment = SkyEnvironment(
-      sky,
-      refresh: SkyEnvironmentRefresh.manual,
-      faceResolution: 64,
-      equirectWidth: 256,
-    );
+    // Normal and Ultra set no skybox and no SkyEnvironment: they are lit by
+    // the engine's default studio environment. That is what they have
+    // actually shipped with. This method used to assign a physical sky here,
+    // but [_applyEnvironmentSettings] replaced it with null on the next line
+    // (see [_activeSkybox]), and both modes were tuned against the result.
+    // Super Ultra brings its own sky; see `super_ultra_rig.dart`.
 
     // NOTE: this is deliberately NOT `Scene.sunLight`/`SunLight`. See the
     // findings in 06-island-scene.md: in flutter_scene 0.23.0
@@ -287,13 +517,13 @@ class IslandScene {
     moonNode = Node(name: 'moon')
       ..addComponent(DirectionalLightComponent(moonLight));
     scene.add(moonNode);
-    moonNode.lookAtFrom(vm.Vector3(-7, 9, 6), vm.Vector3.zero());
+    moonNode.lookAtFrom(_normalMoonEye, vm.Vector3.zero());
 
     dayNight = DayNightCycleComponent(
       timeOfDay: 10.5,
       // 0 = presenter-driven. The slider is the clock; nothing runs on its own.
       timeSpeed: 0.0,
-      latitude: 26.0,
+      latitude: _normalLatitude,
       sunLightNode: sunNode,
       skySource: sky,
       targetScene: scene,
@@ -466,7 +696,8 @@ class IslandScene {
       flameNode: _flameNode,
       flameMaterial: _flameMaterial,
       isLit: () => campfireLit,
-      isUltra: () => _ultraMode,
+      isUltra: () => isUltraMode,
+      isSuperUltra: () => isSuperUltra && _superRig.isMounted,
       flameEmitter: _flameEmitter,
       flameEmitterNode: _flameEmitterNode,
       smokeEmitter: _smokeEmitter,
@@ -529,44 +760,139 @@ class IslandScene {
     }
   }
 
-  void setUltraMode(bool ultra) {
-    if (_ultraMode == ultra) {
+  /// Switches the scene to [quality].
+  ///
+  /// Super Ultra builds its content the first time (a second or two, mostly
+  /// on background isolates). Until it is ready the scene shows Ultra, so the
+  /// switch gives immediate feedback; [isBuildingSuperUltra] is true
+  /// meanwhile. A later call supersedes one still waiting on the build.
+  Future<void> setQuality(IslandQuality quality) async {
+    final request = ++_qualityRequest;
+    if (quality == IslandQuality.superUltra && !_superRig.isBuilt) {
+      _applyQuality(IslandQuality.ultra);
+      _buildingSuperUltra = true;
+      try {
+        // Built after Ultra's scatter exists, so the lawn avoids its props.
+        await _superRig.ensureBuilt(obstacles: physicsWorld.obstacles);
+      } finally {
+        _buildingSuperUltra = false;
+      }
+      if (request != _qualityRequest) {
+        return;
+      }
+    }
+    _applyQuality(quality);
+  }
+
+  void _applyQuality(IslandQuality quality) {
+    if (_quality == quality) {
       return;
     }
-    _ultraMode = ultra;
-    physicsWorld.setupBalls(ultra ? 8 : 1);
-    physicsWorld.replaceUltraObstacles(const <IslandObstacle>[]);
-    _syncBallInstances();
-    _syncUltraProps(ultra);
-    _syncUltraGroundCover(ultra);
-    _syncUltraSand(ultra);
-    _syncUltraWater(ultra);
-    _syncNpc(ultra);
-    _syncFlock(ultra);
-    if (!ultra) {
-      _clearDebris();
-    } else {
-      _ensureDebrisPool();
+    final wasUltra = isUltraMode;
+    final wasSuper = isSuperUltra;
+    _quality = quality;
+    final ultra = isUltraMode;
+    if (ultra != wasUltra) {
+      physicsWorld.setupBalls(ultra ? 8 : 1);
+      physicsWorld.replaceUltraObstacles(const <IslandObstacle>[]);
+      _syncBallInstances();
+      _syncUltraProps(ultra);
+      _syncUltraGroundCover(ultra);
+      _syncUltraSand(ultra);
+      _syncUltraWater(ultra);
+      _syncNpc(ultra);
+      _syncFlock(ultra);
+      if (!ultra) {
+        _clearDebris();
+      } else {
+        _ensureDebrisPool();
+      }
+    }
+    if (isSuperUltra != wasSuper) {
+      _syncSuperUltra(isSuperUltra);
     }
     _applyEnvironmentSettings();
+    if (isSuperUltra != wasSuper) {
+      // The sky that comes back may have been baked for another hour.
+      scene.skyEnvironment?.invalidate();
+    }
+    _applyLighting();
     if (_cameraMode == IslandCameraMode.orbit) {
       _recount();
     }
   }
 
+  /// Mounts or unmounts the Super Ultra content and swaps what it replaces:
+  /// the cylinder landmass, the Ultra sea and sand, the sky, the sun path,
+  /// the buoy spots and the camera framing.
+  void _syncSuperUltra(bool on) {
+    if (on) {
+      _superRig.mount(scene);
+      if (_rainWanted) {
+        unawaited(_prepareRain());
+      }
+    } else {
+      _superRig.unmount();
+      // Rain stops with the mode, dry, so coming back does not replay a
+      // shower frozen mid-air.
+      _superRig.rain?.reset();
+      _superRig.lightning?.reset();
+      _superRig.unmountRain();
+      _rainLevel = 0.0;
+      _superRig.weather = 0.0;
+    }
+    _capNode.visible = !on;
+    _coneNode.visible = !on;
+    _sandRoot?.visible = !on;
+    _waterNode.visible = !on;
+    dayNight.latitude = on ? kSuperUltraSunLatitude : _normalLatitude;
+    if (!on) {
+      moonNode.lookAtFrom(_normalMoonEye, vm.Vector3.zero());
+    }
+    // Buoys move out past the new beach so they float in water, not sand.
+    for (final buoy in _buoys) {
+      buoy.float.x = buoy.x * (on ? 1.45 : 1.0);
+      buoy.float.z = buoy.z * (on ? 1.45 : 1.0);
+    }
+    dayNight.update(0.0);
+    _reframeCamera(superUltra: on);
+  }
+
   void resetBalls() {
-    physicsWorld.setupBalls(_ultraMode ? 8 : 1);
+    physicsWorld.setupBalls(isUltraMode ? 8 : 1);
     _syncBallInstances();
   }
 
+  /// The sky the current mode shows and bakes its lighting from, or null for
+  /// none (Normal and Ultra, which use the default studio environment).
+  ///
+  /// Every [EnvironmentSettings] literal below must carry these: assigning
+  /// `scene.environmentSettings` applies the whole look, sky included, and a
+  /// literal that leaves them out sets `scene.skybox` and
+  /// `scene.skyEnvironment` to null. That is how a physical sky assigned in
+  /// [_buildEnvironment] never reached the screen in any mode, which is why
+  /// the sun was never visible.
+  Skybox? get _activeSkybox =>
+      isSuperUltra && _superRig.isBuilt ? _superRig.skybox : null;
+  SkyEnvironment? get _activeSkyEnvironment =>
+      isSuperUltra && _superRig.isBuilt ? _superRig.skyEnvironment : null;
+
   void _applyEnvironmentSettings() {
+    if (isSuperUltra) {
+      _applySuperUltraLook();
+      return;
+    }
     sunLight.shadowCascadeCount = 1;
     sunLight.shadowMapResolution = 512;
     sunLight.shadowMaxDistance = 24.0;
-    if (_ultraMode) {
+    sunLight.shadowFilter = DirectionalShadowFilter.rotatedPoisson;
+    sunLight.contactShadows = false;
+    if (isUltraMode) {
       scene.renderScale = 0.85;
       scene.antiAliasingMode = AntiAliasingMode.msaa;
       scene.environmentSettings = EnvironmentSettings(
+        skybox: _activeSkybox,
+        skyEnvironment: _activeSkyEnvironment,
         toneMapping: ToneMappingMode.aces,
         colorGradingEnabled: true,
         saturation: 1.25,
@@ -595,6 +921,8 @@ class IslandScene {
       scene.renderScale = 0.75;
       scene.antiAliasingMode = AntiAliasingMode.auto;
       scene.environmentSettings = EnvironmentSettings(
+        skybox: _activeSkybox,
+        skyEnvironment: _activeSkyEnvironment,
         toneMapping: ToneMappingMode.aces,
         colorGradingEnabled: true,
         saturation: 1.25,
@@ -612,6 +940,178 @@ class IslandScene {
         ambientOcclusionHalfResolution: true,
         ambientOcclusionIntensity: 0.8,
       );
+    }
+  }
+
+  /// One coherent look for Super Ultra, after the looks skill: `showcase`
+  /// grounding (GTAO with bent normals) plus the atmospheric half of `moody`
+  /// (fog with sun in-scatter, god rays, a touch of grain), under a sun you
+  /// can now see (lens flare). SSR stays off: the water's planar reflection
+  /// replaces it and the two would double up.
+  void _applySuperUltraLook() {
+    sunLight
+      ..shadowCascadeCount = 2
+      ..shadowMapResolution = 2048
+      ..shadowMaxDistance = 42.0
+      ..shadowFilter = DirectionalShadowFilter.pcss
+      ..contactShadows = true;
+    // SMAA at 85% by default, not MSAA at 100%: the sea reads the scene
+    // behind it, which splits the scene pass, and with MSAA that split writes
+    // the 4x depth buffer out to memory and reads it back every frame.
+    scene.renderScale = _renderScale.scale;
+    scene.antiAliasingMode = _antiAliasing.mode;
+    scene.environmentSettings = EnvironmentSettings(
+      skybox: _activeSkybox,
+      skyEnvironment: _activeSkyEnvironment,
+      toneMapping: ToneMappingMode.aces,
+      exposure: 0.85,
+      colorGradingEnabled: true,
+      saturation: 1.18,
+      contrast: 1.08,
+      temperature: 0.04,
+      bloomEnabled: true,
+      bloomThreshold: 1.0,
+      bloomIntensity: 0.16,
+      bloomScatter: 0.72,
+      lensFlareEnabled: true,
+      lensFlareIntensity: 0.35,
+      lensFlareHaloIntensity: 0.22,
+      vignetteEnabled: true,
+      vignetteIntensity: 0.22,
+      filmGrainEnabled: true,
+      filmGrainIntensity: 0.035,
+      ambientOcclusionEnabled: true,
+      ambientOcclusionMethod: AmbientOcclusionMethod.groundTruth,
+      ambientOcclusionBentNormals: true,
+      ambientOcclusionSpecularMode: SpecularAmbientOcclusionMode.bentCone,
+      ambientOcclusionHalfResolution: true,
+      ambientOcclusionIntensity: 0.9,
+      fogEnabled: true,
+      fogMode: FogMode.exponential,
+      fogDensity: 0.003,
+      fogSkyColorInfluence: 1.0,
+      fogSunInScatter: 0.3,
+      fogSunInScatterExponent: 12.0,
+      godRaysEnabled: true,
+      godRaysIntensity: 0.8,
+      godRaysDensity: 0.18,
+      godRaysAnisotropy: 0.78,
+      godRaysStepCount: 24,
+      godRaysMaxDistance: 60.0,
+    );
+    _applyEffectsMenu();
+  }
+
+  // ------------------------------------------------------ effects menu
+
+  final Set<SuperUltraEffect> _effectsOff = <SuperUltraEffect>{};
+  SuperUltraAntiAliasing _antiAliasing = SuperUltraAntiAliasing.initial;
+  SuperUltraRenderScale _renderScale = SuperUltraRenderScale.initial;
+
+  /// Whether the effects menu has [effect] on (all are, by default).
+  bool isEffectOn(SuperUltraEffect effect) => !_effectsOff.contains(effect);
+
+  /// The effects menu's anti-aliasing pick.
+  SuperUltraAntiAliasing get antiAliasing => _antiAliasing;
+
+  /// The effects menu's render-scale pick.
+  SuperUltraRenderScale get renderScale => _renderScale;
+
+  /// How many menu entries differ from their default: effects switched off,
+  /// plus each image-quality pick that has been changed.
+  int get effectsMenuChanges =>
+      _effectsOff.length +
+      (_antiAliasing == SuperUltraAntiAliasing.initial ? 0 : 1) +
+      (_renderScale == SuperUltraRenderScale.initial ? 0 : 1);
+
+  /// Switches one Super Ultra feature on or off, to read its cost off the
+  /// frame times. Kept across mode switches until [resetEffects].
+  void setEffect(SuperUltraEffect effect, bool on) {
+    if (on ? !_effectsOff.remove(effect) : !_effectsOff.add(effect)) {
+      return;
+    }
+    _refreshEffects();
+  }
+
+  /// Picks Super Ultra's anti-aliasing. Kept until [resetEffects].
+  void setAntiAliasing(SuperUltraAntiAliasing value) {
+    if (value == _antiAliasing) {
+      return;
+    }
+    _antiAliasing = value;
+    _refreshEffects();
+  }
+
+  /// Picks Super Ultra's render scale. Kept until [resetEffects].
+  void setRenderScale(SuperUltraRenderScale value) {
+    if (value == _renderScale) {
+      return;
+    }
+    _renderScale = value;
+    _refreshEffects();
+  }
+
+  /// Every effect back on and both image-quality picks back to default.
+  void resetEffects() {
+    if (effectsMenuChanges == 0) {
+      return;
+    }
+    _effectsOff.clear();
+    _antiAliasing = SuperUltraAntiAliasing.initial;
+    _renderScale = SuperUltraRenderScale.initial;
+    _refreshEffects();
+  }
+
+  void _refreshEffects() {
+    if (isSuperUltra) {
+      // The full look first, which ends by applying the menu.
+      _applyEnvironmentSettings();
+      _applyLighting();
+    }
+  }
+
+  /// Applies the effects menu over the Super Ultra look, which has just set
+  /// everything on.
+  void _applyEffectsMenu() {
+    bool off(SuperUltraEffect effect) => _effectsOff.contains(effect);
+    final rig = _superRig;
+    if (rig.isBuilt) {
+      void mount(Node node, bool on) {
+        if (on && node.parent == null) {
+          rig.root.add(node);
+        } else if (!on && node.parent != null) {
+          node.detach();
+        }
+      }
+
+      mount(rig.oceanNode, !off(SuperUltraEffect.sea));
+      mount(rig.simpleSeaNode, off(SuperUltraEffect.sea));
+      mount(rig.grassNode, !off(SuperUltraEffect.grass));
+      mount(rig.fire.root, !off(SuperUltraEffect.fireVfx));
+      for (final reflector
+          in rig.oceanNode.getComponents<PlanarReflectorComponent>()) {
+        reflector.enabled = !off(SuperUltraEffect.planarReflection);
+      }
+    }
+    final post = scene.postProcess;
+    if (off(SuperUltraEffect.godRays)) scene.godRays.enabled = false;
+    if (off(SuperUltraEffect.ambientOcclusion)) {
+      scene.ambientOcclusion.enabled = false;
+    }
+    if (off(SuperUltraEffect.contactShadows)) sunLight.contactShadows = false;
+    if (off(SuperUltraEffect.secondCascade)) sunLight.shadowCascadeCount = 1;
+    if (off(SuperUltraEffect.softShadows)) {
+      sunLight.shadowFilter = DirectionalShadowFilter.rotatedPoisson;
+    }
+    if (off(SuperUltraEffect.bloom)) post.bloom.enabled = false;
+    if (off(SuperUltraEffect.bloom) || off(SuperUltraEffect.lensFlare)) {
+      post.bloom.lensFlare.enabled = false;
+    }
+    if (off(SuperUltraEffect.fog)) scene.fog.enabled = false;
+    if (off(SuperUltraEffect.filmFinish)) {
+      post.vignette.enabled = false;
+      post.filmGrain.enabled = false;
+      post.colorGrading.enabled = false;
     }
   }
 
@@ -633,7 +1133,7 @@ class IslandScene {
 
     // Grass cap: a slightly flared slab whose TOP face sits exactly on
     // groundY, which is the plane the tap picks against.
-    final cap = Node(
+    final cap = _capNode = Node(
       name: 'island_cap',
       mesh: Mesh(
         CylinderGeometry(
@@ -648,7 +1148,7 @@ class IslandScene {
     cap.shadowStatic = true;
     scene.add(cap);
 
-    final cone = Node(
+    final cone = _coneNode = Node(
       name: 'island_cone',
       mesh: Mesh(
         CylinderGeometry(
@@ -668,7 +1168,7 @@ class IslandScene {
     cone.shadowStatic = true;
     scene.add(cone);
 
-    final initialSeaMat = _ultraMode ? _ultraSeaMaterial : _normalSeaMaterial;
+    final initialSeaMat = isUltraMode ? _ultraSeaMaterial : _normalSeaMaterial;
     _waterNode = Node(
       name: 'sea',
       mesh: Mesh(
@@ -754,9 +1254,152 @@ class IslandScene {
   void _attachOrbit() {
     if (!_isOrbitAttached) {
       cameraNode.addComponent(orbit);
-      orbit.target = vm.Vector3(0, 0.2, 0);
+      orbit.target = _orbitTarget;
       orbit.update(0.0);
     }
+  }
+
+  vm.Vector3 get _orbitTarget =>
+      isSuperUltra ? vm.Vector3(0, 3.4, 0) : vm.Vector3(0, 0.2, 0);
+
+  /// Super Ultra frames the island from just above the horizon, wide, and
+  /// facing the key light, so the sun (or moon) and the sky are in shot and
+  /// the palms stand against them. Everything else keeps the high overview.
+  ///
+  /// When the orbit camera is live the new controller starts exactly where
+  /// the camera is and eases to the new framing, so the switch is a camera
+  /// move rather than a cut.
+  void _reframeCamera({required bool superUltra}) {
+    _cameraComponent.projection = PerspectiveProjection(
+      fovRadiansY: (superUltra ? 58 : 45) * vm.degrees2Radians,
+      near: 0.15,
+      far: superUltra ? 640.0 : 220.0,
+    );
+    final target = _orbitTarget;
+    final double wantPolar = superUltra ? 0.07 : 0.62;
+    final double wantDistance = superUltra ? 32.0 : 40.0;
+    final live = _isOrbitAttached;
+
+    var distance = wantDistance;
+    var polar = wantPolar;
+    var azimuth = 0.55;
+    if (live) {
+      final offset = cameraNode.globalTransform.getTranslation() - target;
+      if (offset.length > 1e-3) {
+        distance = offset.length;
+        polar = math.asin((offset.y / distance).clamp(-1.0, 1.0));
+        azimuth = math.atan2(-offset.x, -offset.z);
+      }
+    }
+    final wantAzimuth = superUltra
+        ? orbitAzimuthFacing(_keyLightDirection())
+        : azimuth;
+
+    final next = OrbitCameraController(
+      target: target,
+      distance: distance,
+      azimuth: live ? azimuth : wantAzimuth,
+      polar: live ? polar : wantPolar,
+      minDistance: superUltra ? 14.0 : 20.0,
+      maxDistance: superUltra ? 80.0 : 70.0,
+      // Super Ultra may dip just below the target to look up at the sky.
+      minPolar: superUltra ? -0.06 : 0.12,
+      maxPolar: 1.15,
+      panSpeed: 0.0,
+      smoothing: superUltra ? 0.45 : 0.18,
+    );
+    if (live) {
+      final turn = math.atan2(
+        math.sin(wantAzimuth - azimuth),
+        math.cos(wantAzimuth - azimuth),
+      );
+      next
+        ..orbitBy(turn, wantPolar - polar)
+        ..dollyBy(-math.log(wantDistance / distance) / next.dollySpeed);
+    }
+    if (live) {
+      cameraNode.removeComponent(orbit);
+    }
+    orbit = next;
+    if (live) {
+      cameraNode.addComponent(orbit);
+      orbit.update(0.0);
+    }
+  }
+
+  /// Debug tour only: re-aim the Super Ultra framing at the current key
+  /// light, so each stop of `SCENE_TOUR` has the sun or moon in shot.
+  void debugFaceKeyLight() {
+    if (isSuperUltra && _cameraMode == IslandCameraMode.orbit) {
+      _reframeCamera(superUltra: true);
+    }
+  }
+
+  /// Debug ablation only (`SCENE_ABLATION`): Super Ultra with effects-menu
+  /// entries switched off, another image-quality pick, or rain added, so
+  /// each cost shows as a frame-time delta. The first step is the untouched
+  /// baseline.
+  static final Map<String, _AblationStep> _ablation = <String, _AblationStep>{
+    'all on': _ablationStep(),
+    for (final effect in SuperUltraEffect.values)
+      '${effect.label} off': _ablationStep(off: <SuperUltraEffect>{effect}),
+    for (final aa in SuperUltraAntiAliasing.values)
+      if (aa != SuperUltraAntiAliasing.initial)
+        'AA ${aa.label}': _ablationStep(antiAliasing: aa),
+    for (final scale in SuperUltraRenderScale.values)
+      if (scale != SuperUltraRenderScale.initial)
+        'scale ${scale.label}': _ablationStep(renderScale: scale),
+    'MSAA at 100% (old default)': _ablationStep(
+      antiAliasing: SuperUltraAntiAliasing.msaa,
+      renderScale: SuperUltraRenderScale.percent100,
+    ),
+    'all post off': _ablationStep(
+      off: const <SuperUltraEffect>{
+        SuperUltraEffect.godRays,
+        SuperUltraEffect.ambientOcclusion,
+        SuperUltraEffect.contactShadows,
+        SuperUltraEffect.bloom,
+        SuperUltraEffect.lensFlare,
+        SuperUltraEffect.fog,
+        SuperUltraEffect.filmFinish,
+      },
+    ),
+    '+ rain & storm': _ablationStep(),
+  };
+
+  static _AblationStep _ablationStep({
+    Set<SuperUltraEffect> off = const <SuperUltraEffect>{},
+    SuperUltraAntiAliasing antiAliasing = SuperUltraAntiAliasing.initial,
+    SuperUltraRenderScale renderScale = SuperUltraRenderScale.initial,
+  }) =>
+      (off: off, antiAliasing: antiAliasing, renderScale: renderScale);
+
+  static List<String> get debugAblationSteps => _ablation.keys.toList();
+
+  /// Debug ablation only: applies [step] from [debugAblationSteps].
+  Future<void> debugAblate(String step) async {
+    if (!isSuperUltra) {
+      return;
+    }
+    final rain = step == '+ rain & storm';
+    if (rain != isRaining) {
+      await setRain(rain);
+    }
+    final settings = _ablation[step] ?? _ablationStep();
+    _effectsOff
+      ..clear()
+      ..addAll(settings.off);
+    _antiAliasing = settings.antiAliasing;
+    _renderScale = settings.renderScale;
+    _refreshEffects();
+  }
+
+  /// Toward whichever light casts shadows right now.
+  vm.Vector3 _keyLightDirection() {
+    if (isSuperUltra && moonIsKeyLight(nightBlend)) {
+      return moonDirectionFor(timeOfDay);
+    }
+    return dayNight.sunDirection;
   }
 
   /// Sets the active camera perspective.
@@ -774,8 +1417,9 @@ class IslandScene {
       _attachOrbit();
       _restoreAllVisibility();
     }
-    if (_ultraMode) {
+    if (isUltraMode) {
       _applyEnvironmentSettings();
+      _applyLighting();
     }
   }
 
@@ -1001,6 +1645,7 @@ class IslandScene {
     );
     final hulls = <IslandObstacle>[];
     final byKind = <String, List<_Placement>>{};
+    _scatterRainProps.clear();
     for (var i = 0; i < points.length; i++) {
       final point = points[i];
       final kind = _ultraScatterKinds[i % _ultraScatterKinds.length];
@@ -1009,6 +1654,7 @@ class IslandScene {
       byKind.putIfAbsent(kind, () => <_Placement>[]).add(
             _Placement(kind, point.x, point.y, yaw, scale),
           );
+      _scatterRainProps.add(RainProp(kind, point.x, point.y, scale));
       hulls.add(
         IslandObstacle(
           name: 'ultra_$i',
@@ -1135,6 +1781,13 @@ class IslandScene {
         ),
       );
     }
+
+    _coverRainProps
+      ..clear()
+      ..addAll(<RainProp>[
+        for (var i = 0; i < points.length; i++)
+          RainProp('bush', points[i].x, points[i].y, 0.42 + (i % 5) * 0.055),
+      ]);
 
     final root = Node(name: 'ultra_ground_cover');
     root.shadowStatic = true;
@@ -1344,7 +1997,7 @@ class IslandScene {
     _npcWander = NpcWanderComponent(
       motion: npcSteering,
       playerPosition: () => walker.position,
-      isActive: () => _ultraMode,
+      isActive: () => isUltraMode,
       pickTarget: _pickNpcWanderTarget,
       walkableRadius: IslandDimensions.walkableRadius,
       campfire: vm.Vector3(
@@ -1389,60 +2042,88 @@ class IslandScene {
     _npcWander?.wanderTimer = 4.0 + _npcRandom.nextDouble() * 3.0;
   }
 
-  void _syncFlock(bool ultra) {
-    if (!ultra) {
-      _flockRoot?.detach();
-      _flockRoot = null;
-      _flock = null;
-      return;
-    }
-    if (_flockRoot != null) {
-      return;
-    }
-    final feather = PhysicallyBasedMaterial()
-      ..baseColorFactor = vm.Vector4(0.96, 0.97, 1.0, 1.0)
-      ..metallicFactor = 0.0
-      ..roughnessFactor = 0.55;
-    const count = 4;
-    final batch = InstancedMesh(
-      geometry: CuboidGeometry(vm.Vector3(3.2, 0.12, 0.9)),
-      material: feather,
-    );
+  /// Birds in the Ultra flock.
+  static const int _flockSize = 4;
+
+  /// The seagull model is 4.13 units wingtip to wingtip; this gives a 1.8 m
+  /// span, which reads against the sky from the orbit camera.
+  static const double _birdScale = 0.44;
+
+  /// Builds the flock once, off-screen; [_syncFlock] mounts it in Ultra.
+  Future<void> _buildFlock() async {
+    final nodes = <Node>[];
+    final wingbeats = <AnimationClip?>[];
     final birds = <FlockBirdMotion>[];
-    final phases = <double>[];
-    for (var i = 0; i < count; i++) {
-      final angle = i / count * math.pi * 2.0;
+    for (var i = 0; i < _flockSize; i++) {
+      final model = await _loadProp('assets/models/seagull.glb');
+      // Not inherited by children, so every node of the model.
+      _forEachNode(model, (node) => node.castsShadows = false);
+      final flight = model.findAnimationByName('Fast_Flying');
+      AnimationClip? wingbeat;
+      if (flight != null) {
+        // Slightly different rates and start points, so four birds never
+        // beat their wings in step.
+        wingbeat = model.createAnimationClip(flight)
+          ..loop = true
+          ..playbackTimeScale = 0.9 + 0.07 * i
+          ..seek(i * 0.19)
+          ..play();
+      }
+      wingbeats.add(wingbeat);
+      // The body sits about 2.25 units up and 0.2 back in the model; centre
+      // it on the bird's position so climb and bank pivot about it.
+      final inner = Node(name: 'seagull_model_$i')
+        ..scale = vm.Vector3.all(_birdScale)
+        ..position = vm.Vector3(0, -2.25 * _birdScale, 0.2 * _birdScale)
+        ..add(model);
+      nodes.add(Node(name: 'seagull_$i')..add(inner));
+
+      final angle = i / _flockSize * math.pi * 2.0;
       final radius = 11.4 + (i % 3) * 0.7;
       final height = 5.2 + (i % 4) * 0.45;
-      final origin = vm.Vector3(
-        math.sin(angle) * radius,
-        height,
-        math.cos(angle) * radius,
-      );
       final tangent = vm.Vector3(math.cos(angle), 0, -math.sin(angle));
       birds.add(
         FlockBirdMotion(
-          position: origin,
+          position: vm.Vector3(
+            math.sin(angle) * radius,
+            height,
+            math.cos(angle) * radius,
+          ),
           velocity: tangent * 6.2,
           orbitRadius: radius,
           cruiseHeight: height,
         ),
       );
-      phases.add(i * 0.9);
-      batch.addInstance(
-        vm.Matrix4.compose(origin, vm.Quaternion.identity(), vm.Vector3.all(1)),
-      );
     }
-    _flock = SeagullFlockComponent(
-      batch: batch,
-      birds: birds,
-      phases: phases,
-    );
-    _flockRoot = Node(name: 'seagull_flock')
-      ..castsShadows = false
-      ..addComponent(InstancedMeshComponent(batch))
-      ..addComponent(_flock!);
-    scene.add(_flockRoot!);
+    final root = Node(name: 'seagull_flock')
+      ..addComponent(
+        SeagullFlockComponent(nodes: nodes, birds: birds, wingbeats: wingbeats),
+      );
+    for (final node in nodes) {
+      root.add(node);
+    }
+    _flockRoot = root;
+    // In case Ultra was chosen while the birds were still loading.
+    _syncFlock(isUltraMode);
+  }
+
+  void _syncFlock(bool ultra) {
+    final root = _flockRoot;
+    if (root == null) {
+      return;
+    }
+    if (!ultra) {
+      root.detach();
+    } else if (root.parent == null) {
+      scene.add(root);
+    }
+  }
+
+  static void _forEachNode(Node node, void Function(Node node) visit) {
+    visit(node);
+    for (final child in node.children) {
+      _forEachNode(child, visit);
+    }
   }
 
   static const double _characterScale = 0.5;
@@ -1456,7 +2137,7 @@ class IslandScene {
       characterPosition: walker.position,
       characterYaw: walker.yaw,
     );
-    if (_ultraMode) {
+    if (isUltraMode) {
       _spawnPunchDebris();
     }
     return hits;
@@ -1553,25 +2234,32 @@ class IslandScene {
             spinSpeed: 0.35,
           ),
         );
+      final float = BuoyFloatComponent(
+        sampleWater: _sampleWater,
+        x: x,
+        z: z,
+        seaY: IslandDimensions.seaY,
+      );
       final root = Node(name: 'buoy_$i')
         ..position = vm.Vector3(x, IslandDimensions.seaY + 0.18, z)
         ..add(body)
-        ..addComponent(
-          BuoyFloatComponent(
-            waterNode: _waterNode,
-            x: x,
-            z: z,
-            seaY: IslandDimensions.seaY,
-          ),
-        );
+        ..addComponent(float);
       scene.add(root);
-      _buoys.add(_Buoy(root: root));
+      _buoys.add(_Buoy(root: root, float: float, x: x, z: z));
     }
   }
 
+  /// The sea surface at [at], from whichever sea is showing: Super Ultra's
+  /// GPU waves (on the clock the shader runs on) or Ultra's CPU waves.
+  ({vm.Vector3 displacement, vm.Vector3 normal})? _sampleWater(vm.Vector2 at) {
+    if (isSuperUltra && _superRig.isBuilt) {
+      return _superRig.waterSurface.evaluateAt(at, _superRig.oceanTime);
+    }
+    return _waterSurface?.evaluateAt(at);
+  }
+
   void _sitBallsOnWaves() {
-    final water = _waterSurface;
-    if (!_ultraMode || water == null) {
+    if (!isUltraMode) {
       return;
     }
     for (final ball in physicsWorld.balls) {
@@ -1581,9 +2269,12 @@ class IslandScene {
       if (radius <= IslandDimensions.walkableRadius) {
         continue;
       }
-      final sample = water.evaluateAt(
+      final sample = _sampleWater(
         vm.Vector2(ball.position.x, ball.position.z),
       );
+      if (sample == null) {
+        continue;
+      }
       final minY =
           IslandDimensions.seaY + sample.displacement.y + ball.radius;
       if (ball.position.y < minY) {
@@ -1752,6 +2443,8 @@ class IslandScene {
       characterSpeed: walker.isMoving ? walker.speed : 0.0,
     );
     _sitBallsOnWaves();
+    _tickRain(deltaSeconds);
+    _tickLightning();
 
     if (_cameraMode == IslandCameraMode.overTheShoulder) {
       _cullOffscreenNodes(viewportSize ?? const ui.Size(393, 852));
@@ -1763,7 +2456,10 @@ class IslandScene {
   /// keeps a floor so dusk does not fall off a cliff, and the moon fades in as
   /// the sun goes down.
   void _applyLighting() {
-    final lighting = dayNight.evaluateLighting();
+    final superUltra = isSuperUltra && _superRig.isBuilt;
+    final lighting = superUltra
+        ? _lightingClock.evaluateLighting()
+        : dayNight.evaluateLighting();
     sunLight.color = lighting.sunColor;
     sunLight.intensity = lighting.sunIntensity;
     sunLight.castsShadow = lighting.shadowDarkness > 0.0;
@@ -1776,6 +2472,80 @@ class IslandScene {
       0.25,
     );
     moonLight.intensity = 0.78 * nightBlend;
+    if (superUltra) {
+      _applySuperUltraLighting(lighting);
+    }
+  }
+
+  /// Super Ultra's additions to [_applyLighting]: the visible moon, the moon
+  /// taking over the one shadow-casting light at night (moon shadows and
+  /// moonlit god rays), god-ray and fog tint following the key light, and
+  /// the light the self-shading materials need.
+  void _applySuperUltraLighting(AtmosphericLighting lighting) {
+    final night = nightBlend;
+    final sunDirection = dayNight.sunDirection;
+    final moonDirection = moonDirectionFor(timeOfDay);
+    moonNode.lookAtFrom(moonDirection * 100.0, vm.Vector3.zero());
+
+    final vm.Vector3 keyDirection;
+    final vm.Vector3 keyRadiance;
+    if (moonIsKeyLight(night)) {
+      // [timeOfDay] ran dayNight.update() first, which aimed the sun node at
+      // the (set) sun; turn it to the moon instead.
+      sunNode.lookAtFrom(moonDirection * 100.0, vm.Vector3.zero());
+      // Brighter than the Normal/Ultra moon: this sky really is dark at
+      // night (its lighting bake follows it), where Normal/Ultra fall back
+      // to a floor of generic ambient.
+      sunLight
+        ..color = moonLight.color
+        ..intensity = 1.6 * night
+        ..castsShadow = true
+        ..shadowAmbientStrength = 0.55;
+      scene.environmentIntensity = math.max(scene.environmentIntensity, 0.45);
+      moonLight.intensity = 0.0;
+      keyDirection = moonDirection;
+      keyRadiance = moonLight.color * sunLight.intensity;
+    } else {
+      keyDirection = sunDirection;
+      keyRadiance = lighting.sunColor * lighting.sunIntensity;
+    }
+
+    // Rain clouds: a dimmer key light, almost no shafts, thicker grey haze.
+    final rain = _rainLevel;
+    final dim = 1.0 - 0.6 * rain;
+    sunLight.intensity *= dim;
+
+    final shaftColor = sunLight.color.clone();
+    scene.godRays
+      ..color = shaftColor
+      ..intensity = (moonIsKeyLight(night) ? 0.5 : 0.8) * (1.0 - 0.85 * rain);
+    // Horizon haze follows the light: blue-grey by day, warm at golden hour,
+    // navy at night. The sky-colour influence does most of the work; this is
+    // the fallback where the environment is dark.
+    final warm = (1.0 - (sunDirection.y / 0.45).clamp(0.0, 1.0)) * (1.0 - night);
+    final clearFog = vm.Vector3(0.52, 0.62, 0.74) * (1.0 - night) * (1.0 - warm) +
+        vm.Vector3(0.85, 0.55, 0.36) * warm +
+        vm.Vector3(0.02, 0.035, 0.07) * night;
+    final rainFog = vm.Vector3(0.36, 0.39, 0.43) * (1.0 - night) +
+        vm.Vector3(0.02, 0.025, 0.035) * night;
+    scene.fog
+      ..color = clearFog * (1.0 - rain) + rainFog * rain
+      ..density = 0.003 + 0.013 * rain
+      ..sunInScatter = 0.3 * (1.0 - rain);
+
+    _superRig.applyLighting(
+      sunDirection: sunDirection,
+      moonDirection: moonDirection,
+      night: night,
+      keyDirection: keyDirection,
+      keyRadiance: keyRadiance * dim,
+      ambient: scene.environmentIntensity,
+    );
+    final keyLuma = (keyRadiance * dim).dot(vm.Vector3(0.2126, 0.7152, 0.0722));
+    _baseRainLight = 0.1 + 0.3 * keyLuma + 0.35 * scene.environmentIntensity;
+    _baseEnvironmentIntensity = scene.environmentIntensity;
+    _superRig.rain?.setLight(_baseRainLight);
+    _superRig.lightning?.strength = 0.3 + 0.7 * night;
   }
 
   // ------------------------------------------------------------- statistics
@@ -1857,6 +2627,13 @@ class IslandScene {
   }
 }
 
+/// One step of the debug ablation: the effects-menu state it measures.
+typedef _AblationStep = ({
+  Set<SuperUltraEffect> off,
+  SuperUltraAntiAliasing antiAliasing,
+  SuperUltraRenderScale renderScale,
+});
+
 class _Placement {
   const _Placement(this.kind, this.x, this.z, this.yaw, this.scale);
 
@@ -1868,9 +2645,19 @@ class _Placement {
 }
 
 class _Buoy {
-  const _Buoy({required this.root});
+  const _Buoy({
+    required this.root,
+    required this.float,
+    required this.x,
+    required this.z,
+  });
 
   final Node root;
+  final BuoyFloatComponent float;
+
+  /// The Ultra spot; Super Ultra pushes it further out.
+  final double x;
+  final double z;
 }
 
 class _PropInstance {

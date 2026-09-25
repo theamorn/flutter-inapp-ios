@@ -23,9 +23,9 @@ The predecessor talk is preserved at `flutter_module/lib/couple.md` ("The Power 
 | Path | What it is |
 |---|---|
 | `cool-ios/` | Native UIKit app. `LoginViewController` opens a five-tab `MainTabBarController`; `AppEngines` lazily owns three Flutter engines and the window-level native HUD displays telemetry. Podfile integrates `flutter_module`. |
-| `flutter_module/` | Shared Flutter module: Flame game, Liquid Glass shader, `flutter_scene` island, telemetry, plus the previous standalone home at `/`. |
+| `flutter_module/` | Shared Flutter module: Flame game, the inline holo-badge promo (Flame + shader + verlet strap), the Liquid Glass shader (no longer on a tab), the `flutter_scene` island, telemetry, plus the previous standalone home at `/`. |
 | `flutter_native/` | Standalone Flutter app hosting a native camera — the reverse-direction demo from the old talk. **Not touched by this plan.** |
-| `cool-android/` | Compose Home + cached-engine Flutter Game, native HUD, and a Gradle source integration of the same module. |
+| `cool-android/` | Compose host with the same five tabs: Home, WebView, cached-engine Flutter Game and Island, and the Shop page with an inline `FlutterView` tile. It also has the native HUD and a Gradle source integration of the same module. |
 
 Toolchain is **Flutter 3.47.2** (stable, Dart 3.13.2), managed by fvm. Impeller is default on both platforms.
 
@@ -37,9 +37,9 @@ Do not relitigate these. They were settled with the presenter.
 
 | Decision | Choice |
 |---|---|
-| Android scope | Minimal host: tabs 1 + 3 only (native home + Flutter game) |
+| Android scope | All five tabs, like iOS. This started as tabs 1 + 3 only and grew. New tabs ship on both hosts. |
 | Engine model | `FlutterEngineGroup`, three lazily-spawned engines |
-| Tab 4 concept | Liquid Glass panel, touch-driven ripple over the live widget tree |
+| Tab 4 concept | **Shop**: a native product page with an inline Flutter tile, a holo badge on a lanyard that you can grab, throw, and spin. Tapping it sends `HOLO20` to the page's native promo field, and the page reprices. This replaced the Liquid Glass panel; `/glass` stays supported without a tab. |
 | Tab 5 concept | Low-poly island, day→night slider, tap-to-move character |
 | 3D tech | `flutter_scene` — committed, no fallback |
 | Native stack | iOS UIKit (extend what exists) + Android Jetpack Compose |
@@ -58,22 +58,24 @@ Every task doc uses the same sections: **Goal · Prerequisites · Repo facts you
 | Doc | Task |
 |---|---|
 | `ARCHITECTURE.md` | Engine topology, telemetry contract, route + channel names. **Single source of truth for anything two tasks share.** |
+| `FLUTTER-3D-PLAYBOOK.md` | Reusable `flutter_scene` reference: setup traps, `.fmat` portability rules, water/terrain/grass/sky/fire recipes, verification loop. **Start here for any other 3D demo.** |
 | `00-toolchain.md` | SDK bump to 3.47.2 |
 | `01-scene-spike.md` | `flutter_scene` / `flutter_gpu` validation |
 | `02-ios-host.md` | Login → `UITabBarController`, engine group, HUD |
 | `03-native-web.md` | Tab 1 (UIKit) + Tab 2 (WKWebView) |
 | `04-flappy-cat.md` | Tab 3 (Flame) |
-| `05-liquid-glass.md` | Tab 4 (shader over live widget tree) |
+| `05-liquid-glass.md` | Liquid Glass (shader over live widget tree); was tab 4, route kept |
 | `06-island-scene.md` | Tab 5 (`flutter_scene`, tap-to-move) |
-| `07-android-host.md` | Minimal Compose host, tabs 1 + 3 |
+| `07-android-host.md` | Compose host (started as tabs 1 + 3) |
 | `08-polish.md` | Stage-readiness |
+| `09-inline-holo-badge.md` | Tab 4 (Shop): Flutter as one tile inside a native page, on both hosts |
 
 **Never invent a route name, channel name, or engine name.** Read them from `ARCHITECTURE.md`.
 
 ## Order and checkpoints
 
 ```
-00 → 01 → (02, 03) → 04 → 05 → 06 → 07 → 08
+00 → 01 → (02, 03) → 04 → 05 → 06 → 07 → 08 → 09
 ```
 
 Each checkpoint leaves a demo that could be given if the calendar collapsed:

@@ -1,5 +1,7 @@
 # 05 — Tab 4: Liquid Glass panel
 
+> **Status:** this panel no longer has a tab. Tab 4 is now the Shop page in `09-inline-holo-badge.md` on both hosts. The `/glass` route and this code stay supported, so the tab can be restored with one line per host.
+
 ## Goal
 
 A control panel rendered behind a live glass surface: a fragment shader refracts the **actual scrolling widget tree beneath it**, and dragging a finger sends a ripple across the glass. Sliders control day/night, refraction strength, and glass thickness.

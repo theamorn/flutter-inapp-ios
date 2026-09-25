@@ -434,6 +434,11 @@ class FlockBirdMotion {
   vm.Vector3 velocity;
   double yaw = 0.0;
   double pitch = 0.0;
+
+  /// Roll about the bird's forward (+Z) axis, in radians: the bank of a
+  /// coordinated turn, `atan(speed * turn rate / g)`, so the wing on the
+  /// inside of the turn dips. Eased, so flocking jitter doesn't rock it.
+  double roll = 0.0;
   double maxSpeed;
   double maxForce;
   double orbitRadius;
@@ -503,10 +508,23 @@ class FlockBirdMotion {
 
     final speed = velocity.length;
     if (speed > 0.08) {
+      final previousYaw = yaw;
       yaw = math.atan2(velocity.x, velocity.z);
       pitch = math.asin((velocity.y / speed).clamp(-1.0, 1.0));
+      // Yaw grows as the heading swings toward the bird's left (+X in its
+      // own frame), and a left bank is a negative roll about +Z.
+      final turnRate = shortestAngleDelta(previousYaw, yaw) / dt;
+      final bank = math.atan(speed * turnRate / 9.81).clamp(-0.7, 0.7);
+      roll += (-bank - roll) * math.min(1.0, dt * 3.0);
     }
   }
+
+  /// The body's orientation: heading, then climb, then bank. The model
+  /// faces +Z with its wings along X.
+  vm.Quaternion get attitude =>
+      vm.Quaternion.axisAngle(vm.Vector3(0, 1, 0), yaw) *
+      vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), -pitch) *
+      vm.Quaternion.axisAngle(vm.Vector3(0, 0, 1), roll);
 }
 
 /// The walkable point a tap selects, or null if the tap missed the ground.

@@ -596,6 +596,42 @@ void main() {
       expect(bird.position.y, inInclusiveRange(3.5, 8.0));
     });
 
+    test('banks into its orbit: the inner wing is the lower one', () {
+      final bird = FlockBirdMotion(
+        position: vm.Vector3(12, 5.5, 0),
+        velocity: vm.Vector3(0, 0, 6),
+        maxSpeed: 7.0,
+        orbitRadius: 12.0,
+        cruiseHeight: 5.5,
+      );
+      for (var i = 0; i < 300; i++) {
+        bird.advance(
+          1 / 60,
+          neighborPositions: const <vm.Vector3>[],
+          neighborVelocities: const <vm.Vector3>[],
+        );
+      }
+      // A steady ~7 m/s orbit of ~12 m is a gentle bank, not a knife edge.
+      expect(bird.roll.abs(), inInclusiveRange(0.1, 0.7));
+      // Through a matrix, as the engine applies a node's rotation:
+      // vector_math's `Quaternion.rotated` turns the opposite way.
+      final attitude = vm.Matrix4.compose(
+        vm.Vector3.zero(),
+        bird.attitude,
+        vm.Vector3.all(1),
+      );
+      final left = attitude.transform3(vm.Vector3(1, 0, 0));
+      final right = attitude.transform3(vm.Vector3(-1, 0, 0));
+      final toCentre = vm.Vector3(-bird.position.x, 0, -bird.position.z)
+        ..normalize();
+      final inner = left.dot(toCentre) > right.dot(toCentre) ? left : right;
+      final outer = identical(inner, left) ? right : left;
+      expect(inner.y, lessThan(outer.y));
+      // And the nose still points along the flight path.
+      final nose = attitude.transform3(vm.Vector3(0, 0, 1));
+      expect(nose.dot(bird.velocity.normalized()), greaterThan(0.99));
+    });
+
     test('separates from a neighbor that is sitting on top of it', () {
       final bird = FlockBirdMotion(
         position: vm.Vector3(12.0, 5.5, 0.0),

@@ -22,10 +22,10 @@ final class MainTabBarController: UITabBarController {
                 title: "Game",
                 systemImageName: "gamecontroller"
             ),
-            FlutterTabViewController(
-                route: AppEngines.glassRoute,
-                title: "Glass",
-                systemImageName: "drop"
+            nativeTab(
+                root: ProductDetailViewController(),
+                title: "Shop",
+                systemImageName: "bag"
             ),
             FlutterTabViewController(
                 route: AppEngines.sceneRoute,
@@ -67,7 +67,9 @@ final class MainTabBarController: UITabBarController {
     }
 
     private func updateHUDRoute(for viewController: UIViewController?) {
-        let route = (viewController as? FlutterTabViewController)?.route
+        let content = (viewController as? UINavigationController)?.topViewController
+            ?? viewController
+        let route = (content as? FlutterRouteHosting)?.route
         PerformanceHUDView.shared.setActiveFlutterRoute(route)
     }
 }

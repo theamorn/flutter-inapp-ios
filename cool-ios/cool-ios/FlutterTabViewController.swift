@@ -1,8 +1,13 @@
 import Flutter
 import UIKit
 
+/// A screen showing one Flutter engine; the HUD reports that engine's frames.
+protocol FlutterRouteHosting: AnyObject {
+    var route: String { get }
+}
+
 /// Hosts one persistent Flutter engine below UIKit's tab bar.
-final class FlutterTabViewController: UIViewController {
+final class FlutterTabViewController: UIViewController, FlutterRouteHosting {
     let route: String
     private var flutterViewController: FlutterViewController?
 

@@ -280,7 +280,7 @@ private fun ProfileHeader() {
 }
 
 @Composable
-private fun SectionCard(
+internal fun SectionCard(
     title: String,
     footer: String? = null,
     content: @Composable () -> Unit,
@@ -312,7 +312,7 @@ private fun SectionCard(
 }
 
 @Composable
-private fun RowDivider() {
+internal fun RowDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(start = 56.dp),
         color = MaterialTheme.colorScheme.outlineVariant,
@@ -320,11 +320,11 @@ private fun RowDivider() {
 }
 
 @Composable
-private fun rowColors() = ListItemDefaults.colors(containerColor = Color.Transparent)
+internal fun rowColors() = ListItemDefaults.colors(containerColor = Color.Transparent)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DisclosureRow(icon: ImageVector, title: String, subtitle: String?) {
+internal fun DisclosureRow(icon: ImageVector, title: String, subtitle: String?) {
     ListItem(
         headlineContent = { Text(title) },
         supportingContent = subtitle?.let { { Text(it) } },
@@ -343,7 +343,7 @@ private fun DisclosureRow(icon: ImageVector, title: String, subtitle: String?) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ValueRow(icon: ImageVector, title: String, subtitle: String?, value: String) {
+internal fun ValueRow(icon: ImageVector, title: String, subtitle: String?, value: String) {
     ListItem(
         headlineContent = { Text(title) },
         supportingContent = subtitle?.let { { Text(it) } },
@@ -378,7 +378,7 @@ private fun ToggleRow(
 }
 
 @Composable
-private fun SegmentedRow(
+internal fun SegmentedRow(
     icon: ImageVector,
     title: String,
     subtitle: String?,

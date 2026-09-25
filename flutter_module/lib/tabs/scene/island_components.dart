@@ -12,6 +12,10 @@ import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
 /// Flickers the campfire light, emissive sphere, and particle emitters.
+///
+/// In Super Ultra the visible fire belongs to `SuperUltraFire`, which reads
+/// [intensity]; this component then only drives the light and hides its own
+/// sphere and emitters.
 class CampfireFlickerComponent extends Component {
   CampfireFlickerComponent({
     required this.light,
@@ -19,6 +23,7 @@ class CampfireFlickerComponent extends Component {
     required this.flameMaterial,
     required this.isLit,
     required this.isUltra,
+    required this.isSuperUltra,
     this.flameEmitter,
     this.flameEmitterNode,
     this.smokeEmitter,
@@ -32,6 +37,7 @@ class CampfireFlickerComponent extends Component {
   final PhysicallyBasedMaterial flameMaterial;
   final bool Function() isLit;
   final bool Function() isUltra;
+  final bool Function() isSuperUltra;
   final ParticleEmitterComponent? flameEmitter;
   final Node? flameEmitterNode;
   final ParticleEmitterComponent? smokeEmitter;
@@ -48,7 +54,23 @@ class CampfireFlickerComponent extends Component {
     final target = isLit() ? 1.0 : 0.0;
     intensity += (target - intensity) * math.min(1.0, deltaSeconds * 6.0);
 
-    if (intensity > 0.01) {
+    if (intensity > 0.01 && isSuperUltra()) {
+      // Irregular rather than periodic: incommensurate rates plus a slow
+      // swell, so the light breathes like a fire instead of pulsing.
+      final flicker = 1.0 +
+          0.13 * math.sin(_phase * 11.3) +
+          0.08 * math.sin(_phase * 23.7 + 1.3) +
+          0.06 * math.sin(_phase * 37.1 + 0.4) +
+          0.1 * math.sin(_phase * 1.7);
+      light.intensity = 6.0 * intensity * flicker;
+      flameNode.visible = false;
+      flameEmitter?.paused = true;
+      flameEmitterNode?.visible = false;
+      smokeEmitter?.paused = true;
+      smokeEmitterNode?.visible = false;
+      sparkEmitter?.paused = true;
+      sparkEmitterNode?.visible = false;
+    } else if (intensity > 0.01) {
       final flicker = 1.0 +
           0.20 * math.sin(_phase * 15.0) +
           0.10 * math.cos(_phase * 27.0);
@@ -169,25 +191,33 @@ class NpcWanderComponent extends Component {
   }
 }
 
-/// One instanced seagull flock; updates [InstancedMesh] transforms in place.
+/// The seagull flock: moves each bird's node along its [FlockBirdMotion] and
+/// keeps its wingbeat going.
+///
+/// Each bird is its own skinned model (`assets/models/seagull.glb`) playing
+/// its flight clip; this only sets where it is and which way it faces, and
+/// speeds the wingbeat up while it climbs.
 class SeagullFlockComponent extends Component {
   SeagullFlockComponent({
-    required this.batch,
+    required this.nodes,
     required this.birds,
-    required this.phases,
-  });
+    required this.wingbeats,
+  }) : _baseRates = <double>[
+         for (final clip in wingbeats) clip?.playbackTimeScale ?? 1.0,
+       ];
 
-  final InstancedMesh batch;
+  final List<Node> nodes;
   final List<FlockBirdMotion> birds;
-  final List<double> phases;
-  double _time = 0.0;
+
+  /// Each bird's flight clip, or null if the model had none.
+  final List<AnimationClip?> wingbeats;
+  final List<double> _baseRates;
 
   @override
   void update(double deltaSeconds) {
     if (birds.isEmpty) {
       return;
     }
-    _time += deltaSeconds;
     final positions = <vm.Vector3>[
       for (final bird in birds) bird.position.clone(),
     ];
@@ -207,20 +237,12 @@ class SeagullFlockComponent extends Component {
             if (j != i) velocities[j],
         ],
       );
-      final yaw = vm.Quaternion.axisAngle(vm.Vector3(0, 1, 0), bird.yaw);
-      final pitch = vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), -bird.pitch);
-      final flap = math.sin(_time * 9.0 + phases[i]) * 0.28;
-      final rotation = yaw *
-          pitch *
-          vm.Quaternion.axisAngle(vm.Vector3(0, 0, 1), flap);
-      batch.setInstanceTransform(
-        i,
-        vm.Matrix4.compose(
-          bird.position,
-          rotation,
-          vm.Vector3.all(1.0),
-        ),
-      );
+      nodes[i]
+        ..position = bird.position
+        ..rotation = bird.attitude;
+      // Work harder climbing, ease off descending.
+      wingbeats[i]?.playbackTimeScale =
+          _baseRates[i] * (1.0 + 1.2 * bird.pitch).clamp(0.75, 1.5);
     }
   }
 }
@@ -348,7 +370,9 @@ class GerstnerDisplaceComponent extends Component {
   @override
   void update(double deltaSeconds) {
     final water = node.getComponent<WaterSurfaceComponent>();
-    if (water == null || deltaSeconds <= 0.0) {
+    // Super Ultra hides this sea and draws its own on the GPU; do not keep
+    // re-uploading a grid nobody sees.
+    if (water == null || deltaSeconds <= 0.0 || !node.visible) {
       return;
     }
     _time += deltaSeconds;
@@ -413,24 +437,27 @@ class GerstnerDisplaceComponent extends Component {
 /// Keeps floating crates on the sampled water surface.
 class BuoyFloatComponent extends Component {
   BuoyFloatComponent({
-    required this.waterNode,
+    required this.sampleWater,
     required this.x,
     required this.z,
     required this.seaY,
   });
 
-  final Node waterNode;
-  final double x;
-  final double z;
+  /// The visible sea at a point, or null when there is none to sit on.
+  final ({vm.Vector3 displacement, vm.Vector3 normal})? Function(vm.Vector2)
+      sampleWater;
+
+  /// Where the crate floats. Mutable: Super Ultra moves crates off its beach.
+  double x;
+  double z;
   final double seaY;
 
   @override
   void update(double deltaSeconds) {
-    final water = waterNode.getComponent<WaterSurfaceComponent>();
-    if (water == null) {
+    final sample = sampleWater(vm.Vector2(x, z));
+    if (sample == null) {
       return;
     }
-    final sample = water.evaluateAt(vm.Vector2(x, z));
     node.position = vm.Vector3(x, seaY + sample.displacement.y + 0.16, z);
   }
 }

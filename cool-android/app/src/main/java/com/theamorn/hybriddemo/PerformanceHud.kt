@@ -196,7 +196,12 @@ object PerformanceHudState {
     }
 
     fun enginesLine(): String {
-        val routeOrder = listOf(AppEngines.GAME_ROUTE, AppEngines.GLASS_ROUTE, AppEngines.SCENE_ROUTE)
+        val routeOrder = listOf(
+            AppEngines.GAME_ROUTE,
+            AppEngines.PROMO_ROUTE,
+            AppEngines.GLASS_ROUTE,
+            AppEngines.SCENE_ROUTE,
+        )
         val summaries = routeOrder.mapNotNull { route ->
             val spawn = engineSpawns[route] ?: return@mapNotNull null
             String.format(
