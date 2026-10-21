@@ -1,0 +1,80 @@
+// The Super Ultra campfire's core glow: one camera-facing card with a
+// procedural radial falloff, added onto the scene (blending: additive, no
+// depth write). It replaces the old additive sprite emitter at the same HDR
+// energy, so there is never a second glow on top of it.
+//
+// The card keeps real depth testing (logs and stones in front still hide it)
+// and fades out where it meets the opaque surface behind it, so the ground it
+// sinks into shows no hard line. Drawn before the heat haze
+// (Node.renderOrder), so the haze's scene-colour snapshot holds the glow and
+// shimmers it.
+//
+// The quad is authored in the XY plane centred on the origin with uv (0, 0)
+// at one corner; the vertex block turns it to face the camera.
+material {
+  name: "AdditiveGlow",
+  shading_model: unlit,
+  blending: additive,
+  depth_write: false,
+  culling: none,
+  engine_inputs: [scene_depth],
+  parameters: [
+    // rgb = linear HDR colour at the centre, w = overall strength (the fire's
+    // flicker).
+    { type: vec4, name: glow, default: [1.0, 0.46, 0.12, 1.0] },
+    // x = falloff sharpness, y = soft-depth distance (m).
+    { type: vec4, name: shape, default: [4.5, 0.25, 0.0, 0.0] },
+  ],
+}
+
+vertex {
+  void Vertex(inout VertexInputs vertex) {
+    // Origin and size from the node's transform, so the card may sit under a
+    // moved or scaled parent.
+    vec3 centre = (vertex.model_transform * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+    float scale = length(vertex.model_transform[0].xyz);
+    vec3 to_camera = vertex.camera_position - centre;
+    float distance = length(to_camera);
+    vec3 facing = distance > 0.0001 ? to_camera / distance : vec3(0.0, 0.0, 1.0);
+    // Right and up across the view; fall back to world X when looking
+    // straight down onto the fire.
+    vec3 right = cross(vec3(0.0, 1.0, 0.0), facing);
+    float right_length = length(right);
+    right = right_length > 0.0001 ? right / right_length : vec3(1.0, 0.0, 0.0);
+    vec3 up = cross(facing, right);
+    vertex.world_position = centre +
+                            (right * vertex.position.x + up * vertex.position.y) * scale;
+    vertex.world_normal = facing;
+  }
+}
+
+fragment {
+  // flutter_scene 0.24 defaults material fragments to mediump (half precision
+  // on Mali/Adreno/web). Depth differences below need float32.
+  precision highp float;
+
+  void Surface(inout MaterialInputs material) {
+    vec2 p = GetUV0() * 2.0 - 1.0;
+    float r2 = dot(p, p);
+    // Gaussian-like core reaching zero at the card's rim, with an incandescent
+    // white-gold heart fading into the warm amber outer halo.
+    float rim = 1.0 - smoothstep(0.7, 1.0, r2);
+    float falloff = exp(-r2 * material_params.shape.x) * rim;
+    float hot_core = exp(-r2 * material_params.shape.x * 2.8) * rim;
+    // Soft contact: fade where the card is close in front of an opaque
+    // surface (planar view depth, the same measure the depth target holds).
+    highp float opaque_depth = GetSceneDepth(vec2(0.0));
+    highp float card_depth = dot(GetWorldPosition() - frag_info.camera_position.xyz,
+                                 frag_info.camera_forward.xyz);
+    float contact = clamp((opaque_depth - card_depth) / max(material_params.shape.y, 0.001),
+                          0.0, 1.0);
+    // Straight alpha; the framework premultiplies, and additive blending adds
+    // rgb * alpha onto the scene. The flicker scales the colour, not the
+    // alpha, so a flare above 1 is not clipped.
+    vec3 core_tint = mix(material_params.glow.rgb,
+                         vec3(1.55, 1.05, 0.48),
+                         hot_core * 0.65);
+    material.base_color = vec4(core_tint * material_params.glow.w,
+                               falloff * contact);
+  }
+}

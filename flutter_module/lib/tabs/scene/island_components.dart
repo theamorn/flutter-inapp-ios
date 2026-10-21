@@ -53,6 +53,9 @@ class CampfireFlickerComponent extends Component {
     _phase += deltaSeconds;
     final target = isLit() ? 1.0 : 0.0;
     intensity += (target - intensity) * math.min(1.0, deltaSeconds * 6.0);
+    if ((target - intensity).abs() < 0.005) {
+      intensity = target;
+    }
 
     if (intensity > 0.01 && isSuperUltra()) {
       // Irregular rather than periodic: incommensurate rates plus a slow
@@ -62,7 +65,14 @@ class CampfireFlickerComponent extends Component {
           0.08 * math.sin(_phase * 23.7 + 1.3) +
           0.06 * math.sin(_phase * 37.1 + 0.4) +
           0.1 * math.sin(_phase * 1.7);
-      light.intensity = 6.0 * intensity * flicker;
+      final flare = ((flicker - 0.75) / 0.55).clamp(0.0, 1.0);
+      light
+        ..color = vm.Vector3(
+          1.0,
+          0.45 + 0.13 * flare,
+          0.08 + 0.09 * flare * flare,
+        )
+        ..intensity = 6.2 * intensity * flicker;
       flameNode.visible = false;
       flameEmitter?.paused = true;
       flameEmitterNode?.visible = false;
@@ -74,8 +84,31 @@ class CampfireFlickerComponent extends Component {
       final flicker = 1.0 +
           0.20 * math.sin(_phase * 15.0) +
           0.10 * math.cos(_phase * 27.0);
-      light.intensity = 5.5 * intensity * flicker;
       final useParticles = isUltra();
+      if (useParticles) {
+        // Step the PointLight phase at 12 Hz so flutter_scene 0.24's
+        // PunctualLightBuffer skips synchronous texture.overwrite and CPU
+        // froxel rebuilds on ~80% of frames on Android Vulkan.
+        final lightPhase = (_phase * 12.0).floorToDouble() / 12.0;
+        final lightFlicker = 1.0 +
+            0.20 * math.sin(lightPhase * 15.0) +
+            0.10 * math.cos(lightPhase * 27.0);
+        final flare = ((lightFlicker - 0.75) / 0.55).clamp(0.0, 1.0);
+        light
+          ..color = vm.Vector3(
+            1.0,
+            0.46 + 0.11 * flare,
+            0.09 + 0.07 * flare * flare,
+          )
+          ..intensity = 5.5 * intensity * lightFlicker;
+      } else {
+        // Normal mode: keep the PointLight steady once faded in so
+        // PunctualLightBuffer reuses its cached GPU textures and froxel grid
+        // every frame, while the visible flame sphere still flickers below.
+        light
+          ..color = vm.Vector3(1.0, 0.50, 0.11)
+          ..intensity = 5.5 * intensity;
+      }
       flameNode.visible = !useParticles;
       flameEmitter?.paused = !useParticles;
       flameEmitterNode?.visible = useParticles;
@@ -293,6 +326,7 @@ class OtsCameraComponent extends Component {
     required this.setOrbitAngle,
     required this.setPitch,
     required this.groundY,
+    this.shake,
   });
 
   final OtsCameraRig rig;
@@ -304,6 +338,7 @@ class OtsCameraComponent extends Component {
   final void Function(double value) setOrbitAngle;
   final void Function(double value) setPitch;
   final double groundY;
+  final CameraShake? shake;
 
   vm.Vector3? _eye;
   vm.Vector3? _target;
@@ -348,6 +383,11 @@ class OtsCameraComponent extends Component {
     }
 
     node.lookAtFrom(_eye!, _target!);
+    final activeShake = shake;
+    if (activeShake != null && activeShake.trauma > 0.0) {
+      final offset = activeShake.update(deltaSeconds);
+      node.localTransform = node.localTransform * offset.toMatrix4();
+    }
   }
 }
 

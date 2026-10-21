@@ -3,13 +3,13 @@
 //
 // The quad is authored in the XY plane with its base at y = 0 and uv.y = 0 at
 // the bottom; the vertex block turns it to face the camera around world Y.
-// The node must carry translation only (no rotation or scale).
 material {
   name: "HeatHaze",
-  shading_model: lit,
+  shading_model: unlit,
   blending: alpha,
   culling: none,
   engine_inputs: [scene_color],
+  scene_color_reach: 0.2,
   parameters: [
     { type: float, name: time, default: 0.0 },
     // x = displacement (screen uv), y = opacity (fire intensity).
@@ -19,19 +19,27 @@ material {
 
 vertex {
   void Vertex(inout VertexInputs vertex) {
-    vec3 centre = vertex.world_position - vertex.position;
+    // The node's origin and scale come from its transform (0.24
+    // vertex.model_transform), so the haze may sit under a rotated or scaled
+    // parent; it still turns to face the camera around world Y.
+    vec3 centre = (vertex.model_transform * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+    float scale_x = length(vertex.model_transform[0].xyz);
+    float scale_y = length(vertex.model_transform[1].xyz);
     vec3 to_camera = vertex.camera_position - centre;
     to_camera.y = 0.0;
     float length_xz = length(to_camera);
     vec3 facing = length_xz > 0.0001 ? to_camera / length_xz : vec3(0.0, 0.0, 1.0);
     vec3 right = vec3(facing.z, 0.0, -facing.x);
-    vertex.world_position = centre + right * vertex.position.x +
-                            vec3(0.0, vertex.position.y, 0.0);
+    vertex.world_position = centre + right * vertex.position.x * scale_x +
+                            vec3(0.0, vertex.position.y * scale_y, 0.0);
     vertex.world_normal = facing;
   }
 }
 
 fragment {
+  // flutter_scene 0.24 defaults material fragments to mediump (half precision
+  // on Mali/Adreno/web). This body computes positions, phases and hashes.
+  precision highp float;
   // Local hash noise rather than <noise.glsl>, whose large constant tables
   // fail to link on some GLES drivers (see island_sky.fmat).
   float Hash12(vec2 p) {
@@ -66,10 +74,6 @@ fragment {
     float n1 = ValueNoise2(vec2(uv.x * 5.0, uv.y * 3.0 - time * 2.6) + 11.0);
     float n2 = ValueNoise2(vec2(uv.x * 4.0 + 3.1, uv.y * 3.5 - time * 3.1) + 29.0);
     vec2 offset = vec2(n1, n2) * material_params.haze.x * mask;
-    material.base_color = vec4(0.0, 0.0, 0.0, mask * material_params.haze.y);
-    material.metallic = 0.0;
-    material.roughness = 1.0;
-    material.specular = 0.0;
-    material.emissive = GetSceneColor(offset);
+    material.base_color = vec4(GetSceneColor(offset), mask * material_params.haze.y);
   }
 }

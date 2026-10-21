@@ -6,25 +6,36 @@ import 'package:flutter_module/app_screen.dart';
 import 'package:flutter_module/game_screen.dart';
 import 'package:flutter_module/shader_screen.dart';
 import 'package:flutter_module/tabs/game/game_app.dart';
+import 'package:flutter_module/tabs/product/product_viewer_app.dart';
 import 'package:flutter_module/tabs/promo/promo_app.dart';
+import 'package:flutter_module/tabs/reviews/review_details_app.dart';
 import 'package:flutter_module/tabs/scene/scene_app.dart';
 import 'package:flutter_module/tabs/glass/glass_app.dart';
 import 'package:flutter_module/telemetry/frame_telemetry.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
-void main() {
+const _tabRoutes = {'/game', '/glass', '/product', '/promo', '/reviews', '/scene'};
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final route = PlatformDispatcher.instance.defaultRouteName;
-  if (route == '/game' ||
-      route == '/glass' ||
-      route == '/promo' ||
-      route == '/scene') {
+  if (_tabRoutes.contains(route)) {
     FrameTelemetryReporter(route).start();
+  }
+  // Without this the first glass on screen paints its fallback for a frame
+  // or two while the shaders load. The /reviews engine is spawned with the
+  // Shop tab, well before anyone taps "Review Details", so this costs no
+  // visible time.
+  if (route == '/reviews' || route == '/glass') {
+    await LiquidGlass.precache();
   }
 
   runApp(switch (route) {
     '/game' => const FlappyCatApp(),
     '/glass' => const LiquidGlassApp(),
+    '/product' => const ProductViewerApp(),
     '/promo' => const HoloPromoApp(),
+    '/reviews' => const ReviewDetailsApp(),
     '/scene' => const IslandSceneApp(),
     _ => const MyApp(),
   });

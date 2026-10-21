@@ -1,0 +1,84 @@
+// Trees in the shared wind (lib/render/wind.dart): the whole tree bends
+// downwind by the square of its height (the base stays put), each tree on
+// its own phase, and the crown flutters a little faster on top. Worn by the
+// island's palms and pines and the hotel's beach palms in place of their
+// own materials, with the same colour.
+material {
+  name: "FoliageSway",
+  shading_model: lit,
+  parameters: [
+    // rgb = linear base colour (times the vertex colour when sway.w is 1).
+    { type: vec4, name: base_color, default: [1.0, 1.0, 1.0, 1.0] },
+    // xy = wind direction * speed (x, z), z = gust 0..1, w = clock (s).
+    { type: vec4, name: wind, default: [0.32, 0.14, 0.5, 0.0] },
+    // x = tree height (object units), y = bend at the top for full wind (m),
+    // z = flutter (m), w = 1 to multiply in the vertex colour.
+    { type: vec4, name: sway, default: [3.0, 0.35, 0.03, 0.0] },
+    // x = roughness.
+    { type: vec4, name: surface, default: [0.85, 0.0, 0.0, 0.0] },
+    // xyz = direction toward the key light, w = wetness (rain).
+    { type: vec4, name: sun_dir, default: [0.4, 0.5, 0.6, 0.0] },
+    // rgb = key light colour * intensity (0 when unset).
+    { type: vec4, name: sun_color, default: [0.0, 0.0, 0.0, 0.0] },
+  ],
+  varyings: [
+    { type: float, name: v_height },
+  ],
+}
+
+vertex {
+  void Vertex(inout VertexInputs vertex) {
+    float height = clamp(vertex.position.y / max(material_params.sway.x, 0.01), 0.0, 1.0);
+    v_height = height;
+    vec3 root = (vertex.model_transform * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+    float time = material_params.wind.w;
+    vec2 wind = material_params.wind.xy;
+    float gust = material_params.wind.z;
+    float phase = dot(root.xz, vec2(0.37, 0.21));
+    float sway = 0.7 + 0.6 * gust + 0.35 * sin(time * 1.3 + phase) +
+                 0.15 * sin(time * 2.9 + phase * 1.7);
+    vec2 bend = wind * material_params.sway.y * sway;
+    float k = height * height;
+    vertex.world_position.xz += bend * k;
+    // Keep the trunk about its length as it leans.
+    vertex.world_position.y -= dot(bend, bend) * 0.3 * k;
+    float flutter = material_params.sway.z * k * (0.4 + 0.6 * gust) * length(wind);
+    vertex.world_position += vec3(
+        sin(time * 7.0 + vertex.position.x * 5.0 + phase),
+        0.5 * sin(time * 8.3 + vertex.position.z * 4.0),
+        cos(time * 6.1 + vertex.position.z * 5.0 + phase)) * flutter;
+  }
+}
+
+fragment {
+  // flutter_scene 0.24 defaults material fragments to mediump (half precision
+  // on Mali/Adreno/web).
+  precision highp float;
+
+  void Surface(inout MaterialInputs material) {
+    float wet = material_params.sun_dir.w;
+    float is_leaf = step(0.001, material_params.sway.z);
+    vec3 color = material_params.base_color.rgb;
+    if (material_params.sway.w > 0.5) {
+      color *= GetVertexColor().rgb;
+    }
+    color *= mix(1.0, 0.86 + 0.22 * v_height, is_leaf) * (1.0 - 0.18 * wet);
+    material.base_color = vec4(color, 1.0);
+    material.metallic = 0.0;
+    material.roughness = mix(material_params.surface.x, 0.28, wet);
+    material.specular = mix(0.5, 0.78, wet);
+    material.occlusion = mix(0.55, 1.0, v_height);
+    if (is_leaf > 0.5) {
+      vec3 to_light = normalize(material_params.sun_dir.xyz);
+      vec3 n = normalize(GetWorldNormal());
+      vec3 v = GetViewDirection();
+      float back_diffuse = clamp(dot(-n, to_light), 0.0, 1.0);
+      float forward_scatter = pow(clamp(dot(-v, to_light), 0.0, 1.0), 3.0);
+      float transmit = (0.35 * back_diffuse + 0.65 * forward_scatter) *
+                       smoothstep(0.2, 0.95, v_height);
+      vec3 leaf_glow = color * vec3(1.15, 1.25, 0.65);
+      material.emissive =
+          leaf_glow * material_params.sun_color.rgb * transmit * 0.42;
+    }
+  }
+}

@@ -1,4 +1,5 @@
-/// Route `/scene` — tab 5, the island. See `docs/hybrid-demo/06-island-scene.md`.
+/// The Island Demo tab, ported from flutter_module's `/scene` route. See
+/// `docs/island/06-island-scene.md`.
 library;
 
 import 'dart:async';
@@ -8,9 +9,13 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_scene/scene.dart' hide Material;
+import 'package:flutter_module/tabs/scene/debug_handles.dart';
 import 'package:flutter_module/tabs/scene/island_scene.dart';
 import 'package:flutter_module/tabs/scene/particles.dart';
+import 'package:flutter_module/tabs/scene/render/prewarm.dart';
+import 'package:flutter_module/tabs/scene/scene_frame_meter.dart';
 import 'package:flutter_module/tabs/scene/super_ultra/super_ultra_effects.dart';
+import 'package:flutter_module/tabs/scene/xray.dart';
 
 /// Off in every shipped build. Enable with
 /// `--dart-define=SCENE_AUTO_DEMO=true` to drive taps from a timer (there is
@@ -55,36 +60,27 @@ const bool kSceneFrameStats = bool.fromEnvironment('SCENE_FRAME_STATS');
 /// speed lands on every step alike. About 10 minutes; ends with a table.
 const bool kSceneAblation = bool.fromEnvironment('SCENE_ABLATION');
 
+/// The island's look from flutter_module (the add-to-app wrapper's theme):
+/// dark and green-seeded.
+final ThemeData kIslandTheme = ThemeData(
+  useMaterial3: true,
+  colorScheme: ColorScheme.fromSeed(
+    seedColor: const Color(0xFF3DA35D),
+    brightness: Brightness.dark,
+  ),
+);
+
+/// Standalone MaterialApp wrapper mounted by the `/scene` route in `main.dart`.
 class IslandSceneApp extends StatelessWidget {
   const IslandSceneApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'Island Scene',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF3DA35D),
-          brightness: Brightness.dark,
-        ),
-      ),
-      // The engine boots this app with defaultRouteName '/scene', which a
-      // bare `home:` cannot satisfy — the Navigator logs "Could not navigate
-      // to initial route" and silently falls back to '/'.
-      //
-      // `onGenerateRoute` alone is NOT the fix. Navigator's default initial
-      // route handling splits '/scene' into ['/', '/scene'] and pushes both
-      // when both resolve — which would mount TWO IslandSceneScreens, two
-      // Scenes and two render loops, one of them invisible underneath. On a
-      // tab whose entire purpose is an honest performance number, that is the
-      // worst possible bug. Pinning the initial stack to exactly one route is
-      // what prevents it.
-      onGenerateInitialRoutes: (_) => <Route<void>>[
-        MaterialPageRoute<void>(builder: (_) => const IslandSceneScreen()),
-      ],
-      onGenerateRoute: (RouteSettings settings) =>
-          MaterialPageRoute<void>(builder: (_) => const IslandSceneScreen()),
+      theme: kIslandTheme,
+      home: const IslandSceneScreen(),
     );
   }
 }
@@ -146,22 +142,48 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
     ui.Offset(0.82, 0.72),
   ];
 
+  /// Frames the scene rendered, not Flutter's: under flutter_scene 0.24's GPU
+  /// pacing the two diverge.
+  final SceneFrameMeter _sceneMeter = SceneFrameMeter();
+
+  /// Rolling 2-second window of `(vsyncStartMicros, uiMicros, rasterMicros)`
+  /// from [SchedulerBinding.addTimingsCallback], used by the top-left HUD in
+  /// Normal, Ultra, and Super Ultra.
+  final List<(int, int, int)> _hudTimings = <(int, int, int)>[];
+  double _flutterFps = 0.0;
+  double _uiMs = 0.0;
+  double _rasterMs = 0.0;
+
   final List<int> _uiMicros = <int>[];
   final List<int> _rasterMicros = <int>[];
   Timer? _statsTimer;
 
   void _onFrameTimings(List<ui.FrameTiming> timings) {
     for (final timing in timings) {
-      _uiMicros.add(timing.buildDuration.inMicroseconds);
-      _rasterMicros.add(timing.rasterDuration.inMicroseconds);
+      final vsync = timing.timestampInMicroseconds(ui.FramePhase.vsyncStart);
+      final uiUs = timing.buildDuration.inMicroseconds;
+      final rasterUs = timing.rasterDuration.inMicroseconds;
+      _hudTimings.add((vsync, uiUs, rasterUs));
+      if (kSceneFrameStats) {
+        _uiMicros.add(uiUs);
+        _rasterMicros.add(rasterUs);
+      }
       if (_ablationRecording) {
-        _ablationUi.add(timing.buildDuration.inMicroseconds);
-        _ablationRaster.add(timing.rasterDuration.inMicroseconds);
+        _ablationUi.add(uiUs);
+        _ablationRaster.add(rasterUs);
       }
     }
-    if (!kSceneFrameStats) {
-      _uiMicros.clear();
-      _rasterMicros.clear();
+    if (_hudTimings.isNotEmpty) {
+      final newest = _hudTimings.last.$1;
+      _hudTimings.removeWhere((frame) => frame.$1 < newest - 2000000);
+      final count = _hudTimings.length;
+      final span = (newest - _hudTimings.first.$1) / 1e6;
+      _uiMs = _hudTimings.fold<int>(0, (sum, f) => sum + f.$2) / count / 1000.0;
+      _rasterMs =
+          _hudTimings.fold<int>(0, (sum, f) => sum + f.$3) / count / 1000.0;
+      if (span > 0 && count > 1) {
+        _flutterFps = (count - 1) / span;
+      }
     }
   }
 
@@ -195,18 +217,22 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
         await Future<void>.delayed(settle);
         _ablationUi.clear();
         _ablationRaster.clear();
+        final startFrames = renderedFrameCount(_island.scene);
+        final clock = Stopwatch()..start();
         _ablationRecording = true;
         await Future<void>.delayed(measure);
         _ablationRecording = false;
+        final sceneFrames = renderedFrameCount(_island.scene) - startFrames;
+        final seconds = clock.elapsedMicroseconds / 1e6;
         final u = mean(_ablationUi);
         final r = mean(_ablationRaster);
-        final f = _ablationUi.length / measure.inSeconds;
+        final f = sceneFrames / seconds;
         (ui[step] ??= <double>[]).add(u);
         (raster[step] ??= <double>[]).add(r);
         (fps[step] ??= <double>[]).add(f);
         debugPrint(
           'island ablation: round $round | $step | ui ${u.toStringAsFixed(2)} '
-          '| raster ${r.toStringAsFixed(2)} ms | ${f.toStringAsFixed(1)} fps',
+          '| raster ${r.toStringAsFixed(2)} ms | ${f.toStringAsFixed(1)} scene fps',
         );
       }
     }
@@ -228,7 +254,7 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
         'island ablation: ${step.padRight(32)} ui ${u.toStringAsFixed(2)} '
         '(${delta(u, baseUi)}) | raster ${r.toStringAsFixed(2)} '
         '(${delta(r, baseRaster)}) ms | '
-        '${median(fps[step]!).toStringAsFixed(1)} fps',
+        '${median(fps[step]!).toStringAsFixed(1)} scene fps',
       );
     }
     debugPrint('island ablation: done');
@@ -250,8 +276,10 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
     debugPrint(
       'island frames: n=${_uiMicros.length} '
       'ui ${summary(_uiMicros)} | raster ${summary(_rasterMicros)} '
-      '| ${_island.quality.name}${_island.isRaining ? ' rain' : ''}'
-      '${_island.isRaining && _island.isStorm ? ' storm' : ''}',
+      '| scene ${_sceneMeter.sceneFps.toStringAsFixed(1)} fps '
+      'paced ${_sceneMeter.pacedPerSecond.toStringAsFixed(1)}/s '
+      '| flutter ${_flutterFps.toStringAsFixed(1)} fps '
+      '| ${_island.quality.name}',
     );
     _uiMicros.clear();
     _rasterMicros.clear();
@@ -260,9 +288,8 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
   @override
   void initState() {
     super.initState();
-    if (kSceneFrameStats || kSceneAblation) {
-      SchedulerBinding.instance.addTimingsCallback(_onFrameTimings);
-    }
+    if (kDebugMode) debugIsland = _island;
+    SchedulerBinding.instance.addTimingsCallback(_onFrameTimings);
     if (kSceneFrameStats) {
       _statsTimer = Timer.periodic(
         const Duration(seconds: 5),
@@ -332,13 +359,13 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
 
   @override
   void dispose() {
-    if (kSceneFrameStats || kSceneAblation) {
-      SchedulerBinding.instance.removeTimingsCallback(_onFrameTimings);
-    }
+    if (kDebugMode) debugIslandDetach(_island);
+    SchedulerBinding.instance.removeTimingsCallback(_onFrameTimings);
     _statsTimer?.cancel();
     _autoDemoTimer?.cancel();
     _tourTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
+    _island.dispose();
     _frame.dispose();
     super.dispose();
   }
@@ -349,6 +376,10 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
         state != AppLifecycleState.paused &&
         state != AppLifecycleState.hidden &&
         state != AppLifecycleState.detached;
+    if (!active) {
+      _island.clearShockwaves();
+      releaseSceneTargets();
+    }
     if (active != _renderLoopActive) {
       // Logged, not just rendered: this is the only way to confirm the tab
       // actually stopped rendering when the host hid it, since the HUD line
@@ -357,6 +388,17 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
         'island scene: render loop ${active ? "resumed" : "stopped"} ($state)',
       );
       setState(() => _renderLoopActive = active);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The app shell hides a tab by switching its tickers off: a ripple must
+    // not wait, frozen, for the tab to come back.
+    if (!TickerMode.valuesOf(context).enabled) {
+      _island.clearShockwaves();
+      releaseSceneTargets();
     }
   }
 
@@ -369,6 +411,9 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
     if ((night - _nightBlend).abs() > 0.004) {
       setState(() => _nightBlend = night);
     }
+    _sceneMeter.add(DateTime.now().microsecondsSinceEpoch,
+        sceneFrames: renderedFrameCount(_island.scene),
+        pacedFrames: _island.scene.pacedFrameCount);
   }
 
   void _openEffectsPanel() {
@@ -381,7 +426,7 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
       builder: (context) => DraggableScrollableSheet(
         initialChildSize: 0.5,
         minChildSize: 0.25,
-        maxChildSize: 0.9,
+        maxChildSize: 0.52,
         expand: false,
         builder: (context, scroll) => _EffectsPanel(
           island: _island,
@@ -538,6 +583,9 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
                       _island.scene,
                       onTick: _onTick,
                       warmUp: true,
+                      warmUpAllShadingTiers: true,
+                      maxFrameRate:
+                          _island.isSuperUltra ? _island.frameCap.fps : null,
                     ),
                   ),
                 ),
@@ -578,9 +626,23 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
                               AnimatedBuilder(
                                 animation: _frame,
                                 builder: (context, _) {
+                                  final stats = onScreenDraws(
+                                    lastOnScreenFrame(_island.scene),
+                                  );
                                   return _Readout(
                                     triangles: _island.triangleCount,
-                                    meshes: _island.meshCount,
+                                    draws: stats?.draws ?? -1,
+                                    offscreenViews: stats?.offscreenViews ?? 0,
+                                    sceneFps: _sceneMeter.sceneFps,
+                                    flutterFps: _flutterFps,
+                                    uiMs: _uiMs,
+                                    rasterMs: _rasterMs,
+                                    adaptiveScalePercent: _island.isSuperUltra &&
+                                            _island.renderScale.adaptive
+                                        ? (_island.scene.adaptiveRenderScale *
+                                                100)
+                                            .round()
+                                        : null,
                                     timeOfDay: _timeOfDay,
                                     renderLoopActive: _renderLoopActive,
                                     quality: _island.quality,
@@ -593,7 +655,8 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
                                     lightningStrikes: _island.lightningStrikes,
                                     campfireLit: _island.campfireLit,
                                     cameraMode: _island.cameraMode,
-                                    culledMeshes: _island.culledMeshCount,
+                                    culledMeshes:
+                                        stats?.culled ?? _island.culledMeshCount,
                                   );
                                 },
                               ),
@@ -626,6 +689,14 @@ class _IslandSceneScreenState extends State<IslandSceneScreen>
                                     _EffectsButton(
                                       changes: _island.effectsMenuChanges,
                                       onTap: _openEffectsPanel,
+                                    ),
+                                  if (_island.isUltraMode)
+                                    _XrayButton(
+                                      mode: _island.xray,
+                                      onTap: () => setState(
+                                        () =>
+                                            _island.setXray(_island.xray.next),
+                                      ),
                                     ),
                                   _CameraSelector(
                                     cameraMode: _island.cameraMode,
@@ -764,7 +835,13 @@ class _ErrorPanel extends StatelessWidget {
 class _Readout extends StatelessWidget {
   const _Readout({
     required this.triangles,
-    required this.meshes,
+    required this.draws,
+    required this.offscreenViews,
+    required this.sceneFps,
+    required this.flutterFps,
+    required this.uiMs,
+    required this.rasterMs,
+    required this.adaptiveScalePercent,
     required this.timeOfDay,
     required this.renderLoopActive,
     required this.quality,
@@ -779,7 +856,14 @@ class _Readout extends StatelessWidget {
   });
 
   final int triangles;
-  final int meshes;
+  /// On-screen draws in the last rendered frame; -1 when unknown.
+  final int draws;
+  final int offscreenViews;
+  final double sceneFps;
+  final double flutterFps;
+  final double uiMs;
+  final double rasterMs;
+  final int? adaptiveScalePercent;
   final double timeOfDay;
   final bool renderLoopActive;
   final IslandQuality quality;
@@ -813,6 +897,11 @@ class _Readout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final flutterFpsLabel = flutterFps > 0 ? '${flutterFps.round()}' : '–';
+    final scaleSuffix =
+        adaptiveScalePercent != null ? ' · $adaptiveScalePercent%' : '';
+    final captureSuffix =
+        offscreenViews > 0 ? ' · $offscreenViews cap' : '';
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.46),
@@ -839,15 +928,27 @@ class _Readout extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Text(
-                '${_grouped(triangles)} tris',
+                '${sceneFps.round()} fps scene · $flutterFpsLabel flutter',
                 style: const TextStyle(
                   fontFamily: 'Menlo',
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: Colors.white,
                 ),
               ),
-              Text('$meshes meshes'),
+              Text(
+                'UI ${uiMs.toStringAsFixed(1)} ms · '
+                'GPU ${rasterMs.toStringAsFixed(1)} ms$scaleSuffix',
+                style: const TextStyle(
+                  fontFamily: 'Menlo',
+                  fontSize: 11,
+                  color: Color(0xFF80CBC4),
+                ),
+              ),
+              Text(
+                '${draws < 0 ? '–' : draws} draws · '
+                '${_grouped(triangles)} tris$captureSuffix',
+              ),
               Text('${_clock(timeOfDay)}  local'),
               const SizedBox(height: 3),
               Text(
@@ -914,7 +1015,8 @@ class _Readout extends StatelessWidget {
                       : const Color(0xFF90CAF9),
                 ),
               ),
-              if (cameraMode == IslandCameraMode.overTheShoulder)
+              if (culledMeshes > 0 ||
+                  cameraMode == IslandCameraMode.overTheShoulder)
                 Text(
                   '👁️ View culling: $culledMeshes off-screen',
                   style: const TextStyle(
@@ -1185,6 +1287,38 @@ class _EffectsButton extends StatelessWidget {
   }
 }
 
+/// The presenter's X-ray: cycles off, wireframe, normals, base colour, each
+/// wiping across the island beside the lit image.
+class _XrayButton extends StatelessWidget {
+  const _XrayButton({required this.mode, required this.onTap});
+
+  final XrayMode mode;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.14),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: _PillTab(
+          label: mode.label,
+          active: mode != XrayMode.off,
+          activeColor: const Color(0xFF00838F),
+          onTap: onTap,
+        ),
+      ),
+    );
+  }
+}
+
 /// Switches for every Super Ultra effect, with the live frame times above
 /// them, so each effect's cost can be read off the device as it is toggled.
 class _EffectsPanel extends StatefulWidget {
@@ -1205,6 +1339,7 @@ class _EffectsPanel extends StatefulWidget {
 class _EffectsPanelState extends State<_EffectsPanel> {
   /// (vsync start, UI, raster) per frame, in microseconds.
   final List<(int, int, int)> _frames = <(int, int, int)>[];
+  final SceneFrameMeter _meter = SceneFrameMeter();
   Timer? _refresh;
   String _readout = 'measuring…';
 
@@ -1226,6 +1361,9 @@ class _EffectsPanelState extends State<_EffectsPanel> {
   }
 
   void _onTimings(List<ui.FrameTiming> timings) {
+    _meter.add(DateTime.now().microsecondsSinceEpoch,
+        sceneFrames: renderedFrameCount(widget.island.scene),
+        pacedFrames: widget.island.scene.pacedFrameCount);
     for (final timing in timings) {
       _frames.add((
         timing.timestampInMicroseconds(ui.FramePhase.vsyncStart),
@@ -1249,10 +1387,15 @@ class _EffectsPanelState extends State<_EffectsPanel> {
     final rasterMs =
         _frames.fold<int>(0, (sum, frame) => sum + frame.$3) / count / 1000;
     final fps = span > 0 ? (count - 1) / span : 0.0;
+    final island = widget.island;
+    final auto = island.renderScale.adaptive
+        ? ' · ${(island.scene.adaptiveRenderScale * 100).round()}%'
+        : '';
     setState(() {
       _readout = 'UI ${uiMs.toStringAsFixed(1)} ms · '
           'raster ${rasterMs.toStringAsFixed(1)} ms · '
-          '${fps.toStringAsFixed(0)} fps';
+          '${fps.toStringAsFixed(0)} flutter fps · '
+          '${_meter.sceneFps.toStringAsFixed(0)} scene fps$auto';
     });
   }
 
@@ -1347,6 +1490,30 @@ class _EffectsPanelState extends State<_EffectsPanel> {
             cost: (scale) => scale.cost,
             onSelected: (scale) => _change(() => island.setRenderScale(scale)),
           ),
+          _EffectsPicker<SuperUltraGpuPacing>(
+            title: 'GPU pacing',
+            options: SuperUltraGpuPacing.values,
+            selected: island.gpuPacing,
+            label: (p) => p.label,
+            cost: (p) => p.cost,
+            onSelected: (p) => _change(() => island.setGpuPacing(p)),
+          ),
+          _EffectsPicker<SuperUltraFrameCap>(
+            title: 'Frame cap',
+            options: SuperUltraFrameCap.values,
+            selected: island.frameCap,
+            label: (c) => c.label,
+            cost: (c) => c.cost,
+            onSelected: (c) => _change(() => island.setFrameCap(c)),
+          ),
+          _EffectsPicker<SuperUltraSceneCopies>(
+            title: 'Scene copies',
+            options: SuperUltraSceneCopies.values,
+            selected: island.sceneCopies,
+            label: (c) => c.label,
+            cost: (c) => c.cost,
+            onSelected: (c) => _change(() => island.setSceneCopies(c)),
+          ),
           for (final group in SuperUltraEffectGroup.values) ...<Widget>[
             header(group.label),
             for (final effect in SuperUltraEffect.values)
@@ -1366,6 +1533,17 @@ class _EffectsPanelState extends State<_EffectsPanel> {
                     style: const TextStyle(color: Colors.white60),
                   ),
                 ),
+            if (group == SuperUltraEffect.lightningRipple.group)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: island.isEffectOn(SuperUltraEffect.lightningRipple)
+                      ? island.previewShockwave
+                      : null,
+                  icon: const Icon(Icons.blur_circular),
+                  label: const Text('Preview lightning ripple'),
+                ),
+              ),
           ],
         ],
       ),
@@ -1525,36 +1703,40 @@ class _ActionButtons extends StatelessWidget {
       child: Align(
         alignment: Alignment.bottomRight,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(0, 0, 18, 76),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              _ActionButton(
-                label: isOts ? '🌐 Orbit' : '👤 Cam',
-                color: isOts
-                    ? const Color(0xFF1565C0)
-                    : const Color(0xFF6A1B9A),
-                onTap: onToggleCamera,
-              ),
-              const SizedBox(width: 8),
-              _ActionButton(
-                label: '⚽ Reset',
-                color: const Color(0xFF37474F),
-                onTap: onResetBalls,
-              ),
-              const SizedBox(width: 8),
-              _ActionButton(
-                label: '🦘 Jump',
-                color: const Color(0xFF00695C),
-                onTap: onJump,
-              ),
-              const SizedBox(width: 8),
-              _ActionButton(
-                label: '🥊 Punch',
-                color: const Color(0xFFC2185B),
-                onTap: onPunch,
-              ),
-            ],
+          padding: const EdgeInsets.fromLTRB(12, 0, 18, 76),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                _ActionButton(
+                  label: isOts ? '🌐 Orbit' : '👤 Cam',
+                  color: isOts
+                      ? const Color(0xFF1565C0)
+                      : const Color(0xFF6A1B9A),
+                  onTap: onToggleCamera,
+                ),
+                const SizedBox(width: 8),
+                _ActionButton(
+                  label: '⚽ Reset',
+                  color: const Color(0xFF37474F),
+                  onTap: onResetBalls,
+                ),
+                const SizedBox(width: 8),
+                _ActionButton(
+                  label: '🦘 Jump',
+                  color: const Color(0xFF00695C),
+                  onTap: onJump,
+                ),
+                const SizedBox(width: 8),
+                _ActionButton(
+                  label: '🥊 Punch',
+                  color: const Color(0xFFC2185B),
+                  onTap: onPunch,
+                ),
+              ],
+            ),
           ),
         ),
       ),

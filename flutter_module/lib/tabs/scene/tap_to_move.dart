@@ -426,6 +426,8 @@ class FlockBirdMotion {
     this.maxForce = 14.0,
     this.orbitRadius = 12.0,
     this.cruiseHeight = 5.5,
+    this.minHeight = 3.4,
+    this.maxHeight = 8.0,
     this.separationDistance = 2.2,
   }) : position = position.clone(),
        velocity = velocity?.clone() ?? vm.Vector3.zero();
@@ -443,6 +445,10 @@ class FlockBirdMotion {
   double maxForce;
   double orbitRadius;
   double cruiseHeight;
+
+  /// The band the bird is held in, whatever the flocking forces say.
+  double minHeight;
+  double maxHeight;
   double separationDistance;
 
   void advance(
@@ -493,7 +499,7 @@ class FlockBirdMotion {
     velocity += force * dt;
     velocity = truncateSteering(velocity, maxSpeed);
     position += velocity * dt;
-    position.y = position.y.clamp(3.4, 8.0);
+    position.y = position.y.clamp(minHeight, maxHeight);
 
     final xz = math.sqrt(position.x * position.x + position.z * position.z);
     if (xz < 9.0 && xz > 1e-5) {
@@ -718,6 +724,11 @@ class OtsCameraRig {
 
   /// Computes `(eye, target)` vectors in world coordinates given the character's
   /// [characterPosition] and total camera [yaw] (which may include a user swipe offset).
+  ///
+  /// [pitchOffset] tilts the view from its resting angle, in radians:
+  /// positive looks up, negative looks down. The eye drops a little toward
+  /// the shoulder as it looks up (so the sky opens past the head) and rises
+  /// as it looks down.
   (vm.Vector3 eye, vm.Vector3 target) compute({
     required vm.Vector3 characterPosition,
     required double yaw,
@@ -727,7 +738,9 @@ class OtsCameraRig {
     final forward = vm.Vector3(math.sin(yaw), 0.0, math.cos(yaw));
     final right = vm.Vector3(math.cos(yaw), 0.0, -math.sin(yaw));
 
-    final height = camHeight + math.sin(pitchOffset) * 0.8;
+    final height = camHeight +
+        math.sin(math.max(-pitchOffset, 0.0)) * 0.5 -
+        math.sin(math.max(pitchOffset, 0.0)) * 0.3;
     final eyeY = math.max(
       characterPosition.y + height,
       groundY + minGroundClearance,
@@ -748,8 +761,20 @@ class OtsCameraRig {
           forward.z * lookAheadDistance +
           right.z * (shoulderOffset * 0.25),
     );
+    if (pitchOffset == 0.0) {
+      return (eye, target);
+    }
 
-    return (eye, target);
+    // Swing the resting line of sight about the eye's horizontal axis.
+    final look = target - eye;
+    final level = vm.Vector3(look.x, 0.0, look.z);
+    final reach = level.length;
+    final angle = (math.atan2(look.y, reach) + pitchOffset).clamp(-1.4, 1.4);
+    final length = look.length;
+    final tilted = eye +
+        level.normalized() * (length * math.cos(angle)) +
+        vm.Vector3(0.0, length * math.sin(angle), 0.0);
+    return (eye, tilted);
   }
 }
 

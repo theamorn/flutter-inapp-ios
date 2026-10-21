@@ -32,18 +32,34 @@ void main() {
     for (var x = 0; x < atlas.width; x++) {
       expect(atlas.pixels[x * 4 + 3], 0);
     }
-    // Every frame has some flame in it.
+    // Every frame has some flame in it, and lit pixels carry a warm blackbody
+    // gradient (R >= G >= B, with R strictly hotter than B on non-core sheath
+    // pixels).
+    var warmSheathPixels = 0;
     for (var frame = 0; frame < kFlameAtlasColumns * kFlameAtlasRows; frame++) {
       final ox = (frame % kFlameAtlasColumns) * 32;
       final oy = (frame ~/ kFlameAtlasColumns) * 32;
       var coverage = 0;
       for (var y = 0; y < 32; y++) {
         for (var x = 0; x < 32; x++) {
-          coverage += atlas.pixels[((oy + y) * atlas.width + ox + x) * 4 + 3];
+          final i = ((oy + y) * atlas.width + ox + x) * 4;
+          final r = atlas.pixels[i];
+          final g = atlas.pixels[i + 1];
+          final b = atlas.pixels[i + 2];
+          final a = atlas.pixels[i + 3];
+          coverage += a;
+          if (a > 20) {
+            expect(r, greaterThanOrEqualTo(g));
+            expect(g, greaterThanOrEqualTo(b));
+            if (r > b + 15) {
+              warmSheathPixels++;
+            }
+          }
         }
       }
       expect(coverage, greaterThan(0), reason: 'frame $frame is empty');
     }
+    expect(warmSheathPixels, greaterThan(100));
   });
 
   test('the soft dot fades to nothing at its edge', () {

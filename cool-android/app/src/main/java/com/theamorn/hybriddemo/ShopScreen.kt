@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.LocalShipping
@@ -44,7 +43,9 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -56,13 +57,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -71,6 +72,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -85,15 +88,38 @@ private const val BASE_PRICE = 249f
 private const val DISCOUNT = 0.2f
 private const val PROMO_CODE = "HOLO20"
 
+/** The 3D header's height, matching the iOS page. */
+private val HEADER_HEIGHT = 280.dp
+
+/** Space above the tab row once Review Details pins it. */
+private val PINNED_GAP = 8.dp
+
+/** The page's spacing between items, from its `Arrangement.spacedBy`. */
+private val ITEM_SPACING = 8.dp
+
+/** iOS systemIndigo: the 3D header's backdrop before its first frame. */
+private const val HEADER_BACKDROP = 0xFF5856D6.toInt()
+
+/** The Review Details tab's background, so there is no seam and no flash. */
+private const val REVIEWS_BACKDROP = 0xFFF2F2F7.toInt()
+
+private const val TAB_OVERVIEW = 0
+private const val TAB_REVIEWS = 1
+
 /**
- * Tab 4 on Android: a Material 3 product page with the `/promo` Flutter tile
- * halfway down, mirroring `cool-ios/cool-ios/ProductDetailViewController.swift`
- * section for section.
+ * Tab 4 on Android: a Material 3 product page with three Flutter views in it,
+ * one engine each, mirroring `cool-ios/cool-ios/ProductDetailViewController.swift`
+ * section for section:
  *
- * Compose owns everything around the tile: layout, scrolling, the price, and
- * the success haptic. Flutter draws the badge and, when it is tapped, hands
- * back the promo code; this page fills its own native promo field with it,
- * validates it, and reprices.
+ * - `/product`, the 3D headphones at the top, which the user can orbit.
+ * - `/promo`, the holo badge tile halfway down the Overview tab.
+ * - `/reviews`, the whole Review Details tab, drawn with Liquid Glass: the
+ *   iOS 27 material, on Android.
+ *
+ * Compose owns everything around them: layout, scrolling, the Overview |
+ * Review Details switch, the price, and the success haptic. Flutter draws the
+ * badge and, when it is tapped, hands back the promo code; this page fills
+ * its own native promo field with it, validates it, and reprices.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,6 +146,10 @@ private class Viewport {
     var height = 0
 }
 
+/** Whether a view at [topPx]..[topPx]+[heightPx] in the window shows in [viewport]. */
+private fun Viewport.shows(topPx: Float, heightPx: Int): Boolean =
+    topPx + heightPx > top && topPx < top + height
+
 @Composable
 private fun ShopScreen(contentPadding: PaddingValues) {
     val context = LocalContext.current
@@ -137,6 +167,12 @@ private fun ShopScreen(contentPadding: PaddingValues) {
     )
     val scrollState = rememberScrollState()
     val viewport = remember { Viewport() }
+    // Review Details fills the viewport below the pinned tab row, so its
+    // height follows the viewport's: state, not a layout-only field.
+    var viewportHeightPx by remember { mutableIntStateOf(0) }
+    var tabRowTopPx by remember { mutableIntStateOf(0) }
+    var tabRowHeightPx by remember { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(TAB_OVERVIEW) }
     // Processing a code is native logic, whether it was typed or came from Flutter.
     fun applyPromoCode() {
         if (promoCode.trim().uppercase(Locale.US) != PROMO_CODE) {
@@ -160,6 +196,43 @@ private fun ShopScreen(contentPadding: PaddingValues) {
         }
     }
     DisposableEffect(promo) { onDispose { promo.dispose() } }
+    // TabsActivity already spawned these engines on the Shop tab's first
+    // selection: never on the tab-row tap, where a synchronous engine start
+    // would hitch it.
+    val product = remember {
+        FlutterSurfaceController(
+            AppEngines.engineForRoute(context, AppEngines.PRODUCT_ROUTE),
+            AppEngines.PRODUCT_CHANNEL_NAME,
+        )
+    }
+    val reviews = remember {
+        FlutterSurfaceController(
+            AppEngines.engineForRoute(context, AppEngines.REVIEWS_ROUTE),
+            AppEngines.REVIEWS_CHANNEL_NAME,
+        )
+    }
+    DisposableEffect(product, reviews) {
+        onDispose {
+            product.dispose()
+            reviews.dispose()
+        }
+    }
+    LaunchedEffect(selectedTab) {
+        PerformanceHudState.setActiveFlutterRoute(
+            if (selectedTab == TAB_REVIEWS) AppEngines.REVIEWS_ROUTE else AppEngines.PRODUCT_ROUTE,
+        )
+        if (selectedTab == TAB_REVIEWS) {
+            promo.sendVisibility(false)
+            // Let the panel lay out first, so the page is long enough to
+            // scroll the tab row up to the top. From there on, the list
+            // inside the panel scrolls, and the page cannot.
+            withFrameNanos { }
+            withFrameNanos { }
+            scrollState.animateScrollTo(tabRowTopPx - (PINNED_GAP.value * density).toInt())
+        } else {
+            reviews.sendVisibility(false)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -169,12 +242,62 @@ private fun ShopScreen(contentPadding: PaddingValues) {
             .onGloballyPositioned {
                 viewport.top = it.positionInWindow().y
                 viewport.height = it.size.height
+                viewportHeightPx = it.size.height
             }
             .verticalScroll(scrollState)
-            .padding(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            // The Review Details panel reaches the bottom of the viewport.
+            .padding(bottom = if (selectedTab == TAB_REVIEWS) 0.dp else 24.dp),
+        verticalArrangement = Arrangement.spacedBy(ITEM_SPACING),
     ) {
-        Hero(price = price, discounted = discounted)
+        Hero(
+            price = price,
+            discounted = discounted,
+            product = product,
+            onHeaderPositioned = { topPx, heightPx ->
+                product.sendVisibility(viewport.shows(topPx, heightPx))
+            },
+        )
+
+        PrimaryTabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+            modifier = Modifier
+                .testTag("shopTabs")
+                .onGloballyPositioned {
+                    tabRowTopPx = (it.positionInWindow().y - viewport.top).toInt() + scrollState.value
+                    tabRowHeightPx = it.size.height
+                },
+        ) {
+            listOf("Overview", "Review Details").forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = {
+                        if (selectedTab != index) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        selectedTab = index
+                    },
+                    text = { Text(title) },
+                )
+            }
+        }
+
+        if (selectedTab == TAB_REVIEWS) {
+            val panelHeightPx = viewportHeightPx - tabRowHeightPx -
+                ((PINNED_GAP.value + ITEM_SPACING.value) * density).toInt()
+            EmbeddedFlutterView(
+                controller = reviews,
+                backdropColor = REVIEWS_BACKDROP,
+                cornerRadiusDp = 20f,
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .fillMaxWidth()
+                    .height((panelHeightPx.coerceAtLeast(200 * density.toInt()) / density).dp)
+                    .testTag("reviewsPanel")
+                    .onGloballyPositioned {
+                        reviews.sendVisibility(viewport.shows(it.positionInWindow().y, it.size.height))
+                    },
+            )
+            return@Column
+        }
 
         SectionCard(title = "OPTIONS") {
             SegmentedRow(
@@ -291,18 +414,25 @@ private fun ShopScreen(contentPadding: PaddingValues) {
 }
 
 @Composable
-private fun Hero(price: Float, discounted: Boolean) {
+private fun Hero(
+    price: Float,
+    discounted: Boolean,
+    product: FlutterSurfaceController,
+    onHeaderPositioned: (topPx: Float, heightPx: Int) -> Unit,
+) {
     Column(modifier = Modifier.padding(16.dp)) {
-        Box(
+        // The artwork is the `/product` Flutter view: drag it to orbit.
+        EmbeddedFlutterView(
+            controller = product,
+            backdropColor = HEADER_BACKDROP,
+            cornerRadiusDp = 20f,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(220.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Brush.linearGradient(listOf(Color(0xFF5856D6), Color(0xFFAF52DE)))),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Filled.Headphones, contentDescription = null, tint = Color.White, modifier = Modifier.size(120.dp))
-        }
+                .height(HEADER_HEIGHT)
+                .testTag("productHeader")
+                .semantics { contentDescription = "Nimbus One in 3D. Drag to rotate." }
+                .onGloballyPositioned { onHeaderPositioned(it.positionInWindow().y, it.size.height) },
+        )
         Text(
             "Nimbus One",
             style = MaterialTheme.typography.headlineMedium,

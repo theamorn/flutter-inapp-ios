@@ -1,6 +1,6 @@
 ---
 name: flutter_scene-kit
-version: 3
+version: 8
 description: Build interactive 3D gameplay, character controllers, camera rigs, dynamic day/night cycles, water surfaces, audio, pooling, and debug overlays in flutter_scene. Use when creating game mechanics, camera controls, NPC behaviors, atmospheric environments, or diagnostic HUDs.
 ---
 
@@ -12,6 +12,7 @@ When choosing components, consider existing engine alternatives:
 - For physics-driven character navigation with collider capsules, wall sliding, and autostep, use `KinematicCharacterController` from `package:flutter_scene/physics.dart`.
 - For interactive mouse/touch orbit cameras with inertia, use `OrbitCameraController` or `FollowCameraController`.
 - For framing a standalone `PerspectiveCamera`, use `PerspectiveCamera.framing`. Use `BoundsFraming` when computing a transform for a `NodeCamera` mounted in the scene graph.
+- When driving custom camera-relative movement or ground panning (WASD strafing, RTS/strategy camera drag), read `camera.horizontalRight` and `camera.horizontalForward` (or `camera.right` and `node.right`). Never write `forward.cross(up)`, which points screen-left in `flutter_scene`'s left-handed (`+Z` forward) view space and horizontally inverts `A`/`D` and drag controls.
 
 ## Imports
 
@@ -28,6 +29,8 @@ import 'package:vector_math/vector_math.dart' as vm;
 `SpringArmComponent` attaches to a target character node and mounts a camera node at the arm's socket. It casts rays against the scene hierarchy to prevent geometry clipping, smoothly pulling the camera inward when colliding with walls.
 
 Note on offsets: `targetOffset` is applied in world space from the character node's origin, and `socketOffset` acts in the camera socket's local plane along X (right) and Y (up).
+
+Leave the mounted camera's near plane at its default. Every pass rasterizes with a near plane fitted to visible content each frame, so a chase or follow camera gets the depth precision of a much larger near without clipping the character when the arm pulls in. Raising `near` by hand clips the character at close range and gains nothing; the fit falls back to the authored value only when the camera sits inside an item's bounds (a sky sphere), so draw skies with `scene.skybox`.
 
 ```dart
 final characterNode = Node();
@@ -77,6 +80,8 @@ final controller = ThirdPersonControllerComponent(
 );
 playerNode.addComponent(controller);
 
+// Pass rotatesToMovement: false to move the node without turning it; read
+// controller.yaw to drive a child mesh or animation from the heading instead.
 // When using VirtualJoystick (where up is -Y in screen space), invert Y:
 // controller.setMoveInput(vm.Vector2(joystickDir.x, -joystickDir.y), isRunning: isSprinting);
 if (jumpPressed) controller.jump();
@@ -130,7 +135,7 @@ final waterNormal = surface.normal;
 
 ## Immediate-mode debug visualization
 
-`DebugDraw` provides static immediate-mode line, ray, box, sphere, and axis drawing utilities for physics debugging and AI visualizers.
+`DebugDraw` provides static immediate-mode line, ray, box, sphere, axis, and physics collider drawing utilities for physics debugging and AI visualizers.
 
 ```dart
 DebugDraw.line(startPos, endPos, color: vm.Vector4(1, 0, 0, 1));
@@ -138,9 +143,15 @@ DebugDraw.box(aabb, color: vm.Vector4(0, 1, 0, 1));
 DebugDraw.sphere(center, 1.0, color: vm.Vector4(0, 0, 1, 1));
 DebugDraw.axes(node.globalTransform, size: 2.0);
 
-// Render debug lines
-final debugMesh = DebugDraw.flushMesh();
-if (debugMesh != null) {
-  debugNode.mesh = Mesh(debugMesh, UnlitMaterial());
-}
+// Every collider under a node, posed the way the simulation sees it.
+// Triggers draw in triggerColor. DebugDraw.shape draws a single posed Shape.
+DebugDraw.colliders(scene.root);
+
+// Render debug lines: one updatable geometry, rebuilt in place each frame.
+final debugGeometry = DebugDraw.createGeometry();
+debugNode.mesh = Mesh(debugGeometry, UnlitMaterial());
+// Per frame, after the DebugDraw calls:
+DebugDraw.flushInto(debugGeometry);
 ```
+
+`DebugDraw.flushMesh()` builds a new geometry per call; it suits a one-off capture, not a per-frame loop.

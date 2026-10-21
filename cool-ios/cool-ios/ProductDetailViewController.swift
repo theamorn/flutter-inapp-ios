@@ -7,16 +7,24 @@
 
 import UIKit
 
-/// A native product page, with the `/promo` Flutter tile halfway down.
+/// A native product page with three Flutter views in it, one engine each:
 ///
-/// UIKit owns everything around the tile: layout, scrolling, the price, and
-/// the success haptic. The page tells Flutter where the tile sits (`scroll`),
-/// whether it can be seen (`visibility`), and which drags are Flutter's
-/// (`ProductScrollView`). Flutter draws the badge and, when it is tapped,
-/// hands back the promo code; the page fills its own native promo field with
-/// it, validates it, and reprices.
+/// - `/product`, the 3D headphones at the top, which the user can orbit.
+/// - `/promo`, the holo badge tile halfway down the Overview tab.
+/// - `/reviews`, the whole Review Details tab, drawn with Liquid Glass.
+///
+/// UIKit owns everything around them: layout, scrolling, the Overview |
+/// Review Details switch, the price, and the success haptic. The page tells
+/// each view whether it can be seen (`visibility`) and decides which drags
+/// are Flutter's (`ProductScrollView`). Flutter draws the badge and, when it
+/// is tapped, hands back the promo code; the page fills its own native promo
+/// field with it, validates it, and reprices.
 final class ProductDetailViewController: UIViewController, FlutterRouteHosting {
-    let route = AppEngines.promoRoute
+    /// The HUD reports the Flutter view that owns the screen: the 3D header
+    /// on Overview, the glass panel on Review Details.
+    var route: String {
+        segment.selectedSegmentIndex == 1 ? AppEngines.reviewsRoute : AppEngines.productRoute
+    }
 
     /// A tile this close to the viewport counts as visible, so its engine is
     /// already drawing by the time it scrolls into view.
@@ -24,10 +32,32 @@ final class ProductDetailViewController: UIViewController, FlutterRouteHosting {
     private static let basePrice = 249.0
     private static let discount = 0.2
     private static let promoCode = "HOLO20"
+    private static let headerHeight: CGFloat = 280
+    /// Space above the segmented control once Review Details pins it.
+    private static let pinnedGap: CGFloat = 8
+    private static let segmentSpacing: CGFloat = 16
+    private static let stackBottomMargin: CGFloat = 32
+    /// The Flutter tab's background, so there is no seam and no flash.
+    private static let reviewsBackdrop = UIColor(red: 242 / 255, green: 242 / 255, blue: 247 / 255, alpha: 1)
 
     private let scrollView = ProductScrollView()
     private let stack = UIStackView()
     private let promoTile = InlineFlutterCardViewController()
+    private let productHeader = EmbeddedFlutterViewController(
+        route: AppEngines.productRoute,
+        channelName: AppEngines.productChannelName,
+        backdropColor: .systemIndigo,
+        cornerRadius: 20
+    )
+    private let reviewsPanel = EmbeddedFlutterViewController(
+        route: AppEngines.reviewsRoute,
+        channelName: AppEngines.reviewsChannelName,
+        backdropColor: reviewsBackdrop,
+        cornerRadius: 20
+    )
+    private let segment = UISegmentedControl(items: ["Overview", "Review Details"])
+    private let overviewStack = UIStackView()
+    private var reviewsHeight: NSLayoutConstraint?
     private let priceLabel = UILabel()
     private let promoField = UITextField()
     private let promoApplyButton = UIButton(configuration: .tinted())
@@ -51,10 +81,41 @@ final class ProductDetailViewController: UIViewController, FlutterRouteHosting {
         }
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        // All three engines spawn on the tab's first appearance: never on the
+        // segment tap, where a synchronous engine start would hitch it. They
+        // spawn as one measured step, before the promo tile's own appearance
+        // callback can start its engine alone.
+        AppEngines.shared.spawnShopEngines()
+        super.viewWillAppear(animated)
+        productHeader.embedIfNeeded()
+        reviewsPanel.embedIfNeeded()
+    }
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         // Layout is final now; correct anything Flutter pulled too early.
         promoTile.sendVisibility(promoState().visible, force: true)
+        reportVisibility(force: true)
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        productHeader.sendVisibility(false)
+        reviewsPanel.sendVisibility(false)
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // Review Details fills the viewport below the pinned segmented
+        // control, so the page's content ends where the panel ends.
+        let height = max(
+            scrollView.bounds.height - Self.pinnedGap - segment.bounds.height - Self.segmentSpacing,
+            200
+        )
+        if let reviewsHeight, abs(reviewsHeight.constant - height) > 0.5 {
+            reviewsHeight.constant = height
+        }
     }
 
     // MARK: - Layout
@@ -62,7 +123,7 @@ final class ProductDetailViewController: UIViewController, FlutterRouteHosting {
     private func configureScrollView() {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.delegate = self
-        scrollView.flutterTile = promoTile
+        scrollView.touchOwners = [productHeader, promoTile, reviewsPanel]
         // Pinned to the safe area, so content never slides under the bars:
         // the Flutter tile's safe-area insets stay zero while scrolling, and
         // its viewport metrics never change mid-scroll.
@@ -72,7 +133,7 @@ final class ProductDetailViewController: UIViewController, FlutterRouteHosting {
         stack.axis = .vertical
         stack.spacing = 22
         stack.isLayoutMarginsRelativeArrangement = true
-        stack.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 16, leading: 16, bottom: 32, trailing: 16)
+        stack.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 16, leading: 16, bottom: Self.stackBottomMargin, trailing: 16)
         stack.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(stack)
 
@@ -91,7 +152,35 @@ final class ProductDetailViewController: UIViewController, FlutterRouteHosting {
     }
 
     private func buildPage() {
-        stack.addArrangedSubview(makeHero())
+        addChild(productHeader)
+        let hero = makeHero()
+        stack.addArrangedSubview(hero)
+        productHeader.didMove(toParent: self)
+
+        segment.selectedSegmentIndex = 0
+        segment.accessibilityIdentifier = "shopSegment"
+        segment.addTarget(self, action: #selector(segmentChanged), for: .valueChanged)
+        stack.addArrangedSubview(segment)
+        stack.setCustomSpacing(Self.segmentSpacing, after: hero)
+        stack.setCustomSpacing(Self.segmentSpacing, after: segment)
+
+        overviewStack.axis = .vertical
+        overviewStack.spacing = stack.spacing
+        stack.addArrangedSubview(overviewStack)
+        buildOverview(in: overviewStack)
+
+        addChild(reviewsPanel)
+        reviewsPanel.view.isHidden = true
+        reviewsPanel.view.accessibilityIdentifier = "reviewsPanel"
+        stack.addArrangedSubview(reviewsPanel.view)
+        let reviewsHeight = reviewsPanel.view.heightAnchor.constraint(equalToConstant: 600)
+        reviewsHeight.isActive = true
+        self.reviewsHeight = reviewsHeight
+        reviewsPanel.didMove(toParent: self)
+    }
+
+    /// The Overview tab: the native page as it was, promo tile included.
+    private func buildOverview(in stack: UIStackView) {
         stack.addArrangedSubview(section("OPTIONS", rows: [
             makeSegmentedRow(title: "Color", items: ["Midnight", "Silver", "Sky"]),
             makeRow(symbol: "shippingbox.fill", tint: .systemBrown, title: "In the box", value: "Case, USB-C cable"),
@@ -155,7 +244,8 @@ final class ProductDetailViewController: UIViewController, FlutterRouteHosting {
     private func promoState() -> (visible: Bool, progress: Double) {
         let tile = promoTile.view.convert(promoTile.view.bounds, to: scrollView)
         let viewport = scrollView.bounds
-        let visible = viewport.insetBy(dx: 0, dy: -Self.visibilityMargin).intersects(tile)
+        let visible = !overviewStack.isHidden
+            && viewport.insetBy(dx: 0, dy: -Self.visibilityMargin).intersects(tile)
         let progress = (tile.midY - viewport.midY) / max(viewport.height / 2, 1)
         return (visible, Double(min(max(progress, -1.5), 1.5)))
     }
@@ -174,6 +264,41 @@ final class ProductDetailViewController: UIViewController, FlutterRouteHosting {
         if state.visible {
             promoTile.sendScroll(progress: state.progress, velocity: velocity)
         }
+        reportVisibility()
+    }
+
+    /// The 3D header renders only while some of it is on screen, and the
+    /// reviews only while their tab is selected and on screen.
+    private func reportVisibility(force: Bool = false) {
+        let viewport = scrollView.bounds
+        func onScreen(_ view: UIView) -> Bool {
+            !view.isHidden && viewport.intersects(view.convert(view.bounds, to: scrollView))
+        }
+        let shown = viewIfLoaded?.window != nil
+        productHeader.sendVisibility(shown && onScreen(productHeader.view), force: force)
+        reviewsPanel.sendVisibility(shown && onScreen(reviewsPanel.view), force: force)
+    }
+
+    // MARK: - Overview | Review Details
+
+    @objc private func segmentChanged() {
+        let reviews = segment.selectedSegmentIndex == 1
+        overviewStack.isHidden = reviews
+        reviewsPanel.view.isHidden = !reviews
+        // The panel reaches the bottom of the viewport, so it needs no margin.
+        stack.directionalLayoutMargins.bottom = reviews ? 0 : Self.stackBottomMargin
+        view.layoutIfNeeded()
+
+        if reviews {
+            // Pin the segmented control to the top: the page can scroll no
+            // further, and from here on the list inside the panel scrolls.
+            let pinned = segment.frame.minY - Self.pinnedGap
+            let maxOffset = max(scrollView.contentSize.height - scrollView.bounds.height, 0)
+            scrollView.setContentOffset(CGPoint(x: 0, y: min(pinned, maxOffset)), animated: true)
+        }
+        UISelectionFeedbackGenerator().selectionChanged()
+        PerformanceHUDView.shared.setActiveFlutterRoute(route)
+        reportScroll()
     }
 
     // MARK: - Promo code, processed natively
@@ -262,22 +387,11 @@ final class ProductDetailViewController: UIViewController, FlutterRouteHosting {
     // MARK: - Building blocks
 
     private func makeHero() -> UIView {
-        let artwork = UIImageView(image: UIImage(systemName: "headphones"))
-        artwork.tintColor = .white
-        artwork.contentMode = .scaleAspectFit
-        artwork.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 96, weight: .light)
-
-        let artworkBackground = GradientView(colors: [.systemIndigo, .systemPurple])
-        artworkBackground.layer.cornerRadius = 20
-        artworkBackground.layer.cornerCurve = .continuous
-        artworkBackground.clipsToBounds = true
-        artwork.translatesAutoresizingMaskIntoConstraints = false
-        artworkBackground.addSubview(artwork)
-        NSLayoutConstraint.activate([
-            artworkBackground.heightAnchor.constraint(equalToConstant: 220),
-            artwork.centerXAnchor.constraint(equalTo: artworkBackground.centerXAnchor),
-            artwork.centerYAnchor.constraint(equalTo: artworkBackground.centerYAnchor),
-        ])
+        // The artwork is the `/product` Flutter view: drag it to orbit.
+        let artwork = productHeader.view!
+        artwork.accessibilityIdentifier = "productHeader"
+        artwork.accessibilityLabel = "Nimbus One in 3D. Drag to rotate."
+        artwork.heightAnchor.constraint(equalToConstant: Self.headerHeight).isActive = true
 
         let name = UILabel()
         name.text = "Nimbus One"
@@ -297,7 +411,7 @@ final class ProductDetailViewController: UIViewController, FlutterRouteHosting {
         details.spacing = 6
         details.setCustomSpacing(12, after: rating)
 
-        let hero = UIStackView(arrangedSubviews: [artworkBackground, details])
+        let hero = UIStackView(arrangedSubviews: [artwork, details])
         hero.axis = .vertical
         hero.spacing = 16
         return hero
@@ -457,19 +571,31 @@ extension ProductDetailViewController: UIScrollViewDelegate {
     }
 }
 
+/// A Flutter view inside the page that may claim drags from its scroll view.
+protocol FlutterTouchOwner: AnyObject {
+    var view: UIView! { get }
+
+    /// Whether a touch that started at `point`, in the owner's view
+    /// coordinates, belongs to Flutter rather than to the page's scroll.
+    func ownsTouch(startingAt point: CGPoint) -> Bool
+}
+
+extension InlineFlutterCardViewController: FlutterTouchOwner {}
+
 /// Decides, per touch, whether a drag scrolls the page or belongs to Flutter.
 ///
-/// A drag that starts on the badge is Flutter's: the page must not steal it
-/// once it moves. Any other drag, including one on the tile's empty area,
-/// scrolls the page as usual.
+/// A drag that starts on a Flutter view's owned area is Flutter's, and the
+/// page must not steal it once it moves: the badge on the promo tile, and
+/// anywhere on the 3D header or the Review Details panel. Any other drag,
+/// including one on the promo tile's empty area, scrolls the page as usual.
 final class ProductScrollView: UIScrollView {
-    weak var flutterTile: InlineFlutterCardViewController?
-    private var touchStart: CGPoint?
+    var touchOwners: [FlutterTouchOwner] = []
+    private var touchStart: (owner: FlutterTouchOwner, point: CGPoint)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        // Deliver touches to the tile at once, so grabbing the badge feels
-        // immediate and touchesShouldCancel(in:) decides every drag.
+        // Deliver touches to Flutter at once, so grabbing the badge or the
+        // model feels immediate and touchesShouldCancel(in:) decides every drag.
         delaysContentTouches = false
         canCancelContentTouches = true
     }
@@ -480,37 +606,19 @@ final class ProductScrollView: UIScrollView {
     }
 
     override func touchesShouldBegin(_ touches: Set<UITouch>, with event: UIEvent?, in view: UIView) -> Bool {
-        if let tile = flutterTile?.view, view.isDescendant(of: tile), let touch = touches.first {
-            touchStart = touch.location(in: tile)
-        } else {
-            touchStart = nil
+        touchStart = nil
+        if let touch = touches.first,
+           let owner = touchOwners.first(where: { view.isDescendant(of: $0.view) }) {
+            touchStart = (owner, touch.location(in: owner.view))
         }
         return super.touchesShouldBegin(touches, with: event, in: view)
     }
 
     override func touchesShouldCancel(in view: UIView) -> Bool {
-        if let tile = flutterTile, view.isDescendant(of: tile.view),
-           let start = touchStart, tile.ownsTouch(startingAt: start) {
+        if let start = touchStart, view.isDescendant(of: start.owner.view),
+           start.owner.ownsTouch(startingAt: start.point) {
             return false
         }
         return super.touchesShouldCancel(in: view)
-    }
-}
-
-/// A view whose layer is a vertical gradient, sized with the view.
-private final class GradientView: UIView {
-    override class var layerClass: AnyClass { CAGradientLayer.self }
-
-    init(colors: [UIColor]) {
-        super.init(frame: .zero)
-        let gradient = layer as! CAGradientLayer
-        gradient.colors = colors.map(\.cgColor)
-        gradient.startPoint = CGPoint(x: 0, y: 0)
-        gradient.endPoint = CGPoint(x: 1, y: 1)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
     }
 }

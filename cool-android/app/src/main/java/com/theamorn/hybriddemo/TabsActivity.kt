@@ -209,22 +209,24 @@ class TabsActivity : FragmentActivity() {
 
     override fun onPause() {
         PerformanceHudState.stop()
-        // The Shop tile is a bare FlutterView: no fragment forwards the
-        // activity lifecycle to its engine, so the activity does.
-        AppEngines.getEngine(AppEngines.PROMO_ROUTE)?.lifecycleChannel?.appIsInactive()
+        // The Shop page's Flutter views are bare FlutterViews: no fragment
+        // forwards the activity lifecycle to their engines, so the activity does.
+        shopLifecycles().forEach { it.appIsInactive() }
         super.onPause()
     }
 
     override fun onStop() {
-        AppEngines.getEngine(AppEngines.PROMO_ROUTE)?.lifecycleChannel?.appIsPaused()
+        shopLifecycles().forEach { it.appIsPaused() }
         super.onStop()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        val lifecycle = AppEngines.getEngine(AppEngines.PROMO_ROUTE)?.lifecycleChannel ?: return
-        if (hasFocus) lifecycle.aWindowIsFocused() else lifecycle.noWindowsAreFocused()
+        shopLifecycles().forEach { if (hasFocus) it.aWindowIsFocused() else it.noWindowsAreFocused() }
     }
+
+    private fun shopLifecycles() =
+        AppEngines.SHOP_ROUTES.mapNotNull { AppEngines.getEngine(it)?.lifecycleChannel }
 
     /**
      * `FlutterFragment` needs this forwarded or the engine's lifecycle channel
@@ -284,11 +286,13 @@ class TabsActivity : FragmentActivity() {
                 PerformanceHudState.setActiveFlutterRoute(AppEngines.GAME_ROUTE)
             }
             TAB_SHOP -> {
-                // Spawns the engine lazily and begins the deferred spawn-cost
-                // measurement; ShopScreen then attaches its FlutterView to it.
-                AppEngines.engineForRoute(this, AppEngines.PROMO_ROUTE)
+                // Spawns the page's three engines lazily and begins their
+                // deferred spawn-cost measurements; ShopScreen then attaches
+                // its FlutterViews to them. ShopScreen points the HUD at the
+                // view that owns the screen.
+                AppEngines.spawnShopEngines(this)
                 shopVisited = true
-                PerformanceHudState.setActiveFlutterRoute(AppEngines.PROMO_ROUTE)
+                PerformanceHudState.setActiveFlutterRoute(AppEngines.PRODUCT_ROUTE)
             }
             TAB_SCENE -> {
                 ensureFlutterFragment(AppEngines.SCENE_ROUTE, sceneContainer.id, TAG_FLUTTER_SCENE) {
@@ -308,9 +312,8 @@ class TabsActivity : FragmentActivity() {
     private fun updateFlutterVisibility() {
         val routes = listOf(
             TAB_GAME to AppEngines.GAME_ROUTE,
-            TAB_SHOP to AppEngines.PROMO_ROUTE,
             TAB_SCENE to AppEngines.SCENE_ROUTE,
-        )
+        ) + AppEngines.SHOP_ROUTES.map { TAB_SHOP to it }
         for ((tabIndex, route) in routes) {
             val engine = AppEngines.getEngine(route) ?: continue
             val lifecycle = engine.lifecycleChannel

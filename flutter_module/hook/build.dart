@@ -12,7 +12,11 @@ void main(List<String> args) async {
     buildScenes(buildInput: input, buildOutput: output);
     // Compile .fmat materials under assets/, loadable by source path with
     // loadFmatMaterial (and hot-reloadable). A no-op when there are none.
-    await buildMaterials(buildInput: input, buildOutput: output);
+    await buildMaterials(
+      buildInput: input,
+      buildOutput: output,
+      debugViews: true,
+    );
 // flutter_scene:init:end
   });
 }

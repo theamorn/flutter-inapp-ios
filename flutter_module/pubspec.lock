@@ -159,10 +159,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_scene
-      sha256: "1cc32b5ed0d05296c1f7958e63168a750c05c2373d6769ad9b9eaa973b2f97fe"
+      sha256: "6d2a4acb76307b2cf45a6e458fdf61c6bcf02693514656433e5ae67eda9d4056"
       url: "https://pub.dev"
     source: hosted
-    version: "0.23.0"
+    version: "0.24.3"
   flutter_shaders:
     dependency: "direct main"
     description:
@@ -228,10 +228,10 @@ packages:
     dependency: "direct main"
     description:
       name: liquid_glass_renderer
-      sha256: "789be157494b38cdef7607bb9b63e7fe3fab76fae16149e52fa313c2d858cb3f"
+      sha256: ff5a8a0769e004c11d118c3921c0590552ce396ecd45811ccb8104732477aecd
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.0-dev.4"
+    version: "1.0.0-dev.0"
   logging:
     dependency: transitive
     description:
@@ -316,10 +316,10 @@ packages:
     dependency: transitive
     description:
       name: scene
-      sha256: f14dd23ea3858041b644ec4824eca5cae817b42aca03c5ed2efcf1afa003d554
+      sha256: "2e80649db2f492eed634a656efb924b43ec8b02a985f92a21d86ab2591583f30"
       url: "https://pub.dev"
     source: hosted
-    version: "0.3.0"
+    version: "0.4.1"
   sky_engine:
     dependency: transitive
     description: flutter
@@ -422,5 +422,5 @@ packages:
     source: hosted
     version: "2.2.4"
 sdks:
-  dart: ">=3.13.0 <4.0.0"
+  dart: ">=3.13.0 <3.14.0"
   flutter: ">=3.47.0"

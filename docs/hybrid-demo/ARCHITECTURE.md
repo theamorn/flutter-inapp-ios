@@ -7,12 +7,14 @@
 ```
 AppEngines.shared (iOS) / AppEngines singleton (Android)
   └── FlutterEngineGroup("hybrid-demo")     ← ONE group: shared snapshot, shared GPU context
-        ├── engine A   initialRoute "/game"    ← spawned lazily on first tab-3 appearance
-        ├── engine B   initialRoute "/promo"   ← spawned lazily on first tab-4 (Shop) appearance
-        └── engine C   initialRoute "/scene"   ← spawned lazily on first tab-5 appearance
+        ├── engine A   initialRoute "/game"     ← spawned lazily on first tab-3 appearance
+        ├── engine B   initialRoute "/product"  ┐
+        ├── engine C   initialRoute "/promo"    ├ spawned together on first tab-4 (Shop) appearance
+        ├── engine D   initialRoute "/reviews"  ┘
+        └── engine E   initialRoute "/scene"    ← spawned lazily on first tab-5 appearance
 ```
 
-Both hosts use this topology and expose all five tabs. Tabs 3 and 5 give their engine the whole screen: `FlutterViewController` on iOS, `FlutterFragment` on Android. Tab 4 is different: a native product page with its engine **inline**, as one fixed-height tile in the page's scroll view. See [Inline tile](#inline-tile--route-promo) below.
+Both hosts use this topology and expose all five tabs. Tabs 3 and 5 give their engine the whole screen: `FlutterViewController` on iOS, `FlutterFragment` on Android. Tab 4 is different: a native product page with three engines **inline**, each one view in the page's scroll view, because add-to-app gives one view per engine. See [Inline tile](#inline-tile--route-promo) and [Shop header and Review Details](#shop-header-and-review-details--routes-product-and-reviews) below.
 
 `/glass` (Liquid Glass, `05-liquid-glass.md`) no longer has a tab. The route and its Dart code stay supported, so tab 4 can go back to Glass with a one-line change in each host's tab list.
 
@@ -56,13 +58,17 @@ Each feature app creates exactly one initial Navigator route via `onGenerateInit
 |---|---|
 | Engine group name | `hybrid-demo` |
 | Route — Flappy Cat (tab 3) | `/game` |
+| Route — Shop 3D header (tab 4) | `/product` |
 | Route — Shop promo tile (tab 4) | `/promo` |
+| Route — Shop Review Details tab (tab 4) | `/reviews` |
 | Route — Liquid Glass (no tab; kept supported) | `/glass` |
 | Route — Island scene (tab 5) | `/scene` |
 | Route — standalone dev home | `/` |
 | Existing channel (**keep, do not remove**) | `com.theamorn.flutter` |
 | New telemetry channel | `com.theamorn.hybrid/telemetry` |
 | Inline promo tile channel | `com.theamorn.hybrid/promo` |
+| Shop 3D header channel | `com.theamorn.hybrid/product` |
+| Shop Review Details channel | `com.theamorn.hybrid/reviews` |
 
 `com.theamorn.flutter` remains in the standalone home in `flutter_module/lib/main.dart`. The current native login opens the tab shell and does not install the previous talk's counter handler. The old native wiring is preserved in the root README's integration guide; do not claim that the current login demonstrates that exchange.
 
@@ -91,6 +97,26 @@ Tab 4 is a native product page (UIKit `ProductDetailViewController` / Compose `S
   - a `PlatformPlugin`, so `HapticFeedback` has a handler;
   - consumed window insets;
   - activity lifecycle and window focus, forwarded to the engine by `TabsActivity`.
+
+## Shop header and Review Details — routes `/product` and `/reviews`
+
+Two more Flutter views on the Shop page, same embedding as the promo tile (child `FlutterViewController` on iOS, bare `FlutterView` with a `TextureView` on Android). Task doc: `10-shop-3d-and-reviews.md`.
+
+- **`/product`** is the 280pt/dp header above "Nimbus One": headphones built in code with `flutter_scene` (`nimbus_headphones.dart`), standing in a blurred park they reflect, which the user turns, with a fling and a slow idle spin.
+- **`/reviews`** is the whole **Review Details** tab. The page's native segmented control (iOS) or tab row (Android) switches between **Overview**, the native page as it was, and this panel. Glass review cards scroll in Flutter over a coloured backdrop, under a second glass layer of controls, both `liquid_glass_renderer` iOS 27 presets.
+
+Both use one channel contract, `HostVisibilityLink` in Dart, `EmbeddedFlutterViewController` on iOS, and `FlutterSurfaceController` on Android:
+
+| Direction | Method | Arguments / reply |
+|---|---|---|
+| native → Dart | `visibility` | `{visible}`: the view intersects the viewport, its tab is selected, and the page is on screen. Sent only on change. |
+| Dart → native | `ready` | Reply `{visible}`. Dart pulls its starting state, as with `/promo`. |
+
+**Who owns a touch.** Every touch that starts inside either view belongs to Flutter: dragging the header orbits the model, and dragging the panel scrolls Flutter's list. The page scrolls from everywhere else. On iOS, `ProductScrollView` holds a list of `FlutterTouchOwner`s; on Android, the shared `FlutterViewGate` takes an `ownsTouch` rule.
+
+**Pinning.** Selecting Review Details hides the Overview content and scrolls the page so the tab control sits 8 below the top of the viewport. The panel's height is the viewport's minus the control's, so the page can scroll no further, and from there the list inside the panel scrolls.
+
+**Pausing.** The three Shop engines spawn on the tab's first appearance, never on the segment tap. `/product` stops its render loop (`TickerMode`) when `visibility` says it is off screen and releases its transient render targets. `/reviews` mutes its tickers while hidden. The HUD follows the view that owns the screen: `/product` on Overview, `/reviews` on Review Details.
 
 ## Telemetry — the HUD
 

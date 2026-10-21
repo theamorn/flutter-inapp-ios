@@ -1,0 +1,143 @@
+// The Super Ultra firepit stones with their own indirect light.
+//
+// Ambient() replaces the engine's image-based light on this one small object
+// with a controlled sky/ground gradient (sky_upper above, sky_lower below),
+// which the island drives from its ambient schedule
+// (lib/island/super_ultra/stone_lighting.dart). The sun, the moon and the
+// campfire still light the stones through Light(), with their real
+// attenuation and shadows.
+//
+// The engine's own switch for this, `environment_lighting: false`, compiles
+// but draws nothing on Adreno/Vulkan in flutter_scene 0.24.0 (checked on a
+// device, 2026-10-06), so the environment stays bound and Ambient()
+// overwrites both of its terms instead of scaling them.
+//
+// LightContext.radiance already carries each light's attenuation and shadow,
+// so neither is applied again here.
+material {
+  name: "CampfireStone",
+  shading_model: lit,
+  parameters: [
+    // rgb = linear base colour (the imported stone colour).
+    { type: vec4, name: base_color, default: [0.72, 0.89, 0.91, 1.0] },
+    // rgb = sky radiance above the stones, w = ambient multiplier.
+    { type: vec4, name: sky_upper, default: [0.5, 0.6, 0.7, 1.0] },
+    // rgb = ground bounce below the stones.
+    { type: vec4, name: sky_lower, default: [0.15, 0.13, 0.1, 0.0] },
+    // x = roughness. y = how much of the engine's irradiance to keep: 0,
+    // and never set; see Ambient(). z = rain wetness (0..1), w = campfire
+    // intensity (0..2) for warm inner-ring coal bounce.
+    { type: vec4, name: stone, default: [0.85, 0.0, 0.0, 0.0] },
+  ],
+}
+
+fragment {
+  // flutter_scene 0.24 defaults material fragments to mediump (half precision
+  // on Mali/Adreno/web). The lobes below run in float32.
+  precision highp float;
+
+  float StoneHash31(vec3 p) {
+    vec3 q = fract(p * 0.1031);
+    q += dot(q, q.yzx + 33.33);
+    return fract((q.x + q.y) * q.z);
+  }
+
+  float StoneGrain(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    vec3 u = f * f * (3.0 - 2.0 * f);
+    float n000 = StoneHash31(i);
+    float n100 = StoneHash31(i + vec3(1.0, 0.0, 0.0));
+    float n010 = StoneHash31(i + vec3(0.0, 1.0, 0.0));
+    float n110 = StoneHash31(i + vec3(1.0, 1.0, 0.0));
+    float n001 = StoneHash31(i + vec3(0.0, 0.0, 1.0));
+    float n101 = StoneHash31(i + vec3(1.0, 0.0, 1.0));
+    float n011 = StoneHash31(i + vec3(0.0, 1.0, 1.0));
+    float n111 = StoneHash31(i + vec3(1.0, 1.0, 1.0));
+    float nx00 = mix(n000, n100, u.x);
+    float nx10 = mix(n010, n110, u.x);
+    float nx01 = mix(n001, n101, u.x);
+    float nx11 = mix(n011, n111, u.x);
+    return mix(mix(nx00, nx10, u.y), mix(nx01, nx11, u.y), u.z);
+  }
+
+  void Surface(inout MaterialInputs material) {
+    vec3 p = GetWorldPosition();
+    vec3 n = normalize(GetWorldNormal());
+    float wet = material_params.stone.z;
+
+    // High-frequency mineral grain and micro-pitting normal relief.
+    float g0 = StoneGrain(p * 18.0);
+    float gx = StoneGrain(p * 18.0 + vec3(0.08, 0.0, 0.0)) - g0;
+    float gz = StoneGrain(p * 18.0 + vec3(0.0, 0.0, 0.08)) - g0;
+    float speck = StoneGrain(p * 42.0);
+    n = normalize(n + vec3(gx, 0.0, gz) * (0.45 * (1.0 - 0.35 * wet)));
+
+    // Ground-contact charcoal and moisture staining near the base of the ring.
+    float base_stain = (1.0 - smoothstep(0.01, 0.16, p.y)) *
+                       (1.0 - 0.5 * smoothstep(-0.2, 0.5, n.y));
+    vec3 color = material_params.base_color.rgb *
+                 (0.88 + 0.24 * g0 + 0.10 * (speck - 0.5));
+    color = mix(color, color * vec3(0.32, 0.28, 0.24), base_stain * 0.65);
+    color *= mix(1.0, 0.64, wet);
+
+    // Straight alpha; Composite() premultiplies.
+    material.base_color = vec4(color, 1.0);
+    material.normal = n;
+    material.metallic = 0.0;
+    float dry_roughness =
+        clamp(material_params.stone.x + (0.5 - g0) * 0.12, 0.45, 0.98);
+    material.roughness = mix(dry_roughness, 0.20, wet);
+    material.specular = mix(0.5, 0.82, wet);
+    material.occlusion = mix(1.0, 0.65, base_stain);
+  }
+
+  LightTerms Light(MaterialInputs material, LightContext light) {
+    LightTerms terms;
+    vec3 n = light.normal;
+    vec3 v = light.view;
+    vec3 l = light.light_vector;
+    float n_dot_l = max(dot(n, l), 0.0);
+    terms.diffuse = material.base_color.rgb * (1.0 / kPi) * light.radiance * n_dot_l;
+    terms.specular = vec3(0.0);
+    vec3 h = l + v;
+    float h_len_sq = dot(h, h);
+    if (n_dot_l > 0.0 && h_len_sq > 1e-8) {
+      vec3 half_vector = h * inversesqrt(h_len_sq);
+      float n_dot_v = max(dot(n, v), 1e-4);
+      float d = DistributionGGX(n, half_vector, material.roughness);
+      float vis = VisibilitySmithGGXCorrelated(n_dot_v, n_dot_l, material.roughness);
+      vec3 f = FresnelSchlick(max(dot(half_vector, v), 0.0), vec3(0.04));
+      terms.specular = min(d * vis, 64.0) * f * material.specular *
+                       light.radiance * n_dot_l;
+    }
+    return terms;
+  }
+
+  // The stones' sky: lower colour facing down, upper facing up.
+  vec3 StoneSky(vec3 direction) {
+    float up = clamp(direction.y * 0.5 + 0.5, 0.0, 1.0);
+    return mix(material_params.sky_lower.rgb, material_params.sky_upper.rgb, up) *
+           material_params.sky_upper.w;
+  }
+
+  void Ambient(MaterialInputs material, inout AmbientContext ambient) {
+    // Overwrite, never scale: the baked sky must not leak in. The engine's
+    // irradiance is still read, at a weight of stone.y (0 at runtime): left
+    // unread, the compiler strips irradiance_field from the Metal shader,
+    // the engine binds it by name anyway at slot -1, and Apple GPUs crash
+    // in setFragmentTexture. A uniform weight is one it cannot fold away.
+    vec3 ember_bounce = vec3(1.15, 0.36, 0.08) * material_params.stone.w *
+                        0.22 * clamp(0.65 - ambient.normal.y * 0.45, 0.0, 1.0);
+    ambient.irradiance = StoneSky(ambient.normal) + ember_bounce +
+                         ambient.irradiance * material_params.stone.y;
+    ambient.radiance = StoneSky(ambient.reflection);
+  }
+
+  highp vec4 Composite(MaterialInputs material, LightingResult result) {
+    highp vec3 color = result.direct_diffuse + result.direct_specular +
+                       result.indirect_diffuse + result.indirect_specular +
+                       result.emissive;
+    return vec4(color, 1.0) * result.alpha;
+  }
+}

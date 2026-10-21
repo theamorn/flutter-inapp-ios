@@ -55,6 +55,9 @@ vertex {
 }
 
 fragment {
+  // flutter_scene 0.24 defaults material fragments to mediump (half precision
+  // on Mali/Adreno/web). This body computes positions, phases and hashes.
+  precision highp float;
   void Surface(inout MaterialInputs material) {
     float wet = material_params.sun_dir.w;
     vec3 albedo = GetVertexColor().rgb * (1.0 - 0.18 * wet);

@@ -79,7 +79,7 @@ void main() {
     expect(find.byKey(const ValueKey('pkg-day-night')), findsOneWidget);
     expect(find.byKey(const ValueKey('pkg-thickness')), findsOneWidget);
     expect(find.byKey(const ValueKey('pkg-blur')), findsOneWidget);
-    expect(find.byKey(const ValueKey('pkg-light-angle')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pkg-highlight')), findsOneWidget);
     expect(find.byKey(const ValueKey('pkg-toggle-fake-glass')), findsOneWidget);
     expect(find.byKey(const ValueKey('pkg-toggle-blend-group')), findsOneWidget);
 

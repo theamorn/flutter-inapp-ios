@@ -93,6 +93,9 @@ vertex {
 }
 
 fragment {
+  // flutter_scene 0.24 defaults material fragments to mediump (half precision
+  // on Mali/Adreno/web). This body computes positions, phases and hashes.
+  precision highp float;
   void Surface(inout MaterialInputs material) {
     vec3 p = GetWorldPosition();
     float time = material_params.time;
@@ -126,14 +129,23 @@ fragment {
                     material_params.deep_color.rgb,
                     smoothstep(1.5, 14.0, thickness)) *
                 material_params.water_light.rgb;
+    float crest_thin = smoothstep(-0.02, 0.16, v_crest) +
+                       (1.0 - smoothstep(0.0, 3.2, thickness)) * 0.35;
+    float slope_tilt = clamp((1.0 - normal.y) * 4.5, 0.0, 1.0);
+    vec3 sss = vec3(0.035, 0.56, 0.46) * material_params.water_light.rgb *
+               crest_thin * (0.35 + 0.65 * slope_tilt) * (1.0 - fresnel * 0.6);
     vec3 sand = material_params.seabed.rgb * material_params.water_light.rgb;
-    vec3 water = sand * transmittance + body * inscatter;
+    vec3 water = sand * transmittance + body * inscatter + sss;
 
     // Foam: the same lace as ocean.fmat, along the surf line and on the
     // tallest crests, fetched only where it can be non-zero.
     vec2 dpdx = dFdx(p.xz);
     vec2 dpdy = dFdy(p.xz);
-    float surf = 1.0 - smoothstep(0.0, material_params.foam.x, depth);
+    float swash_wave = 0.5 + 0.5 * sin(depth * 14.0 - time * 2.6 +
+                                       ripple_a.x * 1.4);
+    float surf_edge = max(material_params.foam.x * (0.82 + 0.32 * swash_wave),
+                          0.04);
+    float surf = 1.0 - smoothstep(0.0, surf_edge, depth);
     float crest = smoothstep(material_params.foam.y,
                              material_params.foam.y + 0.09, v_crest);
     float foam = 0.0;
@@ -144,16 +156,18 @@ fragment {
       float breakup = textureGrad(foam_texture,
                                   p.xz * 0.91 - vec2(time * 0.047, 0.0),
                                   dpdx * 0.91, dpdy * 0.91).g;
-      foam = (surf * (0.35 + 1.1 * lace) + crest * lace * 1.4) *
-             smoothstep(0.25, 0.65, breakup + surf * 0.45);
+      foam = (surf * (0.35 + 1.15 * lace) + crest * lace * 1.45) *
+             smoothstep(0.22, 0.64, breakup + surf * 0.48);
       foam = clamp(foam * material_params.foam.z * near, 0.0, 1.0);
     }
 
-    material.base_color = vec4(vec3(0.92) * foam, 1.0);
+    vec3 foam_albedo = vec3(0.94, 0.96, 0.98);
+    material.base_color = vec4(mix(body * 0.65, foam_albedo, foam), 1.0);
     material.normal = normal;
     material.metallic = 0.0;
-    material.roughness = mix(0.05, 0.85, foam);
+    material.roughness = mix(0.045, 0.85, foam);
     material.specular = 1.0 - foam;
-    material.emissive = water * (1.0 - fresnel) * (1.0 - foam);
+    material.emissive = max(water * (1.0 - fresnel) - body * 0.22, vec3(0.0)) *
+                        (1.0 - foam);
   }
 }

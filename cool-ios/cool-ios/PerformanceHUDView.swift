@@ -267,7 +267,7 @@ final class PerformanceHUDView: UIView {
         }
 
         let routeOrder = [
-            AppEngines.gameRoute, AppEngines.promoRoute, AppEngines.glassRoute, AppEngines.sceneRoute,
+            AppEngines.gameRoute, AppEngines.shopSpawnLabel, AppEngines.glassRoute, AppEngines.sceneRoute,
         ]
         let summaries = routeOrder.compactMap { route -> String? in
             guard let spawn = engineSpawns[route] else { return nil }

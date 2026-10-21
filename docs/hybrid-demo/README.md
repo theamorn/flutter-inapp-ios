@@ -27,9 +27,9 @@ The predecessor talk is preserved at `flutter_module/lib/couple.md` ("The Power 
 | `flutter_native/` | Standalone Flutter app hosting a native camera — the reverse-direction demo from the old talk. **Not touched by this plan.** |
 | `cool-android/` | Compose host with the same five tabs: Home, WebView, cached-engine Flutter Game and Island, and the Shop page with an inline `FlutterView` tile. It also has the native HUD and a Gradle source integration of the same module. |
 
-Toolchain is **Flutter 3.47.2** (stable, Dart 3.13.2), managed by fvm. Impeller is default on both platforms.
+Toolchain is **Flutter 3.47.7** (stable, Dart 3.13.5), managed by fvm. Impeller is default on both platforms.
 
-`.fvmrc` now pins **3.47.2**. Run `fvm install` and `fvm flutter pub get` inside the module on a fresh checkout. Task `08` is the current stage: implementation and release builds exist, while physical-device measurements and full stage rehearsal still need to be recorded in [MEASUREMENTS.md](MEASUREMENTS.md).
+`.fvmrc` now pins **3.47.7** (moved from 3.47.2 for `liquid_glass_renderer` 1.0; see `10-shop-3d-and-reviews.md`). Run `fvm install` and `fvm flutter pub get` inside the module on a fresh checkout. Task `08` is the current stage: implementation and release builds exist, while physical-device measurements and full stage rehearsal still need to be recorded in [MEASUREMENTS.md](MEASUREMENTS.md).
 
 ## Decisions already taken
 
@@ -69,6 +69,7 @@ Every task doc uses the same sections: **Goal · Prerequisites · Repo facts you
 | `07-android-host.md` | Compose host (started as tabs 1 + 3) |
 | `08-polish.md` | Stage-readiness |
 | `09-inline-holo-badge.md` | Tab 4 (Shop): Flutter as one tile inside a native page, on both hosts |
+| `10-shop-3d-and-reviews.md` | Tab 4 (Shop): 3D header (`flutter_scene`) and the Review Details tab (`liquid_glass_renderer` 1.0), on both hosts |
 
 **Never invent a route name, channel name, or engine name.** Read them from `ARCHITECTURE.md`.
 

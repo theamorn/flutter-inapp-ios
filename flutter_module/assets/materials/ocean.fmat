@@ -94,6 +94,9 @@ vertex {
 }
 
 fragment {
+  // flutter_scene 0.24 defaults material fragments to mediump (half precision
+  // on Mali/Adreno/web). This body computes positions, phases and hashes.
+  precision highp float;
   vec2 RainHash22(vec2 p) {
     vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
     q += dot(q, q.yzx + 33.33);
@@ -185,7 +188,14 @@ fragment {
                     material_params.deep_color.rgb,
                     smoothstep(1.5, 14.0, thickness)) *
                 material_params.water_light.rgb;
-    vec3 refracted = behind * transmittance + body * inscatter;
+    // Wave-crest subsurface scattering: thin rolling crests and the shallow
+    // lagoon shelf glow with backlit emerald-aquamarine translucency.
+    float crest_thin = smoothstep(-0.02, 0.16, v_crest) +
+                       (1.0 - smoothstep(0.0, 3.2, thickness)) * 0.35;
+    float slope_tilt = clamp((1.0 - normal.y) * 4.5, 0.0, 1.0);
+    vec3 sss = vec3(0.035, 0.56, 0.46) * material_params.water_light.rgb *
+               crest_thin * (0.35 + 0.65 * slope_tilt) * (1.0 - fresnel * 0.6);
+    vec3 refracted = behind * transmittance + body * inscatter + sss;
 
     vec4 planar = SamplePlanarReflection(p, slope * material_params.ripple.z *
                                                 (1.0 + 4.0 * near));
@@ -197,7 +207,15 @@ fragment {
     // explicit gradients (taken in uniform flow) for the mip.
     vec2 dpdx = dFdx(p.xz);
     vec2 dpdy = dFdy(p.xz);
-    float surf = 1.0 - smoothstep(0.0, material_params.foam.x, thickness);
+    float swash_wave = 0.5 + 0.5 * sin(thickness * 11.0 - time * 2.6 +
+                                       ripple_a.x * 1.4);
+    float surf_edge = max(material_params.foam.x * (0.82 + 0.32 * swash_wave),
+                          0.05);
+    float surf = 1.0 - smoothstep(0.0, surf_edge, thickness);
+    float swash_band = smoothstep(0.04, 0.15, thickness) *
+                       (1.0 - smoothstep(0.15, max(surf_edge, 0.22), thickness)) *
+                       swash_wave;
+    surf = clamp(surf + swash_band * 0.45, 0.0, 1.0);
     float crest = smoothstep(material_params.foam.y,
                              material_params.foam.y + 0.09, v_crest);
     float foam = 0.0;
@@ -208,8 +226,8 @@ fragment {
       float breakup = textureGrad(foam_texture,
                                   p.xz * 0.91 - vec2(time * 0.047, 0.0),
                                   dpdx * 0.91, dpdy * 0.91).g;
-      foam = (surf * (0.35 + 1.1 * lace) + crest * lace * 1.4) *
-             smoothstep(0.25, 0.65, breakup + surf * 0.45);
+      foam = (surf * (0.35 + 1.15 * lace) + crest * lace * 1.45) *
+             smoothstep(0.22, 0.64, breakup + surf * 0.48);
       foam = clamp(foam * material_params.foam.z * near, 0.0, 1.0);
     }
 
@@ -220,11 +238,22 @@ fragment {
     float far_fade = 1.0 - smoothstep(material_params.fade.z,
                                       material_params.fade.w, radius);
 
-    material.base_color = vec4(vec3(0.92) * foam, edge * far_fade);
+    vec3 foam_albedo = vec3(0.94, 0.96, 0.98);
+    // Intrinsic water + foam albedo in base_color so X-ray Base Colour shows
+    // the lagoon's turquoise-to-navy gradient instead of black.
+    material.base_color = vec4(mix(body * 0.65, foam_albedo, foam),
+                               edge * far_fade);
     material.normal = normal;
     material.metallic = 0.0;
-    material.roughness = mix(0.05, 0.85, foam);
-    material.specular = mix(1.0, 0.0, planar.a) * (1.0 - foam);
-    material.emissive = water * (1.0 - foam);
+    material.roughness = mix(0.045, 0.85, foam);
+    // Keep dielectric specular active for analytic lights (sun, moon,
+    // campfire) so their micro-glints sparkle across the wave slopes.
+    material.specular = mix(1.0, 0.42, planar.a) * (1.0 - foam);
+    // Nocturnal dinoflagellate bioluminescence along the breaking surf lace.
+    float bio_night = smoothstep(0.35, 0.90, material_params.foam.w);
+    float bio_pulse = 0.65 + 0.35 * sin(time * 2.1 + p.x * 0.7 + p.z * 0.5);
+    vec3 bio_glow = vec3(0.04, 0.52, 0.92) * foam * bio_night * bio_pulse * 0.42;
+    material.emissive =
+        max(water - body * 0.22, vec3(0.0)) * (1.0 - foam) + bio_glow;
   }
 }

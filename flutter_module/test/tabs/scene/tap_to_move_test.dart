@@ -306,6 +306,38 @@ void main() {
       expect(eye.y, greaterThanOrEqualTo(0.5));
     });
 
+    test('a positive pitch looks up, a negative one looks down', () {
+      double elevation(double pitch) {
+        final (eye, target) = rig.compute(
+          characterPosition: vm.Vector3.zero(),
+          yaw: 0.0,
+          pitchOffset: pitch,
+        );
+        final look = target - eye;
+        return math.atan2(look.y, math.sqrt(look.x * look.x + look.z * look.z));
+      }
+
+      // The eye's own drop or rise shifts the angle by a few hundredths.
+      final rest = elevation(0.0);
+      expect(elevation(0.8), inInclusiveRange(rest + 0.75, rest + 0.85));
+      expect(elevation(0.8), greaterThan(0.6));
+      expect(elevation(-0.3), inInclusiveRange(rest - 0.35, rest - 0.25));
+    });
+
+    test('drops toward the shoulder looking up, rises looking down', () {
+      (vm.Vector3, vm.Vector3) at(double pitch) => rig.compute(
+        characterPosition: vm.Vector3.zero(),
+        yaw: 0.0,
+        pitchOffset: pitch,
+      );
+      expect(at(1.0).$1.y, lessThan(at(0.0).$1.y));
+      expect(at(1.0).$1.y, greaterThanOrEqualTo(0.5));
+      expect(at(-0.4).$1.y, greaterThan(at(0.0).$1.y));
+      // Turning does not move the eye sideways or along the walk.
+      expect(at(1.0).$1.x, closeTo(at(0.0).$1.x, 1e-5));
+      expect(at(1.0).$1.z, closeTo(at(0.0).$1.z, 1e-5));
+    });
+
     test('default constructor provides tight RE4-style camera framing', () {
       const defaultRig = OtsCameraRig();
       expect(defaultRig.followDistance, closeTo(2.0, 1e-5));

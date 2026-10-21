@@ -24,6 +24,9 @@ material {
 }
 
 fragment {
+  // flutter_scene 0.24 defaults material fragments to mediump (half precision
+  // on Mali/Adreno/web). This body computes positions, phases and hashes.
+  precision highp float;
   vec2 RainHash22(vec2 p) {
     vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
     q += dot(q, q.yzx + 33.33);
@@ -88,7 +91,12 @@ fragment {
     // reverse undefined), so falling edges are written as 1 - smoothstep.
     float under = 1.0 - smoothstep(sea - 0.15, sea + 0.05, h);
     float wet = (1.0 - under) *
-                (1.0 - smoothstep(sea + 0.03, sea + 0.45 + 0.2 * patches.g, h));
+                (1.0 - smoothstep(sea + 0.03, sea + 0.48 + 0.22 * patches.g, h));
+    // Saturated water film right at the swash edge: mirror-smooth and flattens
+    // the sand ripples where each wave laps the shore.
+    float swash_film = (1.0 - under) *
+                       (1.0 - smoothstep(sea + 0.01,
+                                         sea + 0.20 + 0.08 * patches.g, h));
     float sand = 1.0 - smoothstep(-0.24, -0.07, h + (patches.g - 0.5) * 0.12);
     float rock = clamp(max(vertex_color.r * smoothstep(0.2, 0.55,
                                                        vertex_color.r + grain.r * 0.35),
@@ -130,11 +138,15 @@ fragment {
     vec3 dirt_color = vec3(0.19, 0.12, 0.065) * (0.8 + 0.4 * grain.g);
     dirt_color = mix(dirt_color, vec3(0.30, 0.26, 0.21), grain.a * 0.8);
 
-    vec3 sand_color = vec3(0.60, 0.49, 0.32) * (0.9 + 0.2 * grain.g) *
-                      (0.9 + 0.1 * ripples.a);
-    sand_color = mix(sand_color, vec3(0.42, 0.40, 0.36), grain.a * 0.55);
-    vec3 wet_sand = sand_color * vec3(0.52, 0.54, 0.58);
-    vec3 sea_sand = vec3(0.56, 0.50, 0.37) * (0.85 + 0.25 * ripples.a);
+    // Warm golden coral-sand with sunlit ripple crests and warm ochre troughs.
+    vec3 sand_trough = vec3(0.56, 0.44, 0.28);
+    vec3 sand_crest = vec3(0.72, 0.59, 0.40);
+    vec3 sand_color = mix(sand_trough, sand_crest, ripples.a) *
+                      (0.92 + 0.18 * grain.g);
+    sand_color = mix(sand_color, vec3(0.54, 0.49, 0.42), grain.a * 0.28);
+    vec3 wet_sand = sand_color * mix(vec3(0.47, 0.39, 0.31),
+                                     vec3(0.38, 0.32, 0.26), swash_film);
+    vec3 sea_sand = vec3(0.60, 0.52, 0.38) * (0.82 + 0.30 * ripples.a);
 
     vec3 rock_color = vec3(0.27, 0.26, 0.245) * (0.75 + 0.45 * patches.g);
     // Cracks on exposed rock only: silt fills them under water, where a
@@ -144,14 +156,35 @@ fragment {
     // Moisture stain on rock near the waterline.
     rock_color *= mix(1.0, 0.6, 1.0 - smoothstep(sea, sea + 0.6, h));
 
+    // Quartz/shell micro-sparkles on dry beach sand within 16 m.
+    float dry_sand_weight = sand * (1.0 - wet) * (1.0 - under) * (1.0 - rock);
+    float sand_sparkle = 0.0;
+    if (dry_sand_weight > 0.01) {
+      float view_dist = length(v_viewvector);
+      float sparkle_fade = 1.0 - smoothstep(3.5, 16.0, view_dist);
+      if (sparkle_fade > 0.0) {
+        vec2 grain_cell = floor(p.xz * 46.0);
+        vec2 gh = RainHash22(grain_cell);
+        vec3 view_dir = normalize(v_viewvector);
+        float glint_align = fract(gh.x * 13.7 + view_dir.x * 3.1 + view_dir.z * 2.7);
+        float glint = smoothstep(0.92, 0.995, gh.y) *
+                      smoothstep(0.82, 0.98, glint_align);
+        sand_sparkle = glint * sparkle_fade * dry_sand_weight *
+                       (0.6 + 0.4 * ripples.a);
+      }
+    }
+
     vec3 albedo = grass_color * grass + dirt_color * dirt;
     vec3 shore = mix(mix(sand_color, wet_sand, wet), sea_sand, under);
-    albedo += shore * sand * (1.0 - rock);
+    albedo += (shore + vec3(0.32, 0.28, 0.22) * sand_sparkle) * sand * (1.0 - rock);
     albedo = mix(albedo, rock_color, rock);
 
     // ---- Roughness ----
     float roughness = 0.92 * grass + 0.95 * dirt;
-    roughness += sand * (1.0 - rock) * mix(mix(0.88, 0.18, wet), 0.6, under);
+    float wet_roughness = mix(0.24, 0.08, swash_film);
+    roughness += sand * (1.0 - rock) *
+                 mix(mix(0.84 - 0.45 * sand_sparkle, wet_roughness, wet),
+                     0.58, under);
     roughness = mix(roughness, 0.72, rock);
 
     // ---- Relief ----
@@ -161,8 +194,9 @@ fragment {
       n = PerturbNormal(n, clump_normal, bump * (grass * 0.9 + dirt * 0.7));
     }
     if (sand > 0.0) {
-      n = PerturbNormal(n, DecodeNormal(ripples),
-                        bump * sand * (1.0 - wet * 0.6) * (1.0 - rock) * 0.8);
+      float sand_bump = bump * sand * (1.0 - wet * 0.45 - swash_film * 0.4) *
+                        (1.0 - rock) * 0.95;
+      n = PerturbNormal(n, DecodeNormal(ripples), sand_bump);
     }
     if (rock > 0.0) {
       vec3 rock_normal = DecodeNormal(textureGrad(
@@ -189,6 +223,7 @@ fragment {
     material.normal = n;
     material.metallic = 0.0;
     material.roughness = clamp(roughness, 0.05, 1.0);
+    material.specular = mix(0.5, 0.78, swash_film * sand * (1.0 - rock));
     material.occlusion = mix(1.0, mix(0.55, 1.0, cavity), grass + dirt * 0.5) *
                          (1.0 - 0.45 * cracks * rock);
 
@@ -203,12 +238,21 @@ fragment {
                                   dpdx * 0.53, dpdy * 0.53).b;
       float layer_b = textureGrad(masks, p.xz * 0.42 + drift_b + vec2(0.5, 0.3),
                                   dpdx * 0.42, dpdy * 0.42).b;
-      float caustic = min(layer_a, layer_b) * 1.6 + layer_a * layer_b * 0.8;
+      float raw_caustic = min(layer_a, layer_b) * 1.65 + layer_a * layer_b * 0.95;
+      float caustic = raw_caustic * (0.65 + 0.55 * raw_caustic);
+      // Subtle RGB dispersion along caustic focal ridges.
+      float split = (layer_a - layer_b) * 0.35;
+      vec3 chroma = vec3(1.0 + split, 1.0, 1.0 - split);
       float view_fade = 1.0 - smoothstep(12.0, 45.0, length(v_viewvector));
-      float depth_fade = exp(-(sea - h) * 0.22) * view_fade;
-      material.emissive = albedo * caustic * depth_fade * under *
+      float depth_fade = exp(-(sea - h) * 0.20) * view_fade;
+      material.emissive = albedo * caustic * chroma * depth_fade * under *
                           material_params.caustic_light.rgb *
                           material_params.water.y;
+    } else if (swash_film > 0.0 && material_params.caustic_light.w > 0.35) {
+      float bio_night = smoothstep(0.35, 0.90, material_params.caustic_light.w);
+      float bio_swash = swash_film * sand * (1.0 - rock) * bio_night *
+                        (0.4 + 0.6 * grain.b);
+      material.emissive = vec3(0.03, 0.44, 0.82) * bio_swash * 0.18;
     }
   }
 }

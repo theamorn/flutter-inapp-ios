@@ -34,6 +34,7 @@ the MCP is actually connected for the current project.
 | `screenshot_viewport` | The viewport as a PNG, what the user sees. | EVERY iteration, paired with the console. |
 | `describe_scene` | The scene-graph tree (ids, paths, names, component types). | Confirming a node/mesh is actually in the scene. |
 | `scan_for_nans` | Capture a frame and scan every float render target for NaN/Inf in pass order. | A black or garbage frame with no error. Find where non-finite values start. |
+| `scan_for_depth_conflicts` | Probe the viewport camera for surfaces that trade pixels as the camera moves (z-fighting) and list the node pairs, pixel counts, and distances. | Stripes, speckles, or a surface that looks right only from some angles. |
 | `capture_render_graph` | Capture the next frame's graph with thumbnails. | You need to see intermediate buffers. |
 | `list_render_passes` | The executed passes in order with CPU timings and the buffer keys each read/wrote, plus target formats and sizes. No images. | Learning which pass owns which buffer, and the key names to read. |
 | `get_pass_output` | Render one captured buffer (a key like `scene_color`, `linear_depth`) as a PNG. NaN paints magenta, Inf yellow, negative blue. | Eyeballing an intermediate buffer to see which stage broke. |
@@ -88,7 +89,7 @@ routes a symptom to the right one.
    `get_pass_output` on that pass's buffer (NaN shows magenta) to confirm.
 4. Common non-NaN causes: a degenerate camera (target equals position, `up` parallel to the view
    direction on a top-down camera, FOV passed in degrees not radians), `layerMask: 0`, an oversized
-   environment texture that failed to allocate on the device. See traps #23 and #16.
+   environment texture that failed to allocate on the device. See traps #24 and #17.
 
 ### Washed-out, low-contrast, or too-bright color
 
@@ -96,12 +97,12 @@ routes a symptom to the right one.
    too-bright first second is just the ramp).
 2. If it persists, suspect a shader-output contract break. A custom `ShaderMaterial`/`PostEffect`/sky
    shader must output linear HDR premultiplied by alpha. Tone-mapping or gamma-encoding in the shader
-   gets applied a second time by the resolve pass, giving exactly this washed-out look. See traps #37
+   gets applied a second time by the resolve pass, giving exactly this washed-out look. See traps #38
    and the root `MATERIALS.md`.
 3. Also check for a non-color texture bound as color (a normal or metallic-roughness map without the
-   right `TextureContent`), which reads wrong and distance-dependent. Trap #2.
+   right `TextureContent`), which reads wrong and distance-dependent. Trap #3.
 4. Hand-packed vertex data at the wrong stride also washes out color (the color attribute lands at the
-   wrong offset). `describe_scene` plus trap #17.
+   wrong offset). `describe_scene` plus trap #18.
 
 ### See-through or inside-out faces
 
@@ -111,21 +112,36 @@ routes a symptom to the right one.
    COUNTER-CLOCKWISE (CCW) in model space, matching glTF and standard conventions. Ensure triangle
    indices wind CCW around the outward face normal, or omit normals and let the constructor derive
    them. NEVER fix orientation with a per-triangle winding flip on an imported model; that leaves
-   normals and IBL wrong. Traps #13 and #17.
+   normals and IBL wrong. Traps #14 and #18.
 3. For an imported model rendered mirrored, check you did not overwrite the runtime importer's
-   `scale(1, 1, -1)` handedness root. Trap #5.
+   `scale(1, 1, -1)` handedness root. Trap #6.
 
 ### Missing or popping geometry
 
 1. `describe_scene` to confirm the node is actually in the graph. If it is absent, it is a scene-build
    bug, not a render bug.
 2. If it is present but invisible, check the layer mask (`Node.layers` is a bitmask, NOT inherited,
-   and must match the view's `layerMask`; `layers = 2` means `1 << 1`, not "layer 2"). Trap #10.
+   and must match the view's `layerMask`; `layers = 2` means `1 << 1`, not "layer 2"). Trap #11.
 3. If it appears and disappears with camera angle, the bounds do not cover the geometry (a
    caller-supplied `bounds` or `setLocalBounds` that is too small, or a swapped primitive geometry on
-   an older version). Widen or omit the bounds. Traps #8 and #24.
+   an older version). Widen or omit the bounds. Traps #9 and #25.
 4. A moved skinned mesh that will not move is the skinned-node transform being ignored by design; move
-   the skeleton root instead. Trap #4.
+   the skeleton root instead. Trap #5.
+
+### Flickering stripes or speckles where surfaces meet
+
+1. Do not judge this from one frame. Run `scan_for_depth_conflicts` (editor MCP) or `await
+   scene.probeDepthConflicts(camera: camera)` in the app; each conflict names two nodes, the pixels
+   they trade, and the distance. `scene.debug.overlays.add(DebugOverlay.depthConflicts)` marks them
+   live in magenta.
+2. Two faces overlapping in one plane (repeated pieces longer than their spacing, overlapping patches
+   at one height, a duplicated node) fight at any distance; fix the content. `scene.findCoplanarOverlaps()`
+   lists the overlapping faces with the length that fixes a repeated piece.
+3. An overlay meant to lie on a surface (a screen, a sign, road paint) gets `material.depthLayer = 1`.
+4. Faces a few centimetres apart that fight only far away need a larger gap or a layer. The
+   `depthGap` debug view shows the gap each pixel needs. See the idioms skill's
+   `references/depth-and-layering.md`.
+5. Re-probe until the conflict list is empty.
 
 ### A value looks numerically wrong (not visually)
 

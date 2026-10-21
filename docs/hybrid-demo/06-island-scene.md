@@ -15,12 +15,11 @@ It ships in three quality modes, chosen on screen: **Normal** (the stage path), 
 
 ## Repo facts you need
 
-- `flutter_scene` (0.23.0) and `flutter_gpu` (from the SDK) are in `flutter_module/pubspec.yaml`, with `vector_math` as an explicit dependency. **`flutter_scene_importer` is not, and must not be** — see `01-scene-spike.md`.
-- The asset pipeline is a **build hook**, `flutter_module/hook/build.dart`, installed by `dart run flutter_scene:init`. Sources are `.glb` under `assets/models/`, loaded **by source path**: `loadScene('assets/models/tree_palm.glb')`. The hook converts them to `.fsceneb` under `flutter_scene_generated/`, which is listed under `flutter: assets:` and is gitignored by design. Commit the `.glb`.
-- Flutter GPU is enabled via the host's Info.plist key `FLTEnableFlutterGPU` (capital `GPU` — see `01-scene-spike.md` for the casing trap). **This repo has `Info-Debug.plist` and `Info-Release.plist`, not `Info.plist`; the key is in both.**
-- `flutter_module/lib/shader_screen.dart` is the reference for fragment-shader work.
-- `flutter_scene` ships agent skills. They are installed at `flutter_module/.claude/skills/` (`fvm dart run flutter_scene:skills`); `references/traps.md` in `flutter_scene-idioms` is the highest-value page in this repo for anyone touching 3D. `FLUTTER-3D-PLAYBOOK.md` covers what the skills don't.
-- Custom materials are `.fmat` files under `flutter_module/assets/materials/`, compiled by the same build hook (`buildMaterials`) and loaded by source path: `loadFmatMaterial('assets/materials/ocean.fmat')`. They must follow the portability rules in the playbook (§4) or they break on Android GLES.
+- `flutter_scene` **0.24.3** and `flutter_gpu` (from the SDK) are in `pubspec.yaml`, with `vector_math` as an explicit dependency. **`flutter_scene_importer` is not, and must not be** — see `01-scene-spike.md`.
+- The asset pipeline is a **build hook**, `hook/build.dart`, installed by `dart run flutter_scene:init`. Sources are `.glb` under `assets/models/`, loaded **by source path**: `loadScene('assets/models/tree_palm.glb')`. The hook converts them to `.fsceneb` under `flutter_scene_generated/`, which is listed under `flutter: assets:` (with per-platform backend subdirectories `metal_ios/`, `metal_desktop/`, `opengl_es/`, `opengl_es_vulkan/`) and is gitignored by design. Commit the `.glb`.
+- Flutter GPU is enabled in the iOS runner through `ios/Runner/Info.plist`'s `FLTEnableFlutterGPU` key (capital `GPU` — see `01-scene-spike.md` for the casing trap).
+- `flutter_scene` ships agent skills. They are installed at `.claude/skills/` (`fvm dart run flutter_scene:skills`); `references/traps.md` in `flutter_scene-idioms` is the highest-value page in this repo for anyone touching 3D. `FLUTTER-3D-PLAYBOOK.md` covers what the skills don't.
+- Custom materials are `.fmat` files under `assets/materials/`, compiled by the same build hook (`buildMaterials(..., debugViews: true)`) and loaded by source path: `loadFmatMaterial('assets/materials/ocean.fmat')`. They must follow the portability rules in the playbook (§4) or they break on Android GLES.
 
 ## Files to create/modify
 
@@ -57,7 +56,7 @@ Low-poly diorama props plus a character. CC0 sources — this build uses Kenney'
 The cost is 4 draws of about 2k triangles each, with no shadows.
 
 Adding it hit four traps:
-1. **The build hook ignored the new `.glb`.** At runtime: `No generated .fsceneb for source "assets/models/seagull.glb"`. The fix is the same as for the first `.fmat`: delete `.dart_tool/hooks_runner/flutter_module` and rebuild.
+1. **The build hook ignored the new `.glb` (0.23 behavior).** At runtime: `No generated .fsceneb for source "assets/models/seagull.glb"`. Deleting `.dart_tool/hooks_runner/flutter_module` fixed that incident. **0.24 change:** adding or removing a source in an asset subdirectory now triggers a rebuild. Task 7 observed a newly added `.fmat` being compiled without clearing the hook cache on macOS; keep checking generated output when adding sources, since that single run did not cover every backend.
 2. **`buildScenes` imports `.glb`, not `.gltf`.** The pack ships `Pigeon.gltf` with a base64 buffer, so it was repacked into a GLB's binary chunk.
 3. **`castsShadows` is not inherited.** Set it on every node of a loaded model, not just the wrapper.
 4. **vector_math's `Quaternion.rotated` turns the opposite way from `Matrix4.compose`,** and `Matrix4.compose` is how the engine applies `node.rotation`. A test that checks orientation with `rotated` fails on correct code. Check through a matrix.
@@ -121,11 +120,11 @@ The engine stays alive when the host hides the tab. The render loop must stop, o
 
 ## Acceptance criteria
 
-- [ ] Island renders on a physical device in release mode. — **NOT VERIFIED: no device attached. Verified on the iOS simulator in debug.**
+- [ ] Island renders on a physical device in release mode. — **NOT VERIFIED. The 0.24 physical-device run covered the hotel, not the island; earlier island verification was on the iOS simulator in debug.**
 - [x] Camera orbits and zooms smoothly, clamped sensibly. — implemented via `OrbitCameraController`; **clamping and smoothing not exercised by hand** (no way to drag a simulator programmatically).
 - [x] Tapping anywhere on the island moves the character there, facing the direction of travel, with a visible tap marker. — verified on the simulator through the auto-demo probe, including off-centre positions.
 - [x] Day→night slider works smoothly end to end and swaps the particle layer. — verified by sweeping `timeOfDay` and screenshotting day, dusk and night.
-- [x] Triangle count and draw calls are displayed. — displayed, but the second number is labelled **meshes**, not draw calls; the criterion as written asked for a number `flutter_scene` does not expose (see Findings).
+- [x] Triangle count and draw calls are displayed. — 0.24's `Scene.renderStats` supplies real per-view, per-pass draw counts (see Findings).
 - [ ] Full refresh rate held during simultaneous orbit + character movement + day/night sweep. — **NOT VERIFIED: needs release-on-device. Debug simulator timings are not evidence.**
 - [x] Render loop stops when the tab is not visible. — **verified on the simulator** by backgrounding the app: one `render loop stopped` log line, one `render loop resumed`, and the scene returns intact. **The add-to-app tab-switch path specifically is still unverified** (see Findings).
 - [x] Super Ultra renders correctly at every time of day: sky with sun and moon, clear water with seabed and reflection, grass, fire. — verified by `SCENE_TOUR` screenshots on the iOS simulator (Metal) **and** the Android emulator (OpenGL ES).
@@ -262,6 +261,8 @@ At runtime this prints `fscene: failed to load texture ...: Unable to load asset
 
 Neither produces a warning. Both are handled in `_relightImportedMaterials`.
 
+**0.24 update:** the engine's unlit-on-Vulkan rendering bug is fixed, and unlit `.fmat` surface materials may now read `engine_inputs: [scene_color]`; the island uses that for rain glass and heat haze. The imported character still needs PBR because its material must respond to the day/night light. `planar_reflection` remains lit-only.
+
 ### Day/night: `DayNightCycleComponent`, **not** `SunLight`
 
 `01-scene-spike.md` suggests `scene.sunLight = SunLight(sky)` and separately recommends `DayNightCycleComponent`. **Using both double-lights the scene**, and of the two only one actually produces a sunset:
@@ -328,11 +329,11 @@ The signal driving it is `didChangeAppLifecycleState`, and it **fails open** —
 
 ### Draw calls: what the number actually counts
 
-`flutter_scene` exposes no draw-call counter, so **this acceptance criterion cannot be met as written** and the readout does not pretend otherwise: it says `36 meshes`.
+In 0.24, `Scene.renderStats` exposes real draw, instance, vertex, culled and batch counters for each render pass and view. The HUD reports the on-screen view's draw count from the newest recent frame that actually contains an on-screen view. A paced frame can make `renderStats.latest` empty, so reading only `latest` would make the counter flicker or disappear.
 
-What it counts is mesh primitives in the visible scene graph — one draw each in the colour pass. It does **not** include the shadow pass, the skybox, the IBL bake or the post stack, so the real GPU draw count is higher. Labelling it "36 draw calls" on a slide would be a number that does not survive being questioned, on the one tab whose job is to be questioned. The field is named `meshCount` in code so it cannot quietly drift back.
+The old visible-graph walk counted mesh primitives in the colour pass and missed `InstancedMesh`; it did not include shadow, sky, IBL or post-process work. Use the engine's counter for draws. The triangle total is still computed from `Geometry.extractMeshData().triangleCount`, summed per instance and cached per geometry.
 
-Triangles are exact: `Geometry.extractMeshData().triangleCount`, summed per instance and cached per geometry, counted once at build time (the scene is static in count). `Geometry.cpuMeshData` would give the same numbers without the copy, but it is `@internal` and using it trips `invalid_use_of_internal_member`.
+Pacing also changes the rate: `renderStats.frameCount` includes frames the GPU held and re-presented. Calculate scene fps from the change in `frameCount - pacedFrameCount` over wall time, and display Flutter fps separately.
 
 ### Testing 3D without a GPU
 
@@ -354,9 +355,9 @@ Tolerances must be float32-sized, not float64-sized: `vector_math` stores `Vecto
 
 ## Super Ultra
 
-> Added 2026-09-24, against `flutter_scene 0.23.0` / Flutter 3.47.2. Verified on the iPhone 17 Pro **simulator** and an Android **emulator** (OpenGL ES), both in debug; see "Not verified" below.
+> Updated 2026-10-06 for `flutter_scene 0.24.0` / Flutter 3.47.2. The original island mode was verified on the iPhone 17 Pro **simulator** and an Android **emulator** (OpenGL ES), both in debug; 0.24 additions were checked on macOS and a physical iPhone in debug. See "Not verified" below for limits.
 
-A third mode for the island (`💎 Super`), for hardware with headroom. Android barely holds 60 fps in Ultra, while the iPhone has room to spare. It keeps everything Ultra has and adds:
+A third island mode (`💎 Super`) that keeps everything Ultra has and adds:
 
 | Area | What | Where |
 |---|---|---|
@@ -368,7 +369,10 @@ A third mode for the island (`💎 Super`), for hardware with headroom. Android 
 | Fire | Flipbook flame tongues, a core glow, velocity-stretched embers, spark bursts, flipbook smoke, a glowing coal bed and heat haze. | `super_ultra/super_ultra_fire.dart`, `ember_bed.fmat`, `heat_haze.fmat` |
 | Rain (toggle) | `🌧 Rain` button, shown only in Super Ultra. About 2,300 drops/s fall as velocity-stretched streaks and **collide** with the terrain, the sea, every prop, the player, the NPC, balls and crates. Each hit splashes (droplets plus an impact flash), water hits sometimes leave a ring, and drops on the campfire hiss up as steam. The GPU half: raindrop rings across the whole sea, wet dark ground with ringed puddles, wet grass, an overcast sky that hides the sun, moon and stars, a dimmer sun, and fog. It fades in and out over 2.5 s. Off unmounts every rain node once the last drop lands, so it then costs nothing. | `super_ultra/super_ultra_rain.dart`, `super_ultra/rain_collision.dart`, rain terms in the four materials |
 | Lightning (toggle) | `⚡ Storm` button, shown while it rains; on by default. In a full downpour, a strike every 4.5–12.5 s, three quarters of them in frame. Each strike is a branching HDR bolt (it blooms and the sea mirrors it), a cold shadowless flash light, the clouds lighting up around it, an ambient pulse, and rain streaks catching the light. There are two or three pulses within half a second, never more than three flashes a second. The flash lights the scene fully at night and only about a third as much by day. | `super_ultra/lightning.dart`, the `flash` term in `island_sky.fmat` |
-| Effects menu | `🎛 Effects` button, shown only in Super Ultra. A half-height panel opens with two image-quality pickers, anti-aliasing (SMAA, MSAA, TAA, FXAA, off) and render scale (100%, 85%, 75%), then lists every other Super Ultra feature with its own switch, grouped: lighting & shadows, post effects, scene content. A live readout at the top shows UI time, raster time and fps over the last 2 s. It is for finding what a feature costs on a real device, not a quality preset: switching Grass off removes the grass. `Full sea` off swaps in a simple opaque sea instead of removing the water, and greys out `Sea reflection`, which only the full sea has. Choices survive mode switches until `Reset`. | `super_ultra/super_ultra_effects.dart`, `IslandScene.setEffect`, `setAntiAliasing`, `setRenderScale` |
+| X-ray | `🔍 X-ray` appears in Ultra and Super Ultra. It cycles `off → wireframe → normals → base colour → off` as a moving split against the lit scene. | `xray.dart`, `IslandScene.setXray` |
+| Ground decals | Super Ultra includes a scorch ring and up to 12 fading footprints. They are built with the mode; there is no separate decal switch in the Effects panel. | `super_ultra/super_ultra_decals.dart` |
+| Campfire shadows | The Effects panel's `Campfire shadows` switch enables point-light shadows; casters render into six cube-map faces. | `super_ultra/super_ultra_effects.dart` |
+| Effects menu | `🎛 Effects` button, shown only in Super Ultra. A half-height panel has anti-aliasing (SMAA, MSAA, TAA, FXAA, off), render scale (100%, 85%, 75%, Auto), GPU pacing (1 or 2 frames), frame cap (Uncapped or 60 fps), and scene copies (Separate or Shared), then feature switches grouped under lighting & shadows, post effects and scene content. The switches are for measuring one change at a time, not quality presets: switching Grass off removes it. `Full sea` off swaps in a simple opaque sea and greys out `Sea reflection`. Its two-second readout shows UI time, raster time, Flutter fps and scene fps; Auto also shows the current adaptive scale. Choices survive mode switches until `Reset`. | `super_ultra/super_ultra_effects.dart`, `IslandScene.setEffect`, `setAntiAliasing`, `setRenderScale`, `setGpuPacing`, `setFrameCap`, `setSceneCopies` |
 | Look | One coherent `EnvironmentSettings`: GTAO with bent normals, god rays, fog with sun in-scatter, bloom with lens flare, light grain. SSR is off because the planar mirror replaces it. Shadows use 2048 px, 2 cascades and PCSS. | `IslandScene._applySuperUltraLook` |
 
 The content is built the first time the mode is chosen: textures and meshes on isolates, materials from the build hook. That takes about 4 s cold and 0.3–0.5 s warm on the simulator in debug. The scene shows Ultra meanwhile.
@@ -387,11 +391,11 @@ Evidence: the sky region read exactly the Scaffold colour `(7, 19, 31)` in every
 
 **3. GLSL `pow()` with a negative base is NaN, and one NaN in a sky takes out the frame.** `pow(dot(dir, n) / 0.2, 2.0)` in the Milky Way band left the sky transparent. Through the IBL bake it also blew every lit surface out to white. Square it by hand.
 
-**4. Framed on a low sun, the physical sky model is a white sheet.** Its forward-scatter glow runs 4–50× the zenith radiance toward the sun (evaluated numerically for the exact parameters). The Super Ultra sky compresses daylight luminance above a knee at 1, multiplies the daylight sky (not the sun disk) by 0.5, and uses turbidity 3.
+**4. Framed on a low sun, the physical sky model is a white sheet.** Its forward-scatter glow runs 4–50× the zenith radiance toward the sun (evaluated numerically for the exact parameters). The Super Ultra sky compresses daylight luminance above a knee at 1, multiplies the daylight sky (not the sun disk) by 0.5, and uses turbidity 3. That still reads as a white sheet around a sun held near 22°: the shader's colour comes from `1 − extinction`, which saturates in every channel along those long low paths. So the sky on screen is a second instance of the same shader with its own grade (Rayleigh coefficient 1.0 with a bluer tint, Mie eccentricity 0.85, knee 3, exposure 0.4), while the instance that bakes the island's lighting keeps the values above.
 
 **5. Stars need pixel-sized falloff and a window inside their cell.** Sized in `1 - cos` units, a star wider than its hash cell is clipped square by the cell edge. The water's reflection then stretches those squares into streaks.
 
-**6. Build hook cache.** The very first `.fmat` added under a new `assets/materials/` directory compiled a stale input set. Deleting `.dart_tool/hooks_runner/flutter_module` fixed it, and later edits recompiled normally. Compiled bundles are per backend (`metalIos`, `metalDesktop`, `openglEs`, `openglEs,vulkan`), 2–3.6 MB each. Everything in `flutter_scene_generated/` ships as assets.
+**6. Build hook cache (0.23 issue; changed in 0.24).** The first `.fmat` added under a new `assets/materials/` directory compiled a stale input set. Deleting `.dart_tool/hooks_runner/flutter_module` fixed it then. 0.24 rebuilds when a source is added or removed in a subdirectory; adding `decal_ground.fmat` was observed to trigger compilation without clearing the cache on one macOS run. Check the build log and generated material index for each new source. Bundles are per backend (`metalIos`, `metalDesktop`, `openglEs`, `openglEs,vulkan`), 2–3.6 MB each. Everything in `flutter_scene_generated/` ships as assets.
 
 **7. Caustic scale matters more than caustic strength.** Caustic cells of 0.7 m read as a coarse web of polygons from 30 m away. At about 0.3 m, and faded with view distance, they read as light.
 
@@ -399,7 +403,7 @@ Evidence: the sky region read exactly the Scaffold colour `(7, 19, 31)` in every
 
 **9. `smoothstep(edge0, edge1, x)` with `edge0 > edge1` is undefined in GLSL ES.** Metal happens to evaluate it as intended. Every falling edge is written as `1.0 - smoothstep(lo, hi, x)`.
 
-**10. A `.fmat` that fails to compile does not fail the build.** The hook prints `building .fmat materials failed; keeping the previous shaders.` and the app runs with the **old** materials, so a broken edit looks like an edit with no effect. It happened here with a redefined variable (`wet`). Grep the build output for that line after every material change.
+**10. A `.fmat` failure can leave the previous shader in use.** 0.24's runtime `.fmat` compiler exposes line-numbered `FmatCompileException.diagnostics`. The build hook compiles its shader bundle through a separate path; when it can keep a previous material it prints `building .fmat materials failed; keeping the previous shaders.` with the underlying error text. A broken edit can still look like an edit with no effect. It happened here with a redefined variable (`wet`). Grep the build output for that line and read the emitted compiler error after each material change.
 
 ### Rain
 
@@ -434,6 +438,8 @@ Drops above the tallest obstacle skip the tests entirely, which is most of their
 ### Performance pass
 
 > 2026-09-24. The brief was to make it cheaper with nothing on screen changing. Measured in profile mode on the `hybrid_demo_shop` emulator (Super Ultra, rain and storm, 10:30), and on the iPhone 17 Pro simulator for the look. No device.
+
+**Version note:** the measurements below predate the upgrade and use `flutter_scene` 0.23.0. Since 0.24 GPU pacing separates Flutter fps from scene fps, do not compare these frame rates directly with 0.24 scene-fps readouts. No 0.24 profile-performance results were captured.
 
 **Changes.** Each one leaves every pixel's formula the same:
 - **The sea is out of its own mirror.** `oceanNode.layers = kSuperUltraNoReflectLayer`. The planar capture clips at the flat sea plane, but the shader lifts wave crests above it. So the whole sea was being redrawn into its own reflection every frame, with the scene colour and depth copies its refraction needs, only to leave stray crest patches.
@@ -502,10 +508,10 @@ What is left to cut is visible. In rough order of payoff:
 
 ### Debug affordances (never on in a shipped build)
 
-`--dart-define=SCENE_QUALITY=superUltra|ultra|normal` picks the mode after load. `SCENE_TOUR=true` steps the clock through 10:30, 17:24, 18:24, 21:30, 01:30 and 06:24, re-aiming the Super Ultra camera at the sun or moon at each stop and logging `island tour: …`. `SCENE_TOUR_MODES=true` also cycles Normal → Ultra → Super → Ultra → Normal → Super to exercise every transition. `SCENE_RAIN=true` switches the rain on after load. `SCENE_LIGHTNING_HOLD=2` holds each strike at its peak for two seconds, so a screenshot taken after the `island lightning: strike` log line catches it. `SCENE_ABLATION=true` (with `SCENE_QUALITY=superUltra`, profile build) switches each effects-menu entry off in turn, tries each non-default anti-aliasing and render-scale pick, then runs `MSAA at 100% (old default)`, `all post off` and `+ rain & storm`. Each step settles 4 s and is measured 5 s, over 3 rounds, and the run ends with a median table of UI and raster deltas. It takes about 10 minutes. On the emulator the same settings measured anywhere from 7 to 18 ms of UI time across rounds, so its table is not evidence. Run it, or the menu, on the phone. `SCENE_FRAME_STATS=true` logs `island frames: n=… ui avg/p90/max … | raster avg/p90/max … | <mode> <rain> <storm>` every 5 s from `FrameTiming`; use it with `--profile`. The simulator can't be tapped from a script; these are how each mode and light was screenshotted.
+`--dart-define=SCENE_QUALITY=superUltra|ultra|normal` picks the mode after load. `SCENE_TOUR=true` steps the clock through 10:30, 17:24, 18:24, 21:30, 01:30 and 06:24, re-aiming the Super Ultra camera at the sun or moon at each stop and logging `island tour: …`. `SCENE_TOUR_MODES=true` also cycles Normal → Ultra → Super → Ultra → Normal → Super to exercise every transition. `SCENE_RAIN=true` switches the rain on after load. `SCENE_LIGHTNING_HOLD=2` holds each strike at its peak for two seconds, so a screenshot taken after the `island lightning: strike` log line catches it. `SCENE_ABLATION=true` (with `SCENE_QUALITY=superUltra`, profile build) switches each effects-menu feature off in turn, tries each non-default anti-aliasing and render-scale pick (including Auto), then runs `MSAA at 100% (old default)`, `all post off` and `+ rain & storm`. It does not sweep GPU pacing, frame cap or scene copies; compare those picks manually in the Effects panel. X-ray is the 🔍 button in Ultra and Super Ultra, while decals are built into Super Ultra. Each ablation step settles 4 s and is measured 5 s, over 3 rounds; the run ends with a median table of UI and raster deltas plus scene fps. `SCENE_FRAME_STATS=true` logs Flutter UI/raster timings, scene fps and paced frames per second every 5 s; use it with `--profile`. The VM service can inject pointer events to operate controls for visual checks.
 
 ### Not verified
 
-- **No device numbers.** Every observation above is from the simulator in debug or the emulator, and says nothing about a phone's frame rate (see "Performance pass" for why the emulator's numbers can't be quoted either). Super Ultra adds a second scene render (the planar capture) and several screen-space passes. Profile it on the iPhone and the Android phone (`--profile`, DevTools frame chart) before quoting it. If a thread is over budget, the levers are, in order: the planar `resolutionScale`/`layerMask`, god-ray steps, grass count, `renderScale`, then the AO method.
+- **No profile-device performance numbers.** The original island mode was checked on the simulator and emulator; 0.24 behaviors were also inspected on macOS and a physical iPhone in debug. These confirm controls and rendering, not sustained profile performance. Super Ultra adds a second scene render (the planar capture) and several screen-space passes. Profile it on the target phone before quoting performance. If a thread is over budget, test the planar `resolutionScale`/`layerMask`, god-ray steps, grass count, render scale, then the AO method.
 - **The heat haze** is subtle; it isn't confirmed visible at stage distance.
 - **Android** is verified only on the `hybrid_demo_shop` emulator (API 36, Impeller on OpenGL ES): all six tour stops render correctly, and Normal still renders. That says nothing about a real Android GPU's Vulkan path or its frame rate.

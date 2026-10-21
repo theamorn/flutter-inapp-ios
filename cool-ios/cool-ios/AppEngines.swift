@@ -7,15 +7,26 @@ final class AppEngines {
 
     static let gameRoute = "/game"
     static let glassRoute = "/glass"
+    static let productRoute = "/product"
     static let promoRoute = "/promo"
+    static let reviewsRoute = "/reviews"
     static let sceneRoute = "/scene"
     static let telemetryChannelName = "com.theamorn.hybrid/telemetry"
     static let gameChannelName = "com.theamorn.hybrid/game"
+    static let productChannelName = "com.theamorn.hybrid/product"
     static let promoChannelName = "com.theamorn.hybrid/promo"
+    static let reviewsChannelName = "com.theamorn.hybrid/reviews"
 
     /// `/glass` has no tab since Shop replaced it, but stays supported so the
     /// Glass tab can come back with one line in `MainTabBarController`.
-    private static let supportedRoutes = [gameRoute, glassRoute, promoRoute, sceneRoute]
+    /// `/product` and `/reviews` are views inside the Shop page, not tabs.
+    private static let supportedRoutes = [gameRoute, glassRoute, productRoute, promoRoute, reviewsRoute, sceneRoute]
+
+    /// The Shop page's three Flutter views, each on its own engine.
+    static let shopRoutes = [productRoute, promoRoute, reviewsRoute]
+    /// The HUD's name for the Shop engines' combined spawn cost. They start
+    /// back to back, so a delta per engine would count the other two as well.
+    static let shopSpawnLabel = "Shop ×3"
 
     private let group = FlutterEngineGroup(name: "hybrid-demo", project: nil)
     private var engines: [String: FlutterEngine] = [:]
@@ -28,6 +39,7 @@ final class AppEngines {
         let durationMillis: Double
     }
     private var pendingSpawns: [String: PendingSpawn] = [:]
+    private var pendingShopSpawn: PendingSpawn?
 
     private init() {}
 
@@ -43,7 +55,10 @@ final class AppEngines {
             "Unsupported Flutter route: \(route)"
         )
 
-        let memoryBefore = MemoryProbe.footprintBytes()
+        // Shop engines are measured together by spawnShopEngines(); a probe
+        // here would land inside that timing.
+        let measured = !Self.shopRoutes.contains(route)
+        let memoryBefore = measured ? MemoryProbe.footprintBytes() : 0
         let start = CACurrentMediaTime()
 
         let options = FlutterEngineGroupOptions()
@@ -56,10 +71,12 @@ final class AppEngines {
         // engine memory. Scene asset loading may still be in progress then.
         let spawnMillis = (CACurrentMediaTime() - start) * 1_000
 
-        pendingSpawns[route] = PendingSpawn(
-            baselineBytes: memoryBefore,
-            durationMillis: spawnMillis
-        )
+        if measured {
+            pendingSpawns[route] = PendingSpawn(
+                baselineBytes: memoryBefore,
+                durationMillis: spawnMillis
+            )
+        }
 
         attachTelemetryChannel(to: engine, route: route)
         if route == Self.gameRoute {
@@ -97,10 +114,36 @@ final class AppEngines {
         }
     }
 
+    /// Spawns the Shop page's three engines as one measured step. The cost is
+    /// closed on the first telemetry batch from any of them: `/reviews` draws
+    /// nothing until Review Details opens, so waiting for all three would
+    /// count whatever happens in between.
+    func spawnShopEngines() {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard !Self.shopRoutes.allSatisfy({ engines[$0] != nil }) else { return }
+        let memoryBefore = MemoryProbe.footprintBytes()
+        let start = CACurrentMediaTime()
+        Self.shopRoutes.forEach { _ = engine(forRoute: $0) }
+        pendingShopSpawn = PendingSpawn(
+            baselineBytes: memoryBefore,
+            durationMillis: (CACurrentMediaTime() - start) * 1_000
+        )
+    }
+
     /// Closes out a deferred memory measurement on the first telemetry batch.
     /// A no-op for subsequent batches.
     private func finalizeSpawnCost(for route: String) {
         dispatchPrecondition(condition: .onQueue(.main))
+        if Self.shopRoutes.contains(route) {
+            guard let pending = pendingShopSpawn else { return }
+            pendingShopSpawn = nil
+            PerformanceHUDView.shared.recordEngineSpawn(
+                route: Self.shopSpawnLabel,
+                deltaBytes: Int64(MemoryProbe.footprintBytes()) - Int64(pending.baselineBytes),
+                durationMillis: pending.durationMillis
+            )
+            return
+        }
         guard let pending = pendingSpawns.removeValue(forKey: route) else { return }
 
         let delta = Int64(MemoryProbe.footprintBytes()) - Int64(pending.baselineBytes)

@@ -12,6 +12,9 @@ material {
 }
 
 fragment {
+  // flutter_scene 0.24 defaults material fragments to mediump (half precision
+  // on Mali/Adreno/web). This body computes positions, phases and hashes.
+  precision highp float;
   // Local hash noise rather than <noise.glsl>, whose large constant tables
   // fail to link on some GLES drivers (see island_sky.fmat).
   float Hash12(vec2 p) {
@@ -69,19 +72,32 @@ fragment {
     float coverage = 1.0 - smoothstep(0.7, 1.0, r + edge_noise);
 
     float coals = WorleyBorder2(q * 11.0);
-    float cracks = 1.0 - smoothstep(0.02, 0.16, coals);
-    float breathe = 0.55 + 0.45 * ValueNoise2(q * 5.0 + vec2(time * 0.7, -time * 0.45) + 3.0);
-    float core = 1.0 - smoothstep(0.1, 0.85, r);
+    float cracks = 1.0 - smoothstep(0.02, 0.17, coals);
+    float hot_fissure = 1.0 - smoothstep(0.0, 0.055, coals);
+    float breathe = 0.55 + 0.45 * ValueNoise2(q * 5.0 + vec2(time * 0.85, -time * 0.55) + 3.0);
+    float gust = smoothstep(0.55, 0.95, breathe);
+    float core = 1.0 - smoothstep(0.08, 0.88, r);
 
-    vec3 ash = mix(vec3(0.035, 0.03, 0.028), vec3(0.16, 0.15, 0.14),
-                   smoothstep(0.45, 1.0, r));
-    vec3 glow = vec3(4.2, 1.15, 0.22) * (0.25 * core + cracks * (0.6 + core)) *
-                breathe * heat;
+    // 3D charcoal chunk relief so the campfire point light glints off coal
+    // facets instead of a flat disc.
+    float chunk_dx = dFdx(coals);
+    float chunk_dy = dFdy(coals);
+    vec3 chunk_normal = normalize(vec3(-chunk_dx * 6.0, 1.0, -chunk_dy * 6.0));
+
+    vec3 ash = mix(vec3(0.028, 0.024, 0.022), vec3(0.18, 0.16, 0.15),
+                   smoothstep(0.42, 0.98, r + (1.0 - cracks) * 0.12));
+    // Blackbody coal spectrum: cherry-red coal bodies, bright orange cracks,
+    // and white-gold incandescent central fissures when fanned by a gust.
+    vec3 cherry = vec3(1.6, 0.16, 0.02) * (0.35 * core * (1.0 - cracks));
+    vec3 orange_crack = vec3(4.6, 1.35, 0.24) * cracks * (0.55 + 0.85 * core);
+    vec3 white_hot = vec3(7.8, 4.8, 1.5) * hot_fissure * core * (0.35 + 0.65 * gust);
+    vec3 glow = (cherry + orange_crack + white_hot) * breathe * heat;
 
     material.base_color = vec4(ash, coverage);
+    material.normal = chunk_normal;
     material.metallic = 0.0;
-    material.roughness = 0.95;
-    material.specular = 0.2;
+    material.roughness = mix(0.78, 0.96, smoothstep(0.3, 0.9, r));
+    material.specular = 0.32;
     material.emissive = glow;
   }
 }

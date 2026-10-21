@@ -124,7 +124,7 @@ water.rebuild(positions: p2, indices: i2);
 
 An updatable mesh fixes its indexed-or-not state at construction, if you built it with `indices`, `rebuild` requires them thereafter, and vice versa. To start empty and fill later, pass a zero-length `positions` with `updatable`. Updatable geometry must retain CPU data and cannot use a buffer arena.
 
-`GeometryBufferArena({int blockSizeInBytes = 16 * 1024 * 1024})` lets many fixed meshes share immutable GPU buffer blocks, worth it when you build a large number of small static meshes.
+`GeometryBufferArena({int blockSizeInBytes = 16 * 1024 * 1024})` lets many fixed meshes share immutable GPU buffer blocks, worth it when you build a large number of small static meshes. It never reclaims space (an arena only grows for as long as it is alive), so give it the lifetime of the batch it serves and never feed it geometry rebuilt every frame; that is what `updatable` is for.
 
 ---
 
@@ -485,6 +485,19 @@ Before authoring a mesh, remember the ten primitives assemble a surprising amoun
 | `WedgeGeometry` | `WedgeGeometry(vm.Vector3 size)` | Triangular prism; base on `y = 0` (not Y-centered). |
 
 Because a cone is just `CylinderGeometry(topRadius: 0)`, a tree is a green cone on a brown cylinder, a fence is repeated thin cuboids, a table is a plane on four cylinders. Assemble each piece as a parented `Node` subtree, then `clone()` and place it, or feed the placements to an `InstancedMesh` when the same piece repeats many times.
+
+### Kit pieces must abut, never overlap
+
+Two faces of different pieces in one plane flicker as the camera moves (z-fighting), at any distance and on any device, so a kit that overlaps its pieces looks broken in motion even when a still looks right.
+
+- **Size a repeated piece to its spacing.** Fence rails, barriers, and curbs placed every `s` meters are `s` meters long. A piece 0.4 m longer than its spacing puts 0.4 m of coplanar faces at every joint.
+- **Cap joints and corners with a post** a centimeter or two larger than the pieces on every face, and stop perpendicular runs at the post instead of running both into the corner.
+- **Make stripes from color, not overlap.** Alternate per-instance `color` on abutting pieces, or paint stripes with vertex colors, rather than laying a strip of one color over another.
+- **Scatter flat pieces without overlap.** Patches, tiles, and rugs at one height must not overlap each other; reject a candidate whose footprint overlaps one already placed, or give each kind its own `Material.depthLayer`.
+- **Wrap with a clear gap or not at all.** A band or trim box wrapped around a larger box sits a clear distance proud (tens of centimeters for content seen from hundreds of meters), and two wraps on one piece use separate height slots. Facade detail seen from far away (windows on a skyline) belongs in the material rather than in thousands of proud boxes.
+- **Overlays get a layer.** Paint, signs, and decal quads that lie on a surface get `material.depthLayer = 1`.
+
+`scene.findCoplanarOverlaps()` lists every overlap left, with the length that fixes a repeated piece, and debug builds print a summary once the scene holds still.
 
 Every primitive except `PlaneGeometry` exposes a `Shape get collisionShape` for the physics package, so a code-built kit gets colliders for free.
 

@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart' as lgr;
 
@@ -27,7 +26,7 @@ class PackageLiquidGlassView extends StatefulWidget {
 class _PackageLiquidGlassViewState extends State<PackageLiquidGlassView> {
   double _thickness = 0.55; // 0..1 -> 0..35 in settings
   double _blur = 10.0; // 0..24
-  double _lightAngle = 0.75 * math.pi; // 0..2*pi
+  double _highlight = 1.0; // 0..2, glint strength
   bool _useFakeGlass = false;
   bool _showBlendGroup = false;
 
@@ -45,16 +44,16 @@ class _PackageLiquidGlassViewState extends State<PackageLiquidGlassView> {
       widget.dayNight,
     )!;
 
+    // 1.0 splits the material: optics on the layer, color per shape.
     final settings = lgr.LiquidGlassSettings(
-      thickness: _thickness * 35.0,
-      blur: _blur,
-      glassColor: glassColor,
-      lightAngle: _lightAngle,
-      lightIntensity: 1.45,
-      ambientStrength: 0.3,
-      chromaticAberration: 0.05,
-      refractiveIndex: 1.25,
-      saturation: 1.25,
+      refractionHeight: _thickness * 35.0,
+      frost: _blur,
+      highlight: _highlight,
+      dispersion: 0.05,
+    );
+    final appearance = lgr.LiquidGlassAppearance(
+      tint: glassColor,
+      colorModel: const lgr.LiquidGlassColorModel.direct(saturation: 1.25),
     );
 
     final shadowColor = Color.lerp(
@@ -96,6 +95,7 @@ class _PackageLiquidGlassViewState extends State<PackageLiquidGlassView> {
               child: lgr.LiquidGlassLayer(
                 fake: _useFakeGlass,
                 settings: settings,
+                defaultAppearance: appearance,
                 child: _showBlendGroup
                     ? _buildBlendGroupDemo(textColor)
                     : _buildSinglePanel(textColor),
@@ -117,14 +117,14 @@ class _PackageLiquidGlassViewState extends State<PackageLiquidGlassView> {
                 dayNight: widget.dayNight,
                 thickness: _thickness,
                 blur: _blur,
-                lightAngle: _lightAngle,
+                highlight: _highlight,
                 useFakeGlass: _useFakeGlass,
                 showBlendGroup: _showBlendGroup,
                 textColor: textColor,
                 onDayNightChanged: widget.onDayNightChanged,
                 onThicknessChanged: (v) => setState(() => _thickness = v),
                 onBlurChanged: (v) => setState(() => _blur = v),
-                onLightAngleChanged: (v) => setState(() => _lightAngle = v),
+                onHighlightChanged: (v) => setState(() => _highlight = v),
                 onFakeGlassToggled: (v) => setState(() => _useFakeGlass = v),
                 onBlendGroupToggled: (v) => setState(() => _showBlendGroup = v),
               ),
@@ -187,14 +187,14 @@ class _PackageLiquidGlassViewState extends State<PackageLiquidGlassView> {
                   dayNight: widget.dayNight,
                   thickness: _thickness,
                   blur: _blur,
-                  lightAngle: _lightAngle,
+                  highlight: _highlight,
                   useFakeGlass: _useFakeGlass,
                   showBlendGroup: _showBlendGroup,
                   textColor: textColor,
                   onDayNightChanged: widget.onDayNightChanged,
                   onThicknessChanged: (v) => setState(() => _thickness = v),
                   onBlurChanged: (v) => setState(() => _blur = v),
-                  onLightAngleChanged: (v) => setState(() => _lightAngle = v),
+                  onHighlightChanged: (v) => setState(() => _highlight = v),
                   onFakeGlassToggled: (v) => setState(() => _useFakeGlass = v),
                   onBlendGroupToggled: (v) => setState(() => _showBlendGroup = v),
                 ),
@@ -212,14 +212,14 @@ class _CompactPackageControls extends StatelessWidget {
     required this.dayNight,
     required this.thickness,
     required this.blur,
-    required this.lightAngle,
+    required this.highlight,
     required this.useFakeGlass,
     required this.showBlendGroup,
     required this.textColor,
     required this.onDayNightChanged,
     required this.onThicknessChanged,
     required this.onBlurChanged,
-    required this.onLightAngleChanged,
+    required this.onHighlightChanged,
     required this.onFakeGlassToggled,
     required this.onBlendGroupToggled,
   });
@@ -227,14 +227,14 @@ class _CompactPackageControls extends StatelessWidget {
   final double dayNight;
   final double thickness;
   final double blur;
-  final double lightAngle;
+  final double highlight;
   final bool useFakeGlass;
   final bool showBlendGroup;
   final Color textColor;
   final ValueChanged<double> onDayNightChanged;
   final ValueChanged<double> onThicknessChanged;
   final ValueChanged<double> onBlurChanged;
-  final ValueChanged<double> onLightAngleChanged;
+  final ValueChanged<double> onHighlightChanged;
   final ValueChanged<bool> onFakeGlassToggled;
   final ValueChanged<bool> onBlendGroupToggled;
 
@@ -335,13 +335,13 @@ class _CompactPackageControls extends StatelessWidget {
             onChanged: (v) => onBlurChanged(v * 24.0),
           ),
           _CompactSliderRow(
-            label: 'LIGHT',
-            valueLabel: '${(lightAngle * 180 / math.pi).round()}°',
-            value: lightAngle / (2 * math.pi),
+            label: 'HIGHLIGHT',
+            valueLabel: '${(highlight * 100).round()}%',
+            value: highlight / 2.0,
             icon: Icons.wb_twilight_rounded,
             textColor: textColor,
-            key: const ValueKey('pkg-light-angle'),
-            onChanged: (v) => onLightAngleChanged(v * 2 * math.pi),
+            key: const ValueKey('pkg-highlight'),
+            onChanged: (v) => onHighlightChanged(v * 2.0),
           ),
         ],
       ),

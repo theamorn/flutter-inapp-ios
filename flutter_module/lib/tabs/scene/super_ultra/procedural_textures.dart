@@ -139,11 +139,20 @@ PixelImage generateFlameAtlas({int cell = 128, int seed = 7}) {
         final brightness =
             (0.55 * density + 0.65 * core * density * (1.0 - s * 0.6))
                 .clamp(0.0, 1.0);
+        // Blackbody temperature across the tongue: incandescent white-gold in
+        // the dense lower core, amber-orange in the body, and deep crimson at
+        // the eroded outer sheath and tip.
+        final coreHeat =
+            (core * (1.0 - (s * 0.55).clamp(0.0, 0.85))).clamp(0.0, 1.0);
+        final r = (brightness * (0.90 + 0.10 * coreHeat)).clamp(0.0, 1.0);
+        final g =
+            (brightness * (0.48 + 0.52 * coreHeat)).clamp(0.0, 1.0);
+        final b = (brightness * (0.22 + 0.78 * coreHeat * coreHeat))
+            .clamp(0.0, 1.0);
         final index = ((oy + py) * width + ox + px) * 4;
-        final grey = (brightness * 255.0).round();
-        pixels[index] = grey;
-        pixels[index + 1] = grey;
-        pixels[index + 2] = grey;
+        pixels[index] = (r * 255.0).round();
+        pixels[index + 1] = (g * 255.0).round();
+        pixels[index + 2] = (b * 255.0).round();
         pixels[index + 3] = (density.clamp(0.0, 1.0) * 255.0).round();
       }
     }

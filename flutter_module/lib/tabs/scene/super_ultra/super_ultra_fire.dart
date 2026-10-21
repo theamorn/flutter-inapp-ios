@@ -6,14 +6,20 @@
 /// * flame tongues from a baked flipbook ([generateFlameAtlas]), upright
 ///   (`axisLocked`), licked sideways by curl-noise turbulence, and HDR hot so
 ///   bloom finds the core;
-/// * a bright core glow, long-lived turbulent embers streaking with their
-///   velocity, and occasional spark pops;
+/// * a bright core glow (one camera-facing additive card,
+///   `additive_glow.fmat`; the older additive sprite emitter stays for the
+///   comparison), long-lived turbulent embers streaking with their velocity,
+///   and occasional spark pops;
 /// * smoke from a puff atlas, warm at the base and grey above;
 /// * a bed of glowing coals under the logs (`ember_bed.fmat`);
 /// * heat shimmer above the flames (`heat_haze.fmat`).
+///
+/// The core glow, the haze and the smoke carry explicit render orders
+/// ([TransparencyOrderValues]) while the glow card shows.
 library;
 
 import 'package:flutter_module/tabs/scene/super_ultra/procedural_textures.dart';
+import 'package:flutter_module/tabs/scene/super_ultra/transparency_order.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
@@ -35,6 +41,7 @@ class SuperUltraFire {
     required FireTextures textures,
     required this.emberMaterial,
     required this.hazeMaterial,
+    required this.glowMaterial,
     required vm.Vector3 base,
   })  : _bedCentre = vm.Vector2(base.x, base.z),
         root = Node(name: 'super_ultra_fire') {
@@ -57,30 +64,30 @@ class SuperUltraFire {
           ColorOverLifeModule(
             GradientColor(
               ColorGradient(<ColorStop>[
-                ColorStop(0.0, vm.Vector4(3.6, 2.5, 1.2, 0.0)),
-                ColorStop(0.08, vm.Vector4(3.4, 2.0, 0.75, 1.0)),
-                ColorStop(0.4, vm.Vector4(2.6, 1.05, 0.22, 0.95)),
-                ColorStop(0.75, vm.Vector4(1.2, 0.3, 0.05, 0.6)),
-                ColorStop(1.0, vm.Vector4(0.25, 0.04, 0.01, 0.0)),
+                ColorStop(0.0, vm.Vector4(3.8, 3.1, 2.0, 0.0)),
+                ColorStop(0.08, vm.Vector4(3.6, 2.5, 1.35, 1.0)),
+                ColorStop(0.38, vm.Vector4(2.9, 1.35, 0.36, 0.96)),
+                ColorStop(0.74, vm.Vector4(1.4, 0.34, 0.06, 0.64)),
+                ColorStop(1.0, vm.Vector4(0.28, 0.04, 0.01, 0.0)),
               ]),
             ),
           ),
           SizeOverLifeModule(
             CurveFloat(
               ParticleCurve(<ParticleKeyframe>[
-                ParticleKeyframe(0.0, 0.7),
-                ParticleKeyframe(0.35, 1.05),
-                ParticleKeyframe(1.0, 0.8),
+                ParticleKeyframe(0.0, 0.72),
+                ParticleKeyframe(0.32, 1.08),
+                ParticleKeyframe(1.0, 0.78),
               ]),
             ),
           ),
         ],
         lifetime: const UniformFloat(0.55, 0.95),
-        startSpeed: const UniformFloat(0.45, 0.9),
-        startSize: const UniformFloat(0.34, 0.54),
+        startSpeed: const UniformFloat(0.48, 0.95),
+        startSize: const UniformFloat(0.35, 0.56),
         startRotation: const UniformFloat(-0.25, 0.25),
         startAngularVelocity: const UniformFloat(-0.6, 0.6),
-        gravity: vm.Vector3(0, 1.0, 0),
+        gravity: vm.Vector3(0, 1.08, 0),
         prewarm: 1.0,
         seed: 3,
       ),
@@ -105,9 +112,9 @@ class SuperUltraFire {
           ColorOverLifeModule(
             GradientColor(
               ColorGradient(<ColorStop>[
-                ColorStop(0.0, vm.Vector4(2.8, 1.3, 0.35, 0.0)),
-                ColorStop(0.3, vm.Vector4(2.8, 1.3, 0.35, 0.4)),
-                ColorStop(1.0, vm.Vector4(1.6, 0.5, 0.1, 0.0)),
+                ColorStop(0.0, vm.Vector4(3.1, 1.5, 0.42, 0.0)),
+                ColorStop(0.3, vm.Vector4(3.1, 1.5, 0.42, 0.42)),
+                ColorStop(1.0, vm.Vector4(1.7, 0.55, 0.12, 0.0)),
               ]),
             ),
           ),
@@ -129,21 +136,21 @@ class SuperUltraFire {
       system: ParticleSystem(
         maxParticles: 70,
         shape: const ConeEmitterShape(angle: 0.45, radius: 0.18),
-        spawner: Spawner(rate: 22),
+        spawner: Spawner(rate: 24),
         modules: <ParticleModule>[
           TurbulenceModule(
-            strength: 2.6,
-            frequency: 0.9,
-            scroll: vm.Vector3(0, 0.8, 0),
+            strength: 2.8,
+            frequency: 0.95,
+            scroll: vm.Vector3(0, 0.85, 0),
             seed: 73,
           ),
-          LinearDragModule(0.6),
+          LinearDragModule(0.58),
           ColorOverLifeModule(
             GradientColor(
               ColorGradient(<ColorStop>[
-                ColorStop(0.0, vm.Vector4(6.0, 2.6, 0.7, 1.0)),
-                ColorStop(0.45, vm.Vector4(4.0, 1.2, 0.2, 0.9)),
-                ColorStop(1.0, vm.Vector4(1.0, 0.15, 0.02, 0.0)),
+                ColorStop(0.0, vm.Vector4(6.8, 3.4, 1.0, 1.0)),
+                ColorStop(0.45, vm.Vector4(4.4, 1.35, 0.22, 0.92)),
+                ColorStop(1.0, vm.Vector4(1.1, 0.16, 0.02, 0.0)),
               ]),
             ),
           ),
@@ -152,9 +159,9 @@ class SuperUltraFire {
           ),
         ],
         lifetime: const UniformFloat(1.4, 2.8),
-        startSpeed: const UniformFloat(1.1, 2.3),
-        startSize: const UniformFloat(0.022, 0.042),
-        gravity: vm.Vector3(0, 0.55, 0),
+        startSpeed: const UniformFloat(1.15, 2.4),
+        startSize: const UniformFloat(0.024, 0.044),
+        gravity: vm.Vector3(0, 0.58, 0),
         prewarm: 2.0,
         seed: 7,
       ),
@@ -162,7 +169,7 @@ class SuperUltraFire {
         ..blendMode = SpriteBlendMode.additive,
       configure: (emitter) => emitter
         ..facing = BillboardFacing.velocityStretched
-        ..velocityStretch = 0.035,
+        ..velocityStretch = 0.042,
     );
 
     _sparks = _emitter(
@@ -182,16 +189,16 @@ class SuperUltraFire {
           ColorOverLifeModule(
             GradientColor(
               ColorGradient(<ColorStop>[
-                ColorStop(0.0, vm.Vector4(8.0, 5.0, 1.6, 1.0)),
-                ColorStop(0.5, vm.Vector4(5.0, 1.8, 0.3, 0.9)),
-                ColorStop(1.0, vm.Vector4(1.5, 0.2, 0.02, 0.0)),
+                ColorStop(0.0, vm.Vector4(8.5, 5.6, 2.0, 1.0)),
+                ColorStop(0.5, vm.Vector4(5.4, 2.0, 0.35, 0.92)),
+                ColorStop(1.0, vm.Vector4(1.6, 0.22, 0.02, 0.0)),
               ]),
             ),
           ),
         ],
         lifetime: const UniformFloat(0.35, 0.75),
         startSpeed: const UniformFloat(2.4, 4.6),
-        startSize: const UniformFloat(0.018, 0.03),
+        startSize: const UniformFloat(0.019, 0.032),
         gravity: vm.Vector3(0, -3.2, 0),
         duration: 6.2,
         seed: 11,
@@ -200,7 +207,7 @@ class SuperUltraFire {
         ..blendMode = SpriteBlendMode.additive,
       configure: (emitter) => emitter
         ..facing = BillboardFacing.velocityStretched
-        ..velocityStretch = 0.06,
+        ..velocityStretch = 0.065,
     );
 
     _smoke = _emitter(
@@ -227,9 +234,9 @@ class SuperUltraFire {
           ColorOverLifeModule(
             GradientColor(
               ColorGradient(<ColorStop>[
-                ColorStop(0.0, vm.Vector4(0.62, 0.38, 0.22, 0.0)),
-                ColorStop(0.12, vm.Vector4(0.44, 0.38, 0.34, 0.34)),
-                ColorStop(0.55, vm.Vector4(0.34, 0.34, 0.36, 0.2)),
+                ColorStop(0.0, vm.Vector4(0.68, 0.42, 0.24, 0.0)),
+                ColorStop(0.12, vm.Vector4(0.46, 0.39, 0.34, 0.36)),
+                ColorStop(0.55, vm.Vector4(0.34, 0.34, 0.36, 0.22)),
                 ColorStop(1.0, vm.Vector4(0.3, 0.3, 0.33, 0.0)),
               ]),
             ),
@@ -266,24 +273,71 @@ class SuperUltraFire {
       ),
     )
       ..position = base + vm.Vector3(0, 0.012, 0)
-      ..castsShadows = false;
+      ..layers = _noReflectLayer
+      ..shadowCastingMode = ShadowCastingMode.off;
     root.add(emberBed);
 
-    final hazeNode = Node(
+    hazeMaterial.depthLayer = 1;
+    _hazeNode = Node(
       name: 'su_heat_haze',
       mesh: Mesh(_hazeQuad(width: 1.1, height: 1.9), hazeMaterial),
     )
       ..position = base + vm.Vector3(0, 0.45, 0)
-      ..castsShadows = false;
-    root.add(hazeNode);
+      ..layers = _noReflectLayer
+      ..shadowCastingMode = ShadowCastingMode.off;
+    root.add(_hazeNode);
+
+    // Same place and size as the sprite glow it replaces (sprites 0.7 to
+    // 0.95 m across around base + 0.22 m).
+    _glowCard = Node(
+      name: 'su_fire_glow_card',
+      mesh: Mesh(_glowQuad(), glowMaterial),
+    )
+      ..position = base + vm.Vector3(0, 0.22, 0)
+      ..scale = vm.Vector3.all(0.9)
+      ..shadowCastingMode = ShadowCastingMode.off;
+    root.add(_glowCard);
+    setCoreGlow(CoreGlowMode.initial);
   }
 
   static const double _bedRadius = 0.46;
+  static const int _noReflectLayer = 1 << 1;
 
   final Node root;
   final vm.Vector2 _bedCentre;
   final PreprocessedMaterial emberMaterial;
   final PreprocessedMaterial hazeMaterial;
+  final PreprocessedMaterial glowMaterial;
+  late final Node _hazeNode;
+  late final Node _glowCard;
+  CoreGlowMode _coreGlow = CoreGlowMode.initial;
+  bool _lit = true;
+  final RenderOrderLedger<Node> _order = RenderOrderLedger<Node>(
+    read: (node) => node.renderOrder,
+    write: (node, order) => node.renderOrder = order,
+  );
+
+  CoreGlowMode get coreGlow => _coreGlow;
+
+  /// Shows the glow card or the old sprite glow, never both. With the card,
+  /// the core, haze and smoke take their ranks; with the sprite, every node
+  /// gets its authored order back.
+  void setCoreGlow(CoreGlowMode mode) {
+    _coreGlow = mode;
+    final shown = coreGlowVisibility(mode);
+    _glowCard.visible = shown.card && _lit;
+    _core.paused = !(shown.sprite && _lit);
+    _core.node.visible = shown.sprite && _lit;
+    if (shown.card) {
+      _order.apply({
+        _glowCard: TransparencyOrderValues.core,
+        _hazeNode: TransparencyOrderValues.haze,
+        _smoke.node: TransparencyOrderValues.smoke,
+      });
+    } else {
+      _order.restore();
+    }
+  }
   late final ParticleEmitterComponent _flames;
   late final ParticleEmitterComponent _core;
   late final ParticleEmitterComponent _embers;
@@ -305,7 +359,7 @@ class SuperUltraFire {
     root.add(
       Node(name: name)
         ..position = at
-        ..castsShadows = false
+        ..shadowCastingMode = ShadowCastingMode.off
         ..addComponent(emitter),
     );
     return emitter;
@@ -315,13 +369,18 @@ class SuperUltraFire {
   /// about 1.3 (flaring); [time] is seconds since the rig was built.
   void update({required double intensity, required double time}) {
     final lit = intensity > 0.02;
+    final sprite = coreGlowVisibility(_coreGlow).sprite;
     for (final emitter in _emitters) {
-      emitter.paused = !lit;
-      emitter.node.visible = lit;
+      final on = lit && (!identical(emitter, _core) || sprite);
+      emitter.paused = !on;
+      emitter.node.visible = on;
     }
+    _lit = lit;
+    _glowCard.visible = lit && !sprite;
     final strength = intensity.clamp(0.0, 1.4);
     _flames.material.tint = vm.Vector4(1, 1, 1, strength.clamp(0.0, 1.0));
     _core.material.tint = vm.Vector4.all(strength);
+    glowMaterial.parameters.setVec4('glow', vm.Vector4(1.0, 0.46, 0.12, strength));
     // The coals never go fully dark: a doused fire still smoulders.
     emberMaterial.parameters
       ..setFloat('time', time)
@@ -337,6 +396,25 @@ class SuperUltraFire {
     hazeMaterial.parameters
       ..setFloat('time', time)
       ..setVec4('haze', vm.Vector4(0.006, strength.clamp(0.0, 1.0), 0, 0));
+  }
+
+  /// A unit XY quad centred on the origin (uv 0..1 across it), for
+  /// `additive_glow.fmat` to turn toward the camera.
+  static MeshGeometry _glowQuad() {
+    final builder = GeometryBuilder(deduplicate: false)
+      ..normal(vm.Vector3(0, 0, 1));
+    builder.texCoord(vm.Vector2(0, 0));
+    final a = builder.addVertex(vm.Vector3(-0.5, -0.5, 0));
+    builder.texCoord(vm.Vector2(1, 0));
+    final b = builder.addVertex(vm.Vector3(0.5, -0.5, 0));
+    builder.texCoord(vm.Vector2(1, 1));
+    final c = builder.addVertex(vm.Vector3(0.5, 0.5, 0));
+    builder.texCoord(vm.Vector2(0, 1));
+    final d = builder.addVertex(vm.Vector3(-0.5, 0.5, 0));
+    builder
+      ..addTriangle(a, b, c)
+      ..addTriangle(a, c, d);
+    return builder.build();
   }
 
   /// An XY quad with its base on y = 0 and uv.y = 0 at the bottom, for

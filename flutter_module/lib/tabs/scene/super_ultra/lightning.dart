@@ -21,6 +21,7 @@ library;
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_module/tabs/scene/render/shockwave_pool.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
@@ -197,6 +198,11 @@ class SuperUltraLightning {
   /// Strikes so far, for the readout.
   int strikes = 0;
 
+  /// Called once per new strike, as it is created (before its flashes), with
+  /// its id and the middle of its bolt in world space.
+  void Function(StrikeEvent event)? onStrike;
+  final StrikeCounter _strikeIds = StrikeCounter();
+
   final math.Random _random = math.Random(41);
   double _untilNext = 3.0;
   double _age = -1.0;
@@ -288,7 +294,7 @@ class SuperUltraLightning {
     _boltNode = Node(
       name: 'su_lightning_bolt',
       mesh: Mesh.primitives(primitives: primitives),
-    )..castsShadows = false;
+    )..shadowCastingMode = ShadowCastingMode.off;
     root.add(_boltNode!);
 
     lightNode.lookAtFrom(top, vm.Vector3.zero());
@@ -296,6 +302,7 @@ class SuperUltraLightning {
     _envelope = LightningEnvelope.random(_random);
     _age = 0.0;
     strikes++;
+    onStrike?.call(StrikeEvent(_strikeIds.next(), x, (top.y + seaLevel) / 2, z));
     if (kDebugMode) {
       debugPrint('island lightning: strike ${top.x.toStringAsFixed(0)}, '
           '${top.z.toStringAsFixed(0)}');

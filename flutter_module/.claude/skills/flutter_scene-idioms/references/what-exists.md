@@ -31,6 +31,9 @@ Transform API (0.22.0 added the component properties; older docs say only `local
 | `localTransform` | `Matrix4` get/set | Getter returns the LIVE matrix; in-place edit throws in debug on next read. Assign a fresh matrix. |
 | `mutateLocalTransform(void Function(Matrix4) edit)` | method | Edits in place AND dirties the cache. Correct raw-matrix path. |
 | `globalTransform` | `Matrix4` get/set | Cached world transform; setter solves for the needed local. |
+| `forward` | `Vector3` get | Unit world-space direction of the node's local `+Z` axis (the axis `lookAt` aims). |
+| `right` | `Vector3` get | Unit world-space direction of the node's local `+X` axis (screen-right when viewed along `forward`). |
+| `up` | `Vector3` get | Unit world-space direction of the node's local `+Y` axis. |
 | `lookAt(target, {up})` | method | Orients the node's forward axis (local +Z) at a world-space target; preserves world position and scale. |
 | `lookAtFrom(eye, target, {up})` | method | Positions at `eye` and aims +Z at `target` in one call (the imperative camera one-liner). |
 | `Node.lookAtTransform(eye, target, {up})` | static -> `Matrix4` | The `lookAt` basis as a local transform, for `Node(localTransform:)` and declarative `transform:`. |
@@ -69,14 +72,24 @@ material)`; `Mesh.clone()` (shallow, shares geometry+material); `Mesh.localBound
   1000.0})`. Field names are `fovNear`/`fovFar`, NOT `near`/`far`.
 - `PerspectiveCamera.framing(Aabb3 bounds, {direction, fovRadiansY, up, margin = 1.1})`.
 - `PerspectiveProjection({fovRadiansY, near = 0.1, far = 1000.0})` and abstract `CameraProjection`,
-  `Camera`. Camera helpers: `screenPointToRay`, `worldToScreen`, `getViewMatrix`, `getFrustum`.
-- There is NO `OrthographicCamera`. Implement `CameraProjection`/`Camera` for other projections.
+  `Camera`. Camera basis getters (`position`, `forward`, `up`, `right`, `horizontalForward`, `horizontalRight`) and helpers (`screenPointToRay`, `worldToScreen`, `getViewMatrix`, `getFrustum`). `right` and `horizontalRight` use `up.cross(forward)` so they always point toward the right edge of the view in the engine's left-handed view space.
+- `OrthographicCamera({OrthographicProjection? projection, Vector3? position, target, up})` and
+  `OrthographicCamera.framing(bounds, {direction, up, margin})`.
+- `OrthographicProjection({OrthographicSize size = OrthographicSize.height(10), zoom = 1.0,
+  Vector2? offset, near = 0.0, far = 1000.0})`, plus `.bounds(left:, right:, bottom:, top:)` and
+  `.matchingPerspective(fovRadiansY:, distance:)`. Sizes are FULL world extents, never half:
+  `OrthographicSize.height(h)`, `.width(w)`, `.contain(w, h)`, `.cover(w, h)`, `.stretch(w, h)`,
+  or `.pixelsPerUnit(ppu)` (logical pixels per world unit, so the scale holds as the view resizes).
+  Frame with `zoom`/`size`, not by moving the eye. `near` may be negative (isometric scenes that
+  extend behind the eye).
+- Custom projections: implement `CameraProjection`. The renderer reads perspective versus
+  orthographic from the matrix, so effects follow.
 - Node-driven: `CameraComponent({CameraProjection? projection, activateOnMount = false})` ->
   `toCamera()` gives a `NodeCamera`. Camera node must not be scaled.
 - Interactive cameras: `CameraController` components attached to the camera node. `OrbitCameraController`
   (turntable around `target`; `orbitBy`/`dollyBy`/`panBy`/`frame`), `FlyCameraController` (WASD + drag
-  free flight; `moveVertical: false` = grounded first-person; `look`), `FollowCameraController`
-  (third-person easing behind `followTarget` node; `orbitBy`/`dollyBy`). All ease with frame-rate
+  free flight; `moveVertical: false` = grounded first-person; `look`, `setMoveInput`, `forward`, `right`), `FollowCameraController`
+  (third-person easing behind `followTarget` node; `orbitBy`/`dollyBy`, `forward`, `right`). All ease with frame-rate
   independent `smoothing` (settle seconds), clamp pitch short of vertical, and write the node via
   `lookAtFrom`. Wire input with the `CameraControls({required controller, enabled, autofocus, child})`
   widget (Focus + gestures + wheel); `SceneView` has no camera-input params by design.
@@ -89,6 +102,15 @@ material)`; `Mesh.clone()` (shallow, shares geometry+material); `Mesh.localBound
 `update(double deltaSeconds)` (NOT `onUpdate`), `fixedUpdate(double)`, `onUnmount`, `onDetach`,
 `cloneFor(Node)`. Node side: `addComponent`, `removeComponent`, `getComponent<T>()`,
 `getComponents<T>()`.
+Game input lives in the separate `flutter_scene_input` package: `InputSystem`, `PlayerInput`
+(`button`, `axis`, `vector`, `delta`, `fixed`, `contexts`, `overrides`), `ActionSet`, typed actions,
+binding nodes (`ButtonBinding`, `DpadBinding`, `StickBinding`, `DeltaBinding`, `ChordBinding`,
+`GatedBinding`), processors (`Deadzone`, `Scale`, `Invert`, `PerSecond`), `scene.attachInput`,
+`InputListener`, `PointerLock`, `DefaultActions`, drivers, `listenForBinding`, `bindingDisplay`.
+
+Components tick root-first in tree order. For code that must run before every component each frame
+(sampling input, applying network state), subclass `SceneTickListener` (`beforeTick(dt)`,
+`beforeFixedStep(fixedDt)`, both optional) and register it with `scene.addTickListener`.
 
 | Component | Constructor/notes |
 | --- | --- |
@@ -174,8 +196,9 @@ static `merge(parts)`. `MeshAttributeData(data, {components})`; `UnweldAttribute
 
 `Geometry` base: `primitiveType`, `localBounds`, `localBoundingSphere`, `setLocalBounds(aabb,
 sphere)`, `setVertices(BufferView, vertexCount)`, `setIndices(BufferView, indexType)`,
-`setCustomAttribute(name, Float32List, {required components})` (1..4; not fetched by depth passes so
-it does not affect shadows), `uploadVertexData(ByteData, vertexCount, ByteData? indices, {indexType =
+`setCustomAttribute(name, Float32List, {required components})` (1..4; depth and shadow passes read
+it too, so attribute-driven displacement casts its shadow; materials that do not declare it ignore
+it, and one that declares an attribute the mesh lacks reads zero), `uploadVertexData(ByteData, vertexCount, ByteData? indices, {indexType =
 int16})`, `isReadable`, `extractMeshData()`, `setVertexShader`/`setVertexShaderName`,
 `setVertexLayout(descriptor, {bindsModelTransform = true})`, `draw(pass, {instanceCount = 1})`.
 `SkinnedGeometry`/`UnskinnedGeometry` subclasses. `GeometryBufferArena({blockSizeInBytes = 16MB})`.
@@ -200,8 +223,12 @@ Attach via `LodComponent`. Shadow/depth passes always draw level 0.
 
 ## Materials and textures
 
-`Material` (abstract): `name`, `doubleSided` (false), `depthBias` (0.0), `setFragmentShader`,
-`setFragmentShaderName(name, {cubeName})`, `setRadianceCubeFragmentShader`, `isOpaque()`.
+`Material` (abstract): `name`, `doubleSided` (false), `depthLayer` (0), `depthBias` (0.0),
+`setFragmentShader`, `setFragmentShaderName(name, {cubeName})`, `setRadianceCubeFragmentShader`,
+`isOpaque()`. `depthLayer` (-8..8) orders coplanar surfaces: a higher layer draws over a lower one
+in the same plane at any distance (an overlay on a wall or road gets 1). `depthBias` is a world-unit
+nudge toward the camera that buys fewer depth steps with distance; prefer `depthLayer`. `.fmat`
+spells the layer `depth_layer:`.
 
 ### UnlitMaterial
 
@@ -296,12 +323,20 @@ Lights (all in `light.dart`, all fields mutable):
   shadowDepthBias = 0.02, shadowNormalBias = 0.02, shadowAmbientStrength = 0.0, shadowFilter =
   rotatedPoisson, shadowCasterFaces = front, contactShadows = false, contactShadowDistance = 0.3,
   angularRadius = 0.005})`.
-- `PointLight({color, intensity = 1.0, range = 0.0, falloffExponent = 2.0})`. No shadows.
+- `PointLight({color, intensity = 1.0, range = 0.0, falloffExponent = 2.0, castsShadow = false,
+  shadowMapResolution = 512, shadowNear = 0.1, shadowDepthBias = 0.0, shadowNormalBias = 0.1,
+  shadowSoftness = 1.0, shadowCasterFaces = front})`. Shadows render six cube faces into the shared
+  atlas (a limited number of point casters per frame; the rest shade unshadowed).
 - `SpotLight({color, intensity = 1.0, range = 0.0, falloffExponent = 2.0, direction /*(0,-1,0)*/,
   innerConeAngle = 0.0, outerConeAngle = pi/4, castsShadow = false, ...})`.
 - `RectAreaLight({color, intensity = 1.0, width = 1.0, height = 1.0, range = 0.0})`. Local XY plane,
   emits along +Z, no shadows.
 - `SunLight(SunSky source, {castsShadow = true, ...})` drives `Scene.directionalLight` from a sky.
+
+`Node.shadowCastingMode` (`ShadowCastingMode` = `on` (default) | `off` | `doubleSided` |
+`shadowsOnly`) selects how a node's meshes cast; `Node.castsShadows` is a deprecated two-state
+view of it. Every light also has `shadowCasterChannelMask` (8-bit), tested against
+`Node.lightChannelMask`, to drop casters from one light's map.
 
 `ShadowCasterFaces` = `front` | `back` | `both`. `DirectionalShadowFilter` = `rotatedPoisson` |
 `fixedPcf` | `pcss`. `ShadowCascade`, `Lighting` (per-draw state) are exported.
@@ -392,10 +427,14 @@ input_color` at `in vec2 v_uv`. `PostInsertion` = `beforeTonemap` (linear HDR pr
 timeout})`, `captureEnvironment({required position, faceResolution = 128, equirectWidth = 512,
 layerMask})` -> `EnvironmentMap` (one-shot static capture; use `ReflectionProbeComponent` for a
 node-anchored, parallax-corrected, auto-blended probe). Statics: `Scene.initializeStaticResources()`,
+`Scene.preload({physicalMaterials = true, smaa = false})` (loads the shaders behind PBR extensions
+and `ShadowCatcherMaterial`, and the SMAA tables, which otherwise load on first use),
 `Scene.isReadyToRender`, `Scene.physicalCameraExposure`, `Scene.isAntiAliasingModeSupported`,
 `Scene.effectiveAntiAliasingMode`.
 
-`Scene.antiAliasingMode` (`AntiAliasingMode.auto` -> msaa or fxaa; also `none`, `msaa`, `fxaa`, `smaa`),
+`Scene.antiAliasingMode` (`AntiAliasingMode.auto` -> msaa or fxaa; also `none`, `msaa`, `fxaa`,
+`smaa`, `taa`), `Scene.smaa` (`SmaaSettings`: threshold, search steps, corner rounding),
+`Scene.temporalAntiAliasing` (`TemporalAntiAliasingSettings`),
 `Scene.renderScale` (1.0), `Scene.filterQuality` (`FilterQuality.medium`), `Scene.views`
 (`List<RenderView>` for RenderTexture targets).
 
@@ -423,7 +462,23 @@ Widgets:
 
 `CustomRenderPass`, `RenderInput`, `RenderPassContext`, `RenderStage`, `TransientWriter`,
 `NodeFilter`, `HighlightStyle`, render-graph capture types (`CapturedPass`, `CapturedResource`,
-`RenderGraphCaptureRequest`, `RenderGraphCaptureResult`) are all exported.
+`CapturedDraw`, `CapturedSkip`, `RenderGraphCaptureRequest`, `RenderGraphCaptureResult`) are all
+exported.
+
+Debugging and profiling (all exported, all on every backend):
+- `scene.renderStats.latest` (`RenderFrameStats`): per-frame counters (draws, instances, vertices,
+  culled, batches, pipeline binds and builds) per view and per pass with CPU micros, plus
+  `history`. Always on; GPU times are null until the engine exposes timestamp queries. Each pass
+  also emits a `dart:developer` timeline event, so DevTools shows the frame.
+- `Scene.debugAllowRenderGraphCapture = true` then `scene.captureRenderGraph()` captures one frame:
+  passes with data flow and thumbnails, and every draw (`pass.draws`) with node path, material,
+  shader names, pipeline id, counts, batch size, `batchBreak` reason, and the uniform blocks bound
+  for it (`block.decode(draw)` names the members once `ShaderReflection.loadAll()` has run).
+  `result.toJson()` / `RenderGraphCaptureResult.fromJson` round-trip a capture as JSON.
+- `ShaderReflection.loadAll()` parses every loaded shader bundle; `ShaderReflection.infoFor(shader)`
+  gives inputs, uniform block layouts, texture bindings, and `sourceOf(shader)` the compiled MSL,
+  GLSL, or SPIR-V for any backend the bundle holds. `FmatCompileException.diagnostics` parses
+  compiler errors with line numbers; `shaderSourceWindow` renders the marked source around one.
 
 ---
 
@@ -472,3 +527,24 @@ Animation (`Animation`, `AnimationClip`, `AnimationPlayer` exported):
 The engine-agnostic scene-document core is a separate package `scene` (0.2.0), re-exported through
 `package:flutter_scene/fscene.dart`. `flutter_scene_importer` and `flutter_gpu_shim` no longer exist
 (folded in). Physics and audio are separate barrels (`physics.dart`, `audio.dart`).
+
+## Depth precision and z-fighting
+
+Defaults that keep depth precise: `Scene.reversedDepth` (true; reversed float depth on Metal and
+browsers with clip control) and `Scene.fitNearPlane` (true; the near plane the passes rasterize with
+is fitted to visible content each frame, the authored near is the floor, and the public projection is
+untouched). `Scene.coplanarTieBreak` (false, experimental) gives unlayered materials and instances a
+stable order where they overlap exactly. See `depth-and-layering.md`.
+
+Finding fights: `scene.probeDepthConflicts({camera, width = 960, height = 540, layerMask, minPixels
+= 4})` -> `Future<DepthConflictReport>` (`conflicts` of `DepthConflict` with `nodeA`, `nodeB`,
+`pixelCount`, `bounds`, `distance`; `conflictPixelCount`; `describe()`), rendered from the camera.
+`scene.findCoplanarOverlaps({camera})` -> `List<CoplanarOverlap>` (`nodeA`, `nodeB`, `instanceA`,
+`instanceB`, `area`, `separation`, `center`, `normal`, `hint`, `exact`, `describe()`), from geometry
+with no rendering; debug builds run it once the scene settles and print a summary
+(`scene.debugCheckCoplanarOverlaps = false` silences it). `DebugOverlay.depthConflicts` marks fights
+live, and `SurfaceDebugChannel.depthGap` shows the gap two surfaces need at each pixel.
+
+## Debugging the surface
+
+`Scene.debug` (a `SceneDebugSettings`): `view` is a `DebugView` over a `SurfaceDebugChannel` (geometry attributes, resolved surface channels, physical fields, object and material identity colors, validation flags, a `custom` channel fed by `material.debug` in a `.fmat`), with `gain`, a scalar range, and a `DebugRangePolicy`; `split` compares the view against the lit image; `overlays` holds `DebugOverlay.wireframe` and `DebugOverlay.depthConflicts`. `Node.debugView` overrides or excludes a subtree. The material channels are compiled in only with flutter_scene's `debug_views` hook user-define (`hooks: user_defines: flutter_scene: debug_views: true`, plus `flutter_scene_debug_views: true` under the app's name when its hook builds materials or engine assets); without it every material draws through the fallback, which serves the geometry and identity channels. `DebugViewRegistry` lists every view by id for tools, and `Scene.debugViewId` selects one by id. Raw `ShaderMaterial`s opt in with `debugViews: true` after defining `FLUTTER_SCENE_DEBUG_VIEWS` and including `material_debug.glsl`; those that do not are drawn by a fallback that stripes the material channels.

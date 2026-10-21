@@ -32,6 +32,9 @@ material {
 }
 
 sky {
+  // flutter_scene 0.24 defaults material fragments to mediump (half precision
+  // on Mali/Adreno/web). This body computes positions, phases and hashes.
+  precision highp float;
   // Small local noise instead of <noise.glsl>. That library's large constant
   // tables left this sky with no pipeline on the Android emulator's GLES
   // (it silently drew nothing, and the lighting baked from it was garbage);
@@ -254,6 +257,17 @@ sky {
 
     float above = smoothstep(-0.1, 0.1, dir.y);
     inscatter *= mix(material_params.ground_color.rgb, vec3(1.0), above);
+
+    // Golden-hour horizon belt: when the sun sits low near the horizon, add a
+    // warm amber-peach horizon band that transitions into violet-blue higher
+    // up, enriching both the sky backdrop and the sea's planar reflection.
+    float low_sun = smoothstep(-0.04, 0.10, sun_dir.y) *
+                    (1.0 - smoothstep(0.14, 0.38, sun_dir.y));
+    if (low_sun > 0.001) {
+      float horizon_band = (1.0 - smoothstep(0.0, 0.42, max(dir.y, 0.0))) * above;
+      float sun_side = 0.35 + 0.65 * smoothstep(-0.3, 0.95, cos_theta);
+      inscatter += vec3(0.95, 0.38, 0.12) * low_sun * horizon_band * sun_side * 0.55;
+    }
 
     // Toward a low sun this model's forward-scatter glow runs 4-50x the
     // zenith, and a camera framed on that sun reads it as one white sheet.

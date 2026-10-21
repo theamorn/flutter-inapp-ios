@@ -1,0 +1,68 @@
+// Ground decals for Super Ultra: the campfire's scorch ring (kind 0) and the
+// player's footprints (kind 1). Projected by a DecalNode box onto whatever
+// opaque surface is inside it (the heightfield, stones), so they follow the
+// ground instead of floating on it.
+material {
+  name: "DecalGround",
+  shading_model: unlit,
+  blending: alpha,
+  culling: front,
+  depth_test: always,
+  engine_inputs: [scene_depth],
+  scene_color_reach: 0.0,
+  parameters: [
+    { type: mat4, name: decal_inverse },
+    { type: float, name: decal_fade, default: 1.0 },
+    { type: float, name: kind, default: 0.0 },
+    // rgb = linear colour of the mark; a = strength.
+    { type: vec4, name: tint, default: [0.03, 0.025, 0.02, 0.85] },
+  ],
+}
+
+fragment {
+  precision highp float;
+
+  float Hash12(vec2 p) {
+    vec3 q = fract(vec3(p.xyx) * 0.1031);
+    q += dot(q, q.yzx + 33.33);
+    return fract((q.x + q.y) * q.z);
+  }
+
+  void Surface(inout MaterialInputs material) {
+    vec3 local = (material_params.decal_inverse *
+                  vec4(GetSceneWorldPosition(vec2(0.0)), 1.0)).xyz;
+    vec3 outside = step(vec3(0.5), abs(local));
+    if (max(outside.x, max(outside.y, outside.z)) > 0.0) {
+      discard;
+    }
+    vec2 uv = local.xz * 2.0; // -1..1 across the box
+    float coverage;
+    vec3 color = material_params.tint.rgb;
+    if (material_params.kind < 0.5) {
+      // Scorch: deep charred core, grey-white wood-ash ring around the stones,
+      // and a ragged outer soot halo.
+      float r = length(uv);
+      float grain = Hash12(floor((uv + 1.0) * 22.0));
+      float ragged = 0.86 + 0.12 * grain;
+      float inner_char = 1.0 - smoothstep(0.35, 0.68, r);
+      float ash_ring = smoothstep(0.38, 0.54, r) *
+                       (1.0 - smoothstep(0.54, 0.74, r)) * (0.65 + 0.35 * grain);
+      color = mix(color, vec3(0.22, 0.20, 0.18), ash_ring * 0.65);
+      color = mix(color, vec3(0.015, 0.012, 0.010), inner_char);
+      coverage = 1.0 - smoothstep(ragged - 0.30, ragged, r);
+    } else {
+      // Footprint: an indented sole (with slight arch taper) and heel along
+      // local z, with a darker damp centre and subtle pressed soil rim.
+      float arch_taper = 1.0 - 0.18 * (1.0 - smoothstep(0.0, 0.35, abs(uv.y - 0.05)));
+      vec2 sole = (uv - vec2(0.0, 0.24)) / vec2(0.44 * arch_taper, 0.56);
+      vec2 heel = (uv + vec2(0.0, 0.54)) / vec2(0.35, 0.32);
+      float d = min(dot(sole, sole), dot(heel, heel));
+      float indent = 1.0 - smoothstep(0.0, 0.72, d);
+      color = mix(color * 1.25, color * 0.55, indent);
+      coverage = 1.0 - smoothstep(0.70, 1.0, d);
+    }
+    coverage *= material_params.tint.a * material_params.decal_fade;
+    material.base_color = vec4(color, coverage);
+    PrepareMaterial(material);
+  }
+}

@@ -120,7 +120,7 @@ class SuperUltraRain {
 
     Node emitterNode(String name, ParticleEmitterComponent emitter) =>
         Node(name: name)
-          ..castsShadows = false
+          ..shadowCastingMode = ShadowCastingMode.off
           ..addComponent(emitter);
     root
       ..add(emitterNode('su_rain_drops', _drops))
@@ -128,11 +128,14 @@ class SuperUltraRain {
       ..add(emitterNode('su_rain_steam', _steam))
       ..add(
         Node(name: 'su_rain_ripples')
-          ..castsShadows = false
+          ..layers = _noReflectLayer
+          ..shadowCastingMode = ShadowCastingMode.off
           ..addComponent(InstancedMeshComponent(_ripples)),
       )
       ..addComponent(_RainTick(this));
   }
+
+  static const int _noReflectLayer = 1 << 1;
 
   /// Half the side of the square the rain falls over, centred on the island.
   static const double kAreaHalfSize = 27.0;
@@ -178,6 +181,7 @@ class SuperUltraRain {
   late final InstancedMesh _ripples;
   final Float32List _rippleAge = Float32List(kRippleCount);
   final Float32List _ripplePos = Float32List(kRippleCount * 3);
+  final Uint8List _rippleDirtySlot = Uint8List(kRippleCount);
   int _nextRipple = 0;
   final math.Random _random = math.Random(29);
 
@@ -223,6 +227,9 @@ class SuperUltraRain {
     _splashes.system.reset();
     _steam.system.reset();
     for (var i = 0; i < kRippleCount; i++) {
+      if (_rippleAge[i] < kRippleLife) {
+        _rippleDirtySlot[i] = 1;
+      }
       _rippleAge[i] = kRippleLife;
     }
     _ripplesDirty = true;
@@ -264,6 +271,7 @@ class SuperUltraRain {
     final i = _nextRipple;
     _nextRipple = (_nextRipple + 1) % kRippleCount;
     _rippleAge[i] = 0.0;
+    _rippleDirtySlot[i] = 1;
     _ripplePos[i * 3] = x;
     _ripplePos[i * 3 + 1] = y + 0.012;
     _ripplePos[i * 3 + 2] = z;
@@ -283,6 +291,7 @@ class SuperUltraRain {
     for (var i = 0; i < kRippleCount; i++) {
       if (_rippleAge[i] < kRippleLife) {
         _rippleAge[i] += dt;
+        _rippleDirtySlot[i] = 1;
         anyRipple = true;
       }
     }
@@ -292,6 +301,9 @@ class SuperUltraRain {
     _ripplesDirty = anyRipple;
     _ripples.updateInstanceTransforms((matrices) {
       for (var i = 0; i < kRippleCount; i++) {
+        if (_rippleDirtySlot[i] == 0) {
+          continue;
+        }
         final age = _rippleAge[i];
         final m = matrices[i];
         if (age >= kRippleLife) {
@@ -314,9 +326,17 @@ class SuperUltraRain {
       }
     }, recomputeWinding: false);
     for (var i = 0; i < kRippleCount; i++) {
+      if (_rippleDirtySlot[i] == 0) {
+        continue;
+      }
       final age = _rippleAge[i];
+      if (age >= kRippleLife) {
+        _ripples.setInstanceColor(i, vm.Vector4(1, 1, 1, 0.0));
+        _rippleDirtySlot[i] = 0;
+        continue;
+      }
       final t = (age / kRippleLife).clamp(0.0, 1.0);
-      final alpha = age >= kRippleLife ? 0.0 : 0.3 * (1.0 - t) * (1.0 - t);
+      final alpha = 0.3 * (1.0 - t) * (1.0 - t);
       _ripples.setInstanceColor(i, vm.Vector4(1, 1, 1, alpha));
     }
   }

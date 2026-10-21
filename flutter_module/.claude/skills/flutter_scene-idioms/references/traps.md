@@ -29,7 +29,28 @@ in-place `localTransform` edit and for editing a copy returned by `position`/`ro
 
 ---
 
-## 2. Passing a normal or metallic-roughness map as `TextureContent.color`
+## 2. Faces of different surfaces overlapping in one plane
+
+**Mistake.** Repeated pieces longer than their spacing (an 8.4 m barrier every 8 m), runs that both
+extend into a corner, patches of different colors overlapping at one height, a sign, screen, or
+road marking laid flush on its surface, or the same mesh added twice.
+
+**Symptom.** The overlap flickers between the two surfaces as the camera moves (z-fighting): stripes,
+speckles, or triangles of the wrong color that crawl. Any one screenshot can look right, and no near
+plane or depth setting fixes an exact overlap.
+
+**Do instead.** Make repeated pieces abut (length equals spacing) and cap joints with a post, keep
+same-height patches apart, and give an overlay that lies on a surface `material.depthLayer = 1`.
+`await scene.probeDepthConflicts()` names every pair that fights from a camera, and
+`scene.findCoplanarOverlaps()` lists the overlapping faces with the length that fixes a repeated
+piece. See `depth-and-layering.md`.
+
+**[Caught in debug]** Debug builds print the overlapping coplanar faces once the scene holds still,
+naming the nodes and the fix.
+
+---
+
+## 3. Passing a normal or metallic-roughness map as `TextureContent.color`
 
 **Mistake.** `material.normalTexture = await Texture2D.fromAsset('brick_normal.png')` without
 `content: TextureContent.normal`. The `content` parameter defaults to `color`.
@@ -44,7 +65,7 @@ linear data. Still silent, so this is on you.
 
 ---
 
-## 3. Non-uniform scale on a lit mesh
+## 4. Non-uniform scale on a lit mesh
 
 **Mistake.** Any non-uniform scale on the node or an ancestor, e.g. `node.scale = Vector3(1, 3, 1)`.
 
@@ -56,7 +77,7 @@ shading or material bug, so it sends you into the materials, never the transform
 
 ---
 
-## 4. Moving a skinned mesh node
+## 5. Moving a skinned mesh node
 
 **Mistake.** `skinnedNode.localTransform = Matrix4.translation(v)` on a node that carries a `Skin`.
 
@@ -69,7 +90,7 @@ mesh node and the skeleton under a shared node and move that. Still silent.
 
 ---
 
-## 5. Replacing the transform of a runtime-imported model root
+## 6. Replacing the transform of a runtime-imported model root
 
 **Mistake.**
 ```dart
@@ -88,7 +109,7 @@ silent.
 
 ---
 
-## 6. `EnvironmentMap.fromGpuTextures` with a raw panorama
+## 7. `EnvironmentMap.fromGpuTextures` with a raw panorama
 
 **Mistake.**
 ```dart
@@ -106,7 +127,7 @@ SH for you. Still silent.
 
 ---
 
-## 7. `ShaderMaterial(cullingMode: none)` for a double-sided custom material
+## 8. `ShaderMaterial(cullingMode: none)` for a double-sided custom material
 
 **Mistake.** `ShaderMaterial(cullingMode: gpu.CullMode.none)`, or setting `doubleSided = true` on a
 `ShaderMaterial`. The two do not agree.
@@ -122,7 +143,7 @@ need to match, or split it. Still silent.
 
 ---
 
-## 8. Caller-supplied `bounds` that do not cover the geometry
+## 9. Caller-supplied `bounds` that do not cover the geometry
 
 **Mistake.** `MeshGeometry.fromArrays(positions: p, bounds: someAabb)` where the AABB does not contain
 every position, or `setLocalBounds` with a guessed or stale box.
@@ -137,7 +158,7 @@ is dangerous. Still silent.
 
 ---
 
-## 9. Binding a mipless texture to a material
+## 10. Binding a mipless texture to a material
 
 **Mistake.** `material.baseColorTexture = GpuTextureSource(await gpuTextureFromAsset('brick.png'))`.
 The helper's own doc even recommends this.
@@ -152,7 +173,7 @@ silent.
 
 ---
 
-## 10. `RenderView.layerMask`/`Node.layers` mismatch, or a zero mask
+## 11. `RenderView.layerMask`/`Node.layers` mismatch, or a zero mask
 
 **Mistake.** Putting a node on a non-default layer and forgetting the view side (or vice versa), or
 `layerMask: 0`, or `Node.layers = 2` meaning to select "layer 2" (which is actually `1 << 2 == 4`).
@@ -162,12 +183,12 @@ silent.
 
 **Do instead.** `Node.layers` is a bitmask and is NOT inherited by children, so set it on each node
 you want the view to see. Use `kRenderLayerAll` to see everything, or a bitmask like `(1 << 2)`.
-Match the view's `layerMask` to the nodes' `layers`. Still silent (but see #23 for the
+Match the view's `layerMask` to the nodes' `layers`. Still silent (but see #24 for the
 draws-nothing diagnostic).
 
 ---
 
-## 11. Mutating a `TextureTransform` in place
+## 12. Mutating a `TextureTransform` in place
 
 **Mistake.** `material.baseColorTextureTransform.offset.x = 0.5` instead of assigning a fresh
 `TextureTransform`. Same shape as trap #1, for materials.
@@ -181,7 +202,7 @@ TextureTransform(offset: ...)`. Still silent.
 
 ---
 
-## 12. Environment image that is not 2:1 equirectangular
+## 13. Environment image that is not 2:1 equirectangular
 
 **Mistake.** Passing a cube cross, a 1:1 angular light probe, or a cropped panorama to any environment
 entry point. HDRI downloads are not reliably 2:1.
@@ -194,21 +215,17 @@ crosses and angular probes are not supported. Still silent.
 
 ---
 
-## 13. Hand-built triangles wound clockwise
+## 14. Hand-built triangles wound clockwise
 
-**Mistake.** Generating triangles with clockwise winding instead of the standard Counter-Clockwise (CCW)
-right-handed convention when feeding `MeshGeometry.fromArrays` or `GeometryBuilder`.
+**Mistake.** Generating triangles with clockwise winding instead of counter-clockwise (CCW) winding around the outward normal when feeding `MeshGeometry.fromArrays` or `GeometryBuilder`.
 
-**Symptom.** The mesh is invisible from outside and visible from inside; a closed shape looks hollow
-or inside-out; lighting is inverted where it shows. ("See-through faces.")
+**Symptom.** The mesh is invisible from outside and visible from inside; a closed shape looks hollow or inside-out; lighting is inverted where it shows. ("See-through faces.")
 
-**Do instead.** flutter_scene's front faces wind COUNTER-CLOCKWISE (CCW) in model space, matching glTF
-and standard 3D conventions. Ensure triangle indices wind CCW around the outward face normal, or omit
-`normals` and let `GeometryBuilder` derive them from your winding. Still silent.
+**Do instead.** flutter_scene's front faces wind COUNTER-CLOCKWISE (CCW) in model space around the outward face normal, matching glTF. Ensure triangle indices wind CCW when viewed from outside the surface, or omit `normals` and let `GeometryBuilder` derive them from your winding. Still silent.
 
 ---
 
-## 14. Out-of-range indices in `fromArrays`
+## 15. Out-of-range indices in `fromArrays`
 
 **Mistake.** `MeshGeometry.fromArrays(positions: p /* 100 verts */, indices: [0, 1, 100])`, e.g. from
 an off-by-one or an index list built against a different vertex array.
@@ -221,7 +238,7 @@ for you and throws; the `fromArrays` index path does not.) Still silent on the `
 
 ---
 
-## 15. A `vertexCount` that does not match the buffer in `setVertices`
+## 16. A `vertexCount` that does not match the buffer in `setVertices`
 
 **Mistake.** `geometry.setVertices(bufferView, vertexCount)` where `vertexCount` is a byte count, a
 float count, or a triangle count rather than a vertex count.
@@ -231,12 +248,12 @@ stray geometry or a dropped draw depending on backend. The buffer is fine, so th
 to the packing code.
 
 **Do instead.** `vertexCount` is a count of vertices. Prefer `uploadVertexData` (which validates the
-stride, see #17) or `fromArrays` over the caller-managed `setVertices` path unless you really own the
+stride, see #18) or `fromArrays` over the caller-managed `setVertices` path unless you really own the
 GPU buffer. Still silent.
 
 ---
 
-## 16. Oversized texture on a low-end device
+## 17. Oversized texture on a low-end device
 
 **Mistake.** `EnvironmentMap.fromEquirectImageAsset(assetPath: 'pano_16k.hdr', maxWidth: 16384)` or
 `EnvironmentMap.radianceCubeSize = 4096` on a device whose max texture size is lower.
@@ -249,7 +266,7 @@ machine, black on a phone.
 
 ---
 
-## 17. Hand-packing vertex bytes at the wrong stride
+## 18. Hand-packing vertex bytes at the wrong stride
 
 **Mistake.** `SkinnedGeometry()..uploadVertexData(bytes, vertexCount, indices)` with the wrong stride
 (a common one is 96 bytes having forgotten UV1, or the legacy 80-byte layout).
@@ -266,7 +283,7 @@ expected layout.
 
 ---
 
-## 18. Custom attribute length not matching the vertex count
+## 19. Custom attribute length not matching the vertex count
 
 **Mistake.** `geometry.setCustomAttribute('a_wind', data, components: 3)` where `data` has the wrong
 length, or set before uploading vertices, or not re-set after a `rebuild` changed the count.
@@ -275,15 +292,17 @@ length, or set before uploading vertices, or not re-set after a `rebuild` change
 displacement shader shears the mesh, a color attribute smears. Nearly right, so hard to spot.
 
 **Do instead.** `data.length` must equal `vertexCount * components`. Set the attribute after uploading
-vertices, and re-set it after any rebuild. Also note custom attributes are not fetched by depth/shadow
-passes, so an attribute-driven displacement will not show in shadows.
+vertices, and re-set it after any rebuild. Depth and shadow passes run the material's full vertex
+variant, so an attribute-driven displacement casts its shadow. The mesh and material sides need not
+match: a declared attribute the mesh lacks reads zero, and a mesh's extra attributes are ignored by
+materials that do not declare them.
 
 **[0.22.0 catches this]** `setCustomAttribute` now throws an `ArgumentError` on a length mismatch
 (once the vertex count is known).
 
 ---
 
-## 19. `UnlitMaterial` with `AlphaMode.mask`
+## 20. `UnlitMaterial` with `AlphaMode.mask`
 
 **Mistake.** `UnlitMaterial(colorTexture: foliage)..alphaMode = AlphaMode.mask` for cutout foliage.
 
@@ -296,7 +315,7 @@ Still silent.
 
 ---
 
-## 20. `vertexColorWeight` on a material that took a physical variant
+## 21. `vertexColorWeight` on a material that took a physical variant
 
 **Mistake.**
 ```dart
@@ -313,7 +332,7 @@ extension. Still silent.
 
 ---
 
-## 21. Vertex-stage binding on a `ShaderMaterial` with no vertex shader
+## 22. Vertex-stage binding on a `ShaderMaterial` with no vertex shader
 
 **Mistake.**
 ```dart
@@ -330,7 +349,7 @@ kinds) to the constructor before binding vertex-stage blocks, or bind the block 
 
 ---
 
-## 22. A `ShaderMaterial` vertex shader on line/trail/polyline geometry
+## 23. A `ShaderMaterial` vertex shader on line/trail/polyline geometry
 
 **Mistake.** Attaching a `ShaderMaterial` that supplies a vertex shader to a `LineSegmentsGeometry`, a
 trail, or a polyline.
@@ -344,7 +363,7 @@ use a mesh geometry. Still silent.
 
 ---
 
-## 23. Four different causes of a blank frame
+## 24. Four different causes of a blank frame
 
 **Mistake.** Any of: a degenerate camera (target equals position, or `up` parallel to the view
 direction, e.g. a top-down camera left at the default `up`), a field of view passed in degrees
@@ -365,13 +384,13 @@ matching nothing).
 
 ---
 
-## 24. Missing bounds after swapping a primitive's geometry
+## 25. Missing bounds after swapping a primitive's geometry
 
 **Mistake.** `mesh.primitives[0].geometry = newGeometry` for hand LOD, a rebuilt procedural mesh, or a
 variant swap.
 
 **Symptom.** The new geometry is culled against the old geometry's bounds; if it is larger or
-displaced, it pops in and out exactly like trap #8.
+displaced, it pops in and out exactly like trap #9.
 
 **Do instead.** Nothing extra is needed anymore.
 
@@ -380,7 +399,7 @@ identity changes, so the manual `markLocalBoundsDirty()` is no longer required.
 
 ---
 
-## 25. A `.fmat` material that overruns the 15-sampler budget
+## 26. A `.fmat` material that overruns the 15-sampler budget
 
 **Mistake.** A `lit` or `physical` `.fmat` declaring several `sampler2d` parameters plus
 `engine_inputs: [scene_color, scene_depth]`, on top of the lit framework's own textures.
@@ -394,7 +413,7 @@ runtime on the device, not at build).
 
 ---
 
-## 26. `RenderView.viewport` with a `target` set
+## 27. `RenderView.viewport` with a `target` set
 
 **Mistake.** `RenderView(camera: cam, target: myRenderTexture, viewport: Rect.fromLTWH(0, 0, 0.5, 1))`
 expecting a half-width render into the texture.
@@ -407,7 +426,7 @@ want, or drop the target to render a sub-rect of the screen. Still silent.
 
 ---
 
-## 27. Scaled or mirrored camera node
+## 28. Scaled or mirrored camera node
 
 **Mistake.** Attaching a `CameraComponent` to a scaled node, or parenting a camera node under a scaled
 one.
@@ -421,7 +440,7 @@ Still silent.
 
 ---
 
-## 28. Hand-built `Skin` with mismatched joints and inverse-bind matrices
+## 29. Hand-built `Skin` with mismatched joints and inverse-bind matrices
 
 **Mistake.** `skin.joints.add(n)` without a matching `skin.inverseBindMatrices.add(...)` (both are
 plain mutable lists).
@@ -435,7 +454,7 @@ not. Still silent.
 
 ---
 
-## 29. Cloning a mesh node whose skeleton is a sibling
+## 30. Cloning a mesh node whose skeleton is a sibling
 
 **Mistake.** `meshNode.clone()` when the skeleton lives outside the cloned subtree.
 
@@ -447,7 +466,7 @@ Still effectively silent.
 
 ---
 
-## 30. `updateInstanceTransforms(recomputeWinding: false)` with a mirroring edit
+## 31. `updateInstanceTransforms(recomputeWinding: false)` with a mirroring edit
 
 **Mistake.** Editing an instance transform to a negative determinant while asking the engine to skip
 the parity refresh.
@@ -459,7 +478,7 @@ the parity refresh.
 
 ---
 
-## 31. Flipbook frame count vs atlas grid mismatch
+## 32. Flipbook frame count vs atlas grid mismatch
 
 **Mistake.** A `FlipbookModule(frameCount: 16)` without `emitter.flipbookColumns = 4;
 emitter.flipbookRows = 4`.
@@ -471,7 +490,7 @@ shows the wrong art.
 
 ---
 
-## 32. `LodComponent` blend bands overlapping
+## 33. `LodComponent` blend bands overlapping
 
 **Mistake.** A `blendRange` larger than the gap between adjacent LOD thresholds.
 
@@ -483,7 +502,7 @@ thresholds. Still silent.
 
 ---
 
-## 33. `TextureAtlas` grid not matching its texture
+## 34. `TextureAtlas` grid not matching its texture
 
 **Mistake.** `TextureAtlas(columns: 16, rows: 16, tileSize: 32, padding: 2, baseColor: eightBySix)`
 where the grid does not match the image, or an out-of-range tile `index`.
@@ -498,7 +517,7 @@ silent.
 
 ---
 
-## 34. `useEnvironment` sky with no cube-radiance variant
+## 35. `useEnvironment` sky with no cube-radiance variant
 
 **Mistake.** `ShaderSkySource(fragmentShader: myShader, useEnvironment: true)` with
 `radianceCubeFragmentShader` left null.
@@ -512,7 +531,7 @@ not rely on the warning.
 
 ---
 
-## 35. `radianceCubeFragmentShader` that is not the cube build
+## 36. `radianceCubeFragmentShader` that is not the cube build
 
 **Mistake.** `ShaderMaterial(fragmentShader: f, radianceCubeFragmentShader: f)` (the same shader
 twice), or naming the non-cube entry as the cube twin.
@@ -526,7 +545,7 @@ backends, garbage specular on others.
 
 ---
 
-## 36. Reading `int`/`bool`/`uint` shader members through `setUniformBlockFromFloats`
+## 37. Reading `int`/`bool`/`uint` shader members through `setUniformBlockFromFloats`
 
 **Mistake.** `setUniformBlockFromFloats('FragInfo', [1.0, 0.5])` where the shader declares `int mode;
 float amount;`.
@@ -540,7 +559,7 @@ material whose `MaterialParameters` type-checks every assignment. Unenforceable 
 
 ---
 
-## 37. A custom fragment shader that tone-maps or writes straight alpha
+## 38. A custom fragment shader that tone-maps or writes straight alpha
 
 **Mistake.** Ending a `ShaderMaterial`/`ShaderSkySource`/`beforeTonemap` `PostEffect` fragment
 shader with `frag_color = vec4(color, alpha)` (straight alpha) or `pow(color, vec3(1.0/2.2))`
@@ -556,7 +575,7 @@ first. `.fmat` materials get the premultiply for free. Unenforceable at runtime.
 
 ---
 
-## 38. `MaterialParameters.copyStateFrom` across a changed layout
+## 39. `MaterialParameters.copyStateFrom` across a changed layout
 
 **Mistake.** Applying a re-realized material onto a live instance whose shader layout changed (an
 editor hot reload where the `.fmat` gained or lost a parameter).
@@ -569,7 +588,7 @@ name through `updateFromMetadata` across a layout change instead. Still silent.
 
 ---
 
-## 39. Environment or widget textures with sub-255 alpha
+## 40. Environment or widget textures with sub-255 alpha
 
 **Mistake.** Passing an equirect image carrying alpha below 255 (an unfilled sky dome, a masked
 panorama) to `fromUIImages`/`fromEquirectImageAsset`. Or, for `WidgetTexture`/`WidgetComponent`,
@@ -586,15 +605,26 @@ Still silent.
 
 ---
 
+## 41. Computing a camera or node right vector with `forward.cross(up)` or `+Z` orbit tangents
+
+**Mistake.** Writing `final right = forward.cross(up).normalized()`, or placing an orbit camera at `target + Vector3(d * sin(azimuth), y, d * cos(azimuth))` and using `Vector3(cos(azimuth), 0, -sin(azimuth))` as its horizontal right vector.
+
+**Symptom.** Horizontal camera strafing (`A`/`D`) and click-drag panning move in the exact opposite horizontal direction from expected, while vertical movement (`W`/`S` and vertical drag) works normally.
+
+**Do instead.** `flutter_scene`'s view space is left-handed (`+Z` forward into the screen, `+Y` up, `+X` right), while `package:vector_math`'s `cross()` is right-handed, so `forward.cross(up)` yields `-right` (screen-left). Likewise, when a camera sits on the `+Z` side of the origin looking along `-Z`, world `+X` is on the left of the screen (`right = Vector3(-cos(azimuth), 0, sin(azimuth))`). Read `camera.right`, `camera.horizontalRight`, `camera.horizontalForward`, or `node.right` directly, or compute `up.cross(forward).normalized()`. Prefer `OrbitCameraController`, `FollowCameraController`, or `FlyCameraController` over hand-rolled spherical camera math.
+
+---
+
 ## Now caught by the engine, in one place
 
 For quick reference, these traps became loud in 0.22.0. If you hit one you get an error, not silent
 wrong pixels:
 
 - In-place edit of `localTransform`/`position`/`rotation`/`scale` -> throws in debug (#1).
-- Degenerate camera and a frame that draws nothing -> asserts/prints once in debug (#23).
-- `uploadVertexData` and `setCustomAttribute` length mismatches -> throw always (#17, #18).
-- A `Mesh` whose primitive geometry is swapped -> recomputes bounds itself (#24).
+- Degenerate camera and a frame that draws nothing -> asserts/prints once in debug (#24).
+- `uploadVertexData` and `setCustomAttribute` length mismatches -> throw always (#18, #19).
+- A `Mesh` whose primitive geometry is swapped -> recomputes bounds itself (#25).
+- Faces of different surfaces overlapping in one plane -> printed once in debug with the fix (#2).
 - An `AnimationClip` binding zero of its channels -> asserts in debug naming the wanted nodes.
 - A web-backend bind to a shader uniform/texture name the shader does not declare -> throws (matches
   native), instead of silently sampling whatever was bound last.

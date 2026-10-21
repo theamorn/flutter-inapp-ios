@@ -16,7 +16,7 @@ The metric definitions and shared names live in [ARCHITECTURE.md](docs/hybrid-de
 
 ## Toolchain and setup
 
-- Flutter **3.47.2**, pinned by `.fvmrc`; use FVM for all module commands.
+- Flutter **3.47.7**, pinned by `.fvmrc`; use FVM for all module commands.
 - iOS host deployment target **15.6**; Xcode with the appropriate iOS SDK and CocoaPods. Signing is needed to install on a phone.
 - Android SDK **36**, minimum API **24**, Java **17+**, and a complete installed NDK. Gradle/AGP/Kotlin versions are pinned in `cool-android/`.
 

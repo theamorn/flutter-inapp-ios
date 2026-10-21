@@ -629,11 +629,11 @@
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = "$(inherited) armv7";
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "$(inherited) i386";
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"\"/Users/pikmin/fvm/versions/3.47.2/bin/cache/artifacts/engine/ios-release/Flutter.xcframework/ios-arm64\"",
+					"\"/Users/pikmin/fvm/versions/3.47.7/bin/cache/artifacts/engine/ios-release/Flutter.xcframework/ios-arm64\"",
 					"$(inherited)",
 				);
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"\"/Users/pikmin/fvm/versions/3.47.2/bin/cache/artifacts/engine/ios-release/Flutter.xcframework/ios-arm64_x86_64-simulator\"",
+					"\"/Users/pikmin/fvm/versions/3.47.7/bin/cache/artifacts/engine/ios-release/Flutter.xcframework/ios-arm64_x86_64-simulator\"",
 					"$(inherited)",
 				);
 				INFOPLIST_FILE = "Target Support Files/Pods-cool-ios/Pods-cool-ios-Info.plist";
@@ -686,11 +686,11 @@
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = "$(inherited) armv7";
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "$(inherited) i386";
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"\"/Users/pikmin/fvm/versions/3.47.2/bin/cache/artifacts/engine/ios-release/Flutter.xcframework/ios-arm64\"",
+					"\"/Users/pikmin/fvm/versions/3.47.7/bin/cache/artifacts/engine/ios-release/Flutter.xcframework/ios-arm64\"",
 					"$(inherited)",
 				);
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"\"/Users/pikmin/fvm/versions/3.47.2/bin/cache/artifacts/engine/ios-release/Flutter.xcframework/ios-arm64_x86_64-simulator\"",
+					"\"/Users/pikmin/fvm/versions/3.47.7/bin/cache/artifacts/engine/ios-release/Flutter.xcframework/ios-arm64_x86_64-simulator\"",
 					"$(inherited)",
 				);
 				INFOPLIST_FILE = "Target Support Files/Pods-cool-ios-cool-iosUITests/Pods-cool-ios-cool-iosUITests-Info.plist";
@@ -805,11 +805,11 @@
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = "$(inherited) armv7";
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "$(inherited) i386";
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"\"/Users/pikmin/fvm/versions/3.47.2/bin/cache/artifacts/engine/ios-release/Flutter.xcframework/ios-arm64\"",
+					"\"/Users/pikmin/fvm/versions/3.47.7/bin/cache/artifacts/engine/ios-release/Flutter.xcframework/ios-arm64\"",
 					"$(inherited)",
 				);
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"\"/Users/pikmin/fvm/versions/3.47.2/bin/cache/artifacts/engine/ios-release/Flutter.xcframework/ios-arm64_x86_64-simulator\"",
+					"\"/Users/pikmin/fvm/versions/3.47.7/bin/cache/artifacts/engine/ios-release/Flutter.xcframework/ios-arm64_x86_64-simulator\"",
 					"$(inherited)",
 				);
 				INFOPLIST_FILE = "Target Support Files/Pods-cool-iosTests/Pods-cool-iosTests-Info.plist";
@@ -860,11 +860,11 @@
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = "$(inherited) armv7";
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "$(inherited) i386";
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"\"/Users/pikmin/fvm/versions/3.47.2/bin/cache/artifacts/engine/ios-release/Flutter.xcframework/ios-arm64\"",
+					"\"/Users/pikmin/fvm/versions/3.47.7/bin/cache/artifacts/engine/ios-release/Flutter.xcframework/ios-arm64\"",
 					"$(inherited)",
 				);
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"\"/Users/pikmin/fvm/versions/3.47.2/bin/cache/artifacts/engine/ios-release/Flutter.xcframework/ios-arm64_x86_64-simulator\"",
+					"\"/Users/pikmin/fvm/versions/3.47.7/bin/cache/artifacts/engine/ios-release/Flutter.xcframework/ios-arm64_x86_64-simulator\"",
 					"$(inherited)",
 				);
 				GCC_PREFIX_HEADER = "Target Support Files/FlutterPluginRegistrant/FlutterPluginRegistrant-prefix.pch";
@@ -939,11 +939,11 @@
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = "$(inherited) armv7";
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "$(inherited) i386";
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"\"/Users/pikmin/fvm/versions/3.47.2/bin/cache/artifacts/engine/ios/Flutter.xcframework/ios-arm64\"",
+					"\"/Users/pikmin/fvm/versions/3.47.7/bin/cache/artifacts/engine/ios/Flutter.xcframework/ios-arm64\"",
 					"$(inherited)",
 				);
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"\"/Users/pikmin/fvm/versions/3.47.2/bin/cache/artifacts/engine/ios/Flutter.xcframework/ios-arm64_x86_64-simulator\"",
+					"\"/Users/pikmin/fvm/versions/3.47.7/bin/cache/artifacts/engine/ios/Flutter.xcframework/ios-arm64_x86_64-simulator\"",
 					"$(inherited)",
 				);
 				INFOPLIST_FILE = "Target Support Files/Pods-cool-iosTests/Pods-cool-iosTests-Info.plist";
@@ -994,11 +994,11 @@
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = "$(inherited) armv7";
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "$(inherited) i386";
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"\"/Users/pikmin/fvm/versions/3.47.2/bin/cache/artifacts/engine/ios/Flutter.xcframework/ios-arm64\"",
+					"\"/Users/pikmin/fvm/versions/3.47.7/bin/cache/artifacts/engine/ios/Flutter.xcframework/ios-arm64\"",
 					"$(inherited)",
 				);
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"\"/Users/pikmin/fvm/versions/3.47.2/bin/cache/artifacts/engine/ios/Flutter.xcframework/ios-arm64_x86_64-simulator\"",
+					"\"/Users/pikmin/fvm/versions/3.47.7/bin/cache/artifacts/engine/ios/Flutter.xcframework/ios-arm64_x86_64-simulator\"",
 					"$(inherited)",
 				);
 				GCC_PREFIX_HEADER = "Target Support Files/FlutterPluginRegistrant/FlutterPluginRegistrant-prefix.pch";
@@ -1054,11 +1054,11 @@
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = "$(inherited) armv7";
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "$(inherited) i386";
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"\"/Users/pikmin/fvm/versions/3.47.2/bin/cache/artifacts/engine/ios/Flutter.xcframework/ios-arm64\"",
+					"\"/Users/pikmin/fvm/versions/3.47.7/bin/cache/artifacts/engine/ios/Flutter.xcframework/ios-arm64\"",
 					"$(inherited)",
 				);
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"\"/Users/pikmin/fvm/versions/3.47.2/bin/cache/artifacts/engine/ios/Flutter.xcframework/ios-arm64_x86_64-simulator\"",
+					"\"/Users/pikmin/fvm/versions/3.47.7/bin/cache/artifacts/engine/ios/Flutter.xcframework/ios-arm64_x86_64-simulator\"",
 					"$(inherited)",
 				);
 				INFOPLIST_FILE = "Target Support Files/Pods-cool-ios-cool-iosUITests/Pods-cool-ios-cool-iosUITests-Info.plist";
@@ -1177,11 +1177,11 @@
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = "$(inherited) armv7";
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "$(inherited) i386";
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"\"/Users/pikmin/fvm/versions/3.47.2/bin/cache/artifacts/engine/ios/Flutter.xcframework/ios-arm64\"",
+					"\"/Users/pikmin/fvm/versions/3.47.7/bin/cache/artifacts/engine/ios/Flutter.xcframework/ios-arm64\"",
 					"$(inherited)",
 				);
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"\"/Users/pikmin/fvm/versions/3.47.2/bin/cache/artifacts/engine/ios/Flutter.xcframework/ios-arm64_x86_64-simulator\"",
+					"\"/Users/pikmin/fvm/versions/3.47.7/bin/cache/artifacts/engine/ios/Flutter.xcframework/ios-arm64_x86_64-simulator\"",
 					"$(inherited)",
 				);
 				INFOPLIST_FILE = "Target Support Files/Pods-cool-ios/Pods-cool-ios-Info.plist";

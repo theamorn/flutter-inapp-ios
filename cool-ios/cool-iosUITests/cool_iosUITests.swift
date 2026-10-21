@@ -91,6 +91,53 @@ final class cool_iosUITests: XCTestCase {
         }
     }
 
+    /// The Shop page's other two Flutter views: the 3D header owns its drags,
+    /// and Review Details pins the native segmented control and scrolls its
+    /// own list underneath Liquid Glass.
+    func testShopHeaderOrbitsAndReviewDetailsPinsTheTabs() throws {
+        let app = XCUIApplication()
+        app.launch()
+        signIn(app)
+        let segment = app.segmentedControls["shopSegment"]
+        for _ in 0..<3 where !segment.exists {
+            app.tabBars.buttons["Shop"].tap()
+            _ = segment.waitForExistence(timeout: 3)
+        }
+        XCTAssertTrue(segment.exists)
+        sleep(3) // The model loads and the first frames render.
+        attachScreenshot(app, named: "shop-3d-header")
+
+        // The header is the 280pt view right above the product name.
+        let name = app.staticTexts["Nimbus One"]
+        let window = app.windows.firstMatch
+        let header = window.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: window.frame.midX, dy: name.frame.minY - 16 - 140))
+        let before = segment.frame.minY
+        header.press(forDuration: 0.05, thenDragTo: header.withOffset(CGVector(dx: 120, dy: 90)))
+        XCTAssertEqual(segment.frame.minY, before, accuracy: 1, "A drag on the 3D header scrolled the page")
+        sleep(1)
+        attachScreenshot(app, named: "shop-3d-orbited")
+
+        dismissSavePassword(app, waiting: 1)
+        segment.buttons["Review Details"].tap()
+        sleep(2) // The page scrolls to pin the tabs, then the panel draws.
+        let navigationBottom = app.navigationBars.firstMatch.frame.maxY
+        XCTAssertEqual(segment.frame.minY, navigationBottom + 8, accuracy: 4, "Review Details did not pin the tabs")
+        attachScreenshot(app, named: "shop-reviews")
+
+        // A drag inside the panel scrolls Flutter's list, not the page.
+        let pinned = segment.frame.minY
+        let panel = window.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: window.frame.midX, dy: segment.frame.maxY + 360))
+        panel.press(forDuration: 0.05, thenDragTo: panel.withOffset(CGVector(dx: 0, dy: -260)), withVelocity: .slow, thenHoldForDuration: 0.2)
+        XCTAssertEqual(segment.frame.minY, pinned, accuracy: 1, "A drag in Review Details scrolled the page")
+        sleep(1)
+        attachScreenshot(app, named: "shop-reviews-scrolled")
+
+        segment.buttons["Overview"].tap()
+        XCTAssertTrue(app.staticTexts["SPECIFICATIONS"].waitForExistence(timeout: 3))
+    }
+
     private func signIn(_ app: XCUIApplication) {
         let username = app.textFields["Username"]
         XCTAssertTrue(username.waitForExistence(timeout: 10))
@@ -102,14 +149,19 @@ final class cool_iosUITests: XCTestCase {
         app.buttons["Sign In"].tap()
         XCTAssertTrue(app.tabBars.buttons["Shop"].waitForExistence(timeout: 10))
 
-        // AutoFill offers to save the demo password in a system sheet that
-        // covers the app and swallows every gesture until it is dismissed.
+        dismissSavePassword(app, waiting: 6)
+    }
+
+    /// AutoFill offers to save the demo password in a system sheet that covers
+    /// the app and swallows every gesture until it is dismissed. It can arrive
+    /// seconds after sign-in, so tests call this again before a key tap.
+    private func dismissSavePassword(_ app: XCUIApplication, waiting timeout: TimeInterval) {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for notNow in [app.buttons["Not Now"], springboard.buttons["Not Now"]]
-        where notNow.waitForExistence(timeout: 3) {
+        where notNow.waitForExistence(timeout: timeout / 2) {
             notNow.tap()
             _ = notNow.waitForNonExistence(timeout: 5)
-            break
+            return
         }
     }
 

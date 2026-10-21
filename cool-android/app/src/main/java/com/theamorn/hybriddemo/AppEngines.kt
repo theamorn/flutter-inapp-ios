@@ -24,18 +24,32 @@ object AppEngines {
 
     const val GAME_ROUTE = "/game"
     const val GLASS_ROUTE = "/glass"
+    const val PRODUCT_ROUTE = "/product"
     const val PROMO_ROUTE = "/promo"
+    const val REVIEWS_ROUTE = "/reviews"
     const val SCENE_ROUTE = "/scene"
     const val TELEMETRY_CHANNEL_NAME = "com.theamorn.hybrid/telemetry"
     const val GAME_CHANNEL_NAME = "com.theamorn.hybrid/game"
+    const val PRODUCT_CHANNEL_NAME = "com.theamorn.hybrid/product"
     const val PROMO_CHANNEL_NAME = "com.theamorn.hybrid/promo"
+    const val REVIEWS_CHANNEL_NAME = "com.theamorn.hybrid/reviews"
+
+    /** The Shop page's three Flutter views, each a bare `FlutterView` on its own engine. */
+    val SHOP_ROUTES = listOf(PRODUCT_ROUTE, PROMO_ROUTE, REVIEWS_ROUTE)
+
+    /**
+     * The HUD's name for the Shop engines' combined spawn cost. They start back
+     * to back, so a delta per engine would count the other two as well.
+     */
+    const val SHOP_SPAWN_LABEL = "Shop ×3"
 
     /**
      * The Flutter routes supported by the demo contract. Engines are created
      * lazily on the tab's first appearance. `/glass` has no tab since Shop
      * replaced it, but stays supported so the Glass tab can come back.
+     * `/product` and `/reviews` are views inside the Shop page, not tabs.
      */
-    private val supportedRoutes = setOf(GAME_ROUTE, GLASS_ROUTE, PROMO_ROUTE, SCENE_ROUTE)
+    private val supportedRoutes = setOf(GAME_ROUTE, GLASS_ROUTE, PRODUCT_ROUTE, PROMO_ROUTE, REVIEWS_ROUTE, SCENE_ROUTE)
 
     /** Returns the engine for [route] if already created, or null. */
     fun getEngine(route: String): FlutterEngine? = engines[route]
@@ -56,6 +70,7 @@ object AppEngines {
     )
 
     private val pendingSpawns = mutableMapOf<String, PendingSpawn>()
+    private var pendingShopSpawn: PendingSpawn? = null
 
     /** Cache key used with [FlutterEngineCache]; `FlutterFragment` looks it up by this. */
     fun cacheKey(route: String): String = "hybrid-demo${route.replace("/", ".")}"
@@ -72,7 +87,10 @@ object AppEngines {
         val appContext = context.applicationContext
         val engineGroup = group ?: FlutterEngineGroup(appContext).also { group = it }
 
-        val memoryBefore = MemoryProbe.footprintBytes()
+        // Shop engines are measured together by spawnShopEngines; a probe
+        // here would land inside that timing.
+        val measured = route !in SHOP_ROUTES
+        val memoryBefore = if (measured) MemoryProbe.footprintBytes() else 0L
         val start = System.nanoTime()
 
         val engine = engineGroup.createAndRunEngine(
@@ -87,10 +105,12 @@ object AppEngines {
         // engine memory or a settled tab footprint.
         val spawnMillis = (System.nanoTime() - start) / 1_000_000.0
 
-        pendingSpawns[route] = PendingSpawn(
-            baselineBytes = memoryBefore,
-            durationMillis = spawnMillis,
-        )
+        if (measured) {
+            pendingSpawns[route] = PendingSpawn(
+                baselineBytes = memoryBefore,
+                durationMillis = spawnMillis,
+            )
+        }
 
         attachTelemetryChannel(engine, route)
         if (route == GAME_ROUTE) {
@@ -102,10 +122,37 @@ object AppEngines {
     }
 
     /**
+     * Spawns the Shop page's three engines as one measured step. The cost is
+     * closed on the first telemetry batch from any of them: `/reviews` draws
+     * nothing until Review Details opens, so waiting for all three would
+     * count whatever happens in between.
+     */
+    fun spawnShopEngines(context: Context) {
+        if (SHOP_ROUTES.all { it in engines }) return
+        val memoryBefore = MemoryProbe.footprintBytes()
+        val start = System.nanoTime()
+        SHOP_ROUTES.forEach { engineForRoute(context, it) }
+        pendingShopSpawn = PendingSpawn(
+            baselineBytes = memoryBefore,
+            durationMillis = (System.nanoTime() - start) / 1_000_000.0,
+        )
+    }
+
+    /**
      * Closes out a deferred memory measurement on the first telemetry batch.
      * A no-op for subsequent batches.
      */
     private fun finalizeSpawnCost(route: String) {
+        if (route in SHOP_ROUTES) {
+            val pending = pendingShopSpawn ?: return
+            pendingShopSpawn = null
+            PerformanceHudState.recordEngineSpawn(
+                route = SHOP_SPAWN_LABEL,
+                deltaBytes = MemoryProbe.footprintBytes() - pending.baselineBytes,
+                durationMillis = pending.durationMillis,
+            )
+            return
+        }
         val pending = pendingSpawns.remove(route) ?: return
         val delta = MemoryProbe.footprintBytes() - pending.baselineBytes
         PerformanceHudState.recordEngineSpawn(

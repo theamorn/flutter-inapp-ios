@@ -150,30 +150,105 @@ fun InlineFlutterTile(controller: PromoTileController, modifier: Modifier = Modi
     val activity = LocalContext.current.findActivity()
     AndroidView(
         modifier = modifier,
-        factory = { context -> BadgeTouchGate(context, activity, controller) },
+        factory = { context ->
+            FlutterViewGate(
+                context = context,
+                activity = activity,
+                engine = controller.engine,
+                backdropColor = PROMO_BACKDROP,
+                cornerRadiusDp = 16f,
+                ownsTouch = controller::ownsTouch,
+            )
+        },
         onRelease = { gate -> gate.release() },
     )
 }
 
 /**
- * Hosts the `FlutterView`, and hands a drag that starts on the badge to
- * Flutter before the page's scroll can claim it.
+ * The Android half of the smallest host contract, shared by `/product` (the
+ * Shop page's 3D header) and `/reviews` (its Review Details tab): the page
+ * says whether the view can be seen (`visibility`), and Dart pulls that state
+ * when it starts (`ready`). The iOS half is `EmbeddedFlutterViewController`.
+ */
+class FlutterSurfaceController(val engine: FlutterEngine, channelName: String) {
+    private val channel = MethodChannel(engine.dartExecutor.binaryMessenger, channelName)
+    private var sentVisible: Boolean? = null
+    private var visible = false
+
+    init {
+        channel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "ready" -> {
+                    sentVisible = visible
+                    result.success(mapOf("visible" to visible))
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    /** Sent only on change, unless [force]d after the two sides may have drifted. */
+    fun sendVisibility(visible: Boolean, force: Boolean = false) {
+        this.visible = visible
+        if (!force && visible == sentVisible) return
+        sentVisible = visible
+        channel.invokeMethod("visibility", mapOf("visible" to visible))
+    }
+
+    fun dispose() = channel.setMethodCallHandler(null)
+}
+
+/**
+ * A Flutter route as a view inside a Compose page that owns every touch that
+ * starts on it: dragging the 3D header orbits the model, and dragging the
+ * Review Details panel scrolls Flutter's list, never the page.
+ */
+@Composable
+fun EmbeddedFlutterView(
+    controller: FlutterSurfaceController,
+    backdropColor: Int,
+    cornerRadiusDp: Float,
+    modifier: Modifier = Modifier,
+) {
+    val activity = LocalContext.current.findActivity()
+    AndroidView(
+        modifier = modifier,
+        factory = { context ->
+            FlutterViewGate(
+                context = context,
+                activity = activity,
+                engine = controller.engine,
+                backdropColor = backdropColor,
+                cornerRadiusDp = cornerRadiusDp,
+                ownsTouch = { _, _ -> true },
+            )
+        },
+        onRelease = { gate -> gate.release() },
+    )
+}
+
+/**
+ * Hosts a bare `FlutterView`, and hands a drag that starts where [ownsTouch]
+ * says Flutter owns it to Flutter before the page's scroll can claim it.
  */
 @SuppressLint("ViewConstructor")
-private class BadgeTouchGate(
+private class FlutterViewGate(
     context: Context,
     activity: Activity,
-    private val controller: PromoTileController,
+    engine: FlutterEngine,
+    backdropColor: Int,
+    cornerRadiusDp: Float,
+    private val ownsTouch: (x: Float, y: Float) -> Boolean,
 ) : FrameLayout(context) {
     private val flutterView = FlutterView(context, FlutterTextureView(context))
 
     // A bare FlutterView gets no platform plugin from a fragment delegate;
     // without one, HapticFeedback and other platform calls go unanswered.
-    private val platformPlugin = PlatformPlugin(activity, controller.engine.platformChannel)
+    private val platformPlugin = PlatformPlugin(activity, engine.platformChannel)
 
     init {
-        setBackgroundColor(PROMO_BACKDROP)
-        val radius = 16 * resources.displayMetrics.density
+        setBackgroundColor(backdropColor)
+        val radius = cornerRadiusDp * resources.displayMetrics.density
         outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) {
                 outline.setRoundRect(0, 0, view.width, view.height, radius)
@@ -181,15 +256,15 @@ private class BadgeTouchGate(
         }
         clipToOutline = true
 
-        // The tile sits mid-page: system bar insets never apply to it, and
+        // The view sits mid-page: system bar insets never apply to it, and
         // forwarding them would change Flutter's viewport metrics for nothing.
         ViewCompat.setOnApplyWindowInsetsListener(flutterView) { _, _ -> WindowInsetsCompat.CONSUMED }
         addView(flutterView, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        flutterView.attachToFlutterEngine(controller.engine)
+        flutterView.attachToFlutterEngine(engine)
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-        if (event.actionMasked == MotionEvent.ACTION_DOWN && controller.ownsTouch(event.x, event.y)) {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN && ownsTouch(event.x, event.y)) {
             // Compose's AndroidView honors this: the page's verticalScroll
             // stops competing for the gesture that follows.
             parent?.requestDisallowInterceptTouchEvent(true)

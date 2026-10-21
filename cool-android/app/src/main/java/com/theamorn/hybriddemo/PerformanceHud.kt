@@ -198,7 +198,7 @@ object PerformanceHudState {
     fun enginesLine(): String {
         val routeOrder = listOf(
             AppEngines.GAME_ROUTE,
-            AppEngines.PROMO_ROUTE,
+            AppEngines.SHOP_SPAWN_LABEL,
             AppEngines.GLASS_ROUTE,
             AppEngines.SCENE_ROUTE,
         )
@@ -215,7 +215,8 @@ object PerformanceHudState {
         return if (summaries.isEmpty()) {
             "ENGINES  lazy — none spawned"
         } else {
-            "ENGINES  " + summaries.joinToString("  ")
+            // One engine per line, as on iOS: three Shop engines overflow one.
+            "ENGINES  " + summaries.joinToString("\n         ")
         }
     }
 
@@ -328,7 +329,7 @@ fun PerformanceHud(modifier: Modifier = Modifier) {
                 }
                 HudMetric(hostText)
                 HudMetric(flutterText)
-                HudMetric(enginesText)
+                HudMetric(enginesText, maxLines = Int.MAX_VALUE)
                 if (panelText.isNotEmpty()) {
                     Text(
                         text = panelText,
@@ -351,7 +352,7 @@ fun PerformanceHud(modifier: Modifier = Modifier) {
  * line would change the HUD's height and break the side-by-side photo.
  */
 @Composable
-private fun HudMetric(text: String) {
+private fun HudMetric(text: String, maxLines: Int = 1) {
     BasicText(
         text = text,
         style = TextStyle(
@@ -361,7 +362,7 @@ private fun HudMetric(text: String) {
             fontSize = 12.sp,
             lineHeight = 15.sp,
         ),
-        maxLines = 1,
+        maxLines = maxLines,
         autoSize = TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 12.sp),
         modifier = Modifier
             .fillMaxWidth()

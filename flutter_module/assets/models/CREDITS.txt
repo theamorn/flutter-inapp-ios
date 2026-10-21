@@ -28,6 +28,14 @@ original. (Poly Pizza's CDN served empty bodies to this network, so the
 source file came from a GitHub mirror of the pack; two independent
 mirrors are byte-identical, md5 3a12019cdd0c3edae9b04a6fbdded0ca.)
 
+                  Used by the Shop tab's 3D header (route /product), not by
+                  the island. 472 triangles, one material with a 128 x 128
+                  palette texture embedded in the .glb. Unmodified: it
+                  passes the screening below as shipped (one scene, two
+                  uniquely named nodes, no orphans). The mesh node carries
+                  a 100x scale; the model is ~0.13 units wide after it and
+                  is scaled up in lib/tabs/product/product_scene.dart.
+
 The Nature Kit .glb files here have been PREPROCESSED. Kenney's exports
 carry an orphan node named "tmpParent" that is not in any glTF scene but
 lists the scene's root node as its child. flutter_scene 0.23.0 realizes
