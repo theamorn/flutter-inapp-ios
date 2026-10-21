@@ -1,0 +1,11 @@
+Castle QR artwork
+
+Tool: built-in image_gen.imagegen, reference-image edit.
+Reference: qr-repo.png, generated using macOS Core Image, QR error correction H.
+Payload: https://github.com/theamorn/flutter-inapp-ios
+Output: qr-castle.png
+Verification: Apple Vision decoded the exact payload at the original 1254 px, 520 px, and 320 px. Actual projector/camera conditions still need rehearsal.
+
+Final prompt:
+
+Use case: style-transfer. Asset type: square castle-themed artistic QR image for the final slide of a calm, clean zen-style technical presentation. Image 1 is the EDIT TARGET: a real QR encoding https://github.com/theamorn/flutter-inapp-ios . It already scans correctly. Transform it into beautiful QR diffusion-style art: an orthographic aerial miniature 3D medieval stone castle and courtyards, with the EXACT dark QR modules becoming dark forest-green rooftops, carved stone walls, battlements and mossy masonry, and the EXACT light modules becoming bright ivory stone courtyards. The three large finder patterns must remain clear concentric square castle enclosures at the exact same positions and proportions as the reference. CRITICAL INVARIANTS: reproduce every dark and light module of the provided QR grid exactly at the same position, same orientation, same relative scale. Preserve all timing/alignment patterns. Preserve the plain unobstructed four-module white quiet zone on all sides. Keep all dark module silhouettes very dark and all light cells very light; tiny architectural details may appear WITHIN the cells but must never change their thresholded silhouettes. Strict straight top-down orthographic camera, shallow 3D relief, subtle ambient occlusion confined to dark cells, no perspective distortion. Style: elegant high quality miniature 3D environment, zen restraint, weathered stone, forest moss, warm ivory courtyards, subtle sand-gold highlights, softly lit, detailed but uncluttered. The castle architecture should form the actual QR grid organically, not be a separate castle behind a pasted QR panel. Final image must still scan as the EXACT supplied QR. Square high resolution image. No words, no labels, no logo, no watermark, no people, no extra finder patterns. Function and cell fidelity take precedence over decoration.

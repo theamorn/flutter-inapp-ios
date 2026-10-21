@@ -1,0 +1,96 @@
+// The Nimbus One headphones' metal: silver, chrome, and midnight anodized
+// aluminium, reflecting the park around them.
+//
+// A lit material whose Composite() replaces the engine's environment
+// reflection with its own. On the Adreno test phone (OnePlus CPH2499) the
+// engine's prefiltered radiance comes back black (base-mip-only sampling,
+// flutter#189965), so this reads the park from three baked, single-mip RGBM
+// levels instead (tool/bake_park_reflections.py), blended by roughness, with
+// Karis's analytic split-sum fit instead of the BRDF lookup table. iOS renders
+// it the same. The engine's direct light (the sun) is kept as is.
+material {
+  name: "NimbusMetal",
+  shading_model: lit,
+  culling: back,
+  parameters: [
+    // Linear base colour; for a metal, its reflectance.
+    { type: vec4, name: base_color, default: [0.91, 0.92, 0.94, 1.0] },
+    // x = roughness, y = clearcoat amount, z = clearcoat roughness.
+    { type: vec4, name: surface, default: [0.25, 0.0, 0.08, 0.0] },
+    // The park at 512x256, 128x64, and 32x16: sharp, soft, and blurred.
+    { type: sampler2d, name: reflection_sharp, hint: default_black },
+    { type: sampler2d, name: reflection_soft, hint: default_black },
+    { type: sampler2d, name: reflection_blurred, hint: default_black },
+  ],
+}
+
+fragment {
+  // flutter_scene 0.24 defaults material fragments to mediump, half precision
+  // on Adreno: the equirect lookup's atan/asin would band and seam.
+  precision highp float;
+
+  void Surface(inout MaterialInputs material) {
+    material.base_color = material_params.base_color;
+    material.normal = GetWorldNormal();
+    material.metallic = 1.0;
+    material.roughness = material_params.surface.x;
+  }
+
+  // Karis, "Physically Based Shading on Mobile" (2014): the split-sum
+  // environment BRDF without the lookup table.
+  vec3 NimbusEnvBrdf(vec3 f0, float roughness, float n_dot_v) {
+    const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
+    const vec4 c1 = vec4(1.0, 0.0425, 1.04, -0.04);
+    vec4 r = roughness * c0 + c1;
+    float a004 = min(r.x * r.x, exp2(-9.28 * n_dot_v)) * r.x + r.y;
+    vec2 ab = vec2(-1.04, 1.04) * a004 + r.zw;
+    return f0 * ab.x + ab.y;
+  }
+
+  // RGBM, as tool/bake_park_reflections.py writes it.
+  highp vec3 NimbusDecode(vec4 texel) {
+    return texel.rgb * texel.rgb * texel.a * 16.0;
+  }
+
+  highp vec3 NimbusEnvironment(vec3 direction, float roughness) {
+    // The engine's environment rotation, so reflections match the skybox.
+    vec3 d = normalize(mat3(frag_info.environment_transform) * direction);
+    // Equirect, as the engine reads it: u from atan(z, x), row 0 up.
+    vec2 uv = vec2(atan(d.z, d.x) * 0.15915494 + 0.5,
+                   0.5 - asin(clamp(d.y, -1.0, 1.0)) * 0.31830989);
+    float level = clamp(roughness / 0.35, 0.0, 1.0) * 2.0;
+    highp vec3 sharp = NimbusDecode(texture(reflection_sharp, uv));
+    highp vec3 soft = NimbusDecode(texture(reflection_soft, uv));
+    highp vec3 blurred = NimbusDecode(texture(reflection_blurred, uv));
+    highp vec3 radiance = level < 1.0 ? mix(sharp, soft, level)
+                                      : mix(soft, blurred, level - 1.0);
+    return radiance * frag_info.environment_intensity;
+  }
+
+  highp vec4 Composite(MaterialInputs material, LightingResult r) {
+    vec3 n = normalize(material.normal);
+    vec3 v = GetViewDirection();
+    float n_dot_v = clamp(dot(n, v), 1e-4, 1.0);
+    vec3 reflection = reflect(-v, n);
+
+    highp vec3 metal =
+        NimbusEnvironment(reflection, material.roughness) *
+        NimbusEnvBrdf(material.base_color.rgb, material.roughness, n_dot_v);
+
+    // A clear lacquer over the metal, for the anodized cups.
+    float coat = material_params.surface.y;
+    float coat_fresnel = 0.04 + 0.96 * pow(1.0 - n_dot_v, 5.0);
+    highp vec3 lacquer =
+        NimbusEnvironment(reflection, material_params.surface.z) *
+        coat_fresnel;
+
+    highp vec3 color = (r.direct_specular + metal) * (1.0 - coat * coat_fresnel) +
+                       lacquer * coat + r.direct_diffuse + r.emissive +
+                       // For a metal, only the multiple-scattering energy
+                       // compensation. Reading it also keeps the engine's
+                       // irradiance sampler, which Metal would otherwise strip
+                       // and Apple GPUs crash binding.
+                       r.indirect_diffuse;
+    return vec4(color, 1.0) * r.alpha;
+  }
+}

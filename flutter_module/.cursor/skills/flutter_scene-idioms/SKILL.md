@@ -1,0 +1,137 @@
+---
+name: flutter_scene-idioms
+version: 16
+description: Write correct flutter_scene code. Use this whenever building 3D with the flutter_scene Dart/Flutter engine (rendering a scene, geometry, materials, lighting, loading a .glb model, animation, custom shaders). It corrects the wrong assumptions models carry from three.js, Godot, and Unity, and names the APIs and traps that are specific to this engine.
+---
+
+# Building with flutter_scene
+
+flutter_scene is a realtime 3D engine for Flutter, built on Flutter GPU. It has a retained scene graph (`Scene` holds `Node`s, nodes carry a `Mesh`), physically based materials, image-based lighting, and a deep post-processing stack.
+
+**The one thing to internalize: this is not three.js, Godot, or Unity, and the API diverges from all three in specific ways.** Most first-attempt failures come from reaching for another engine's spelling. The corrections below are the highest-value part of this skill; read them before writing code.
+
+## Do not reach for these (they do not exist or will break the build)
+
+- **Not the master channel.** flutter_scene runs on **Flutter 3.47 stable or newer**. Do not run `flutter channel master`; it resolves worse, not better.
+- **Not `--enable-impeller`, not `--enable-experiment=native-assets`.** The run flag is **`--enable-flutter-gpu`** and nothing else. `--enable-experiment=native-assets` actively breaks the build on Dart 3.10+.
+- **Not `package:vector_math/vector_math_64.dart`.** flutter_scene uses **`package:vector_math/vector_math.dart`**. The `_64` types are a different, incompatible `Vector3`.
+- **Not `Node.fromAsset(...)`, not `loadModel(...)`.** Load a preprocessed model with **`loadScene('assets/x.glb')`** (returns `Future<Node>`), or a runtime glTF with `Node.fromGlbAsset` / `Node.fromGlbBytes`.
+- **Not a hand-rolled `CustomPainter` + `Ticker`.** Display a scene with the **`SceneView`** widget; it drives the per-frame loop for you.
+- **Not `node.position.set(x, y, z)`.** See transforms below.
+- **Not `forward.cross(up)` for a camera or node right vector.** View space is left-handed (`+Z` forward into the screen, `+Y` up, `+X` right), while `vector_math`'s `cross` is right-handed, so `forward.cross(up)` points **screen-left** and horizontally inverts `A`/`D` strafing and drag panning. Read `camera.right`, `camera.horizontalRight`, or `node.right`, or compute `up.cross(forward).normalized()`.
+- **Not `.model` files or `buildModels`.** The offline format is `.fsceneb`, produced by the `flutter_scene:init` build hook; you load it by source path with `loadScene`.
+- **Not the removed `Environment` class.** Environment lighting is `EnvironmentMap` on `Scene.environment`.
+
+## Setup
+
+```sh
+flutter pub add flutter_scene
+dart run flutter_scene:init      # installs the build hook, sets up assets
+flutter run --enable-flutter-gpu # native; add -d chrome for web
+```
+
+`flutter_scene:init` is required setup, not optional. Rendering is gated on `Scene.initializeStaticResources()`; until it completes the engine prints "Flutter Scene is not ready to render. Skipping frame."
+
+## Minimal scene (this compiles as-is)
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_scene/scene.dart';
+import 'package:vector_math/vector_math.dart' as vm;
+
+void main() => runApp(const MaterialApp(home: CubeView()));
+
+class CubeView extends StatefulWidget {
+  const CubeView({super.key});
+  @override
+  State<CubeView> createState() => _CubeViewState();
+}
+
+class _CubeViewState extends State<CubeView> {
+  final Scene scene = Scene();
+  bool ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Geometry and materials touch the shader bundle, so build them only
+    // after the engine's static resources are up.
+    Scene.initializeStaticResources().then((_) {
+      scene.add(Node(
+        mesh: Mesh(CuboidGeometry(vm.Vector3(1, 1, 1)), PhysicallyBasedMaterial()),
+      ));
+      if (mounted) setState(() => ready = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!ready) return const SizedBox.expand();
+    return SceneView(scene, camera: PerspectiveCamera(position: vm.Vector3(2, 2, -4)));
+  }
+}
+```
+
+An unset `Scene.environment` still gives image-based lighting (a default studio map is resolved at render), so a bare `PhysicallyBasedMaterial()` is lit without any light setup.
+
+## Choosing declarative or imperative
+
+flutter_scene has two ways to build a scene, and picking the wrong one is a structural decision that is expensive to undo later. Choose up front by what the app does, not by which reads nicer.
+
+**Declarative (inline widgets).** Describe the scene as Flutter widgets under `SceneView.declarative(children: [...])`, using `SceneMesh`, `SceneNode`, and `SceneModel`. Flutter's own rebuild diffing keeps the rendered scene in sync with your widget state, the same way it keeps the UI in sync. Reach for this when app state maps cleanly onto a fixed set of objects on screen and nothing is simulation-like, for example a product configurator where a few `SceneMesh`es track some `setState` values.
+
+**Imperative (retained scene graph).** Own a `Scene`, add `Node`s, attach `Component`s, and display it with `SceneView(scene, camera: ..., onTick: ...)`. Track state the way you would in another game engine. The cleanest shape is a plain Dart `Game` class that owns the `Scene` and holds the game state, with the scene build and per-frame tick routed into it, and behavior living in custom `Component`s attached to nodes that the engine runs through the component lifecycle hooks. Reach for this for anything with real simulation.
+
+**Go imperative when** the scene has complex physics, network replication, a character walking around, or procedural generation. Any one of these means imperative.
+**Stay declarative when** state maps directly to a fixed set of shown objects and nothing ticks or simulates.
+
+The two interoperate. A mostly-declarative scene can drop to an imperative node where it needs one, and an imperative scene can mount declarative subtrees. See `references/architecture.md` for the `Game`-class pattern, component-driven nodes, and the hybrid seam.
+
+## The API shape (where it diverges from what you expect)
+
+**Transforms.** `Node` has `position`, `rotation` (a `Quaternion`), and `scale`, but they are whole-value get/set, not the mutable spelling other engines use. Assign the whole vector (`node.position = vm.Vector3(0, 1, 0)` or `node.position += ...`). The getters return copies, so `node.position.x = 5` does nothing and throws in debug. For a raw matrix edit use `node.localTransform = matrix` or `node.mutateLocalTransform((m) => m.translateByVector3(...))`; a bare in-place edit of `node.localTransform` never moves the node, because the cache is not told. `node.forward`, `node.right`, and `node.up` return the node's unit world-space basis axes (`+Z`, `+X`, `+Y`), and `node.lookAt(target)` or `node.lookAtFrom(eye, target)` aims local `+Z` at `target`.
+
+**Geometry.** Ten built-in primitives (`CuboidGeometry`, `SphereGeometry`, `IcosphereGeometry`, `CylinderGeometry` with separate top/bottom radii so cones are free, `CapsuleGeometry`, `TorusGeometry`, `PlaneGeometry`, `DiscGeometry`, `RingGeometry`, `WedgeGeometry`), plus swept geometry (`ExtrudeGeometry`, `TubeGeometry`, `RibbonGeometry`), lines (`PolylineGeometry`), and `GeometryBuilder`/`MeshData` for custom meshes. Do not hand-pack a `ByteData` vertex buffer before checking these.
+
+**Materials.** `PhysicallyBasedMaterial` (base color, metallic, roughness, normal, emissive, plus clearcoat/sheen/transmission/etc.), `UnlitMaterial`, `ShaderMaterial` for custom shaders. Texture slots take a `TextureSource` (from `loadTexture(path)`), not a raw `gpu.Texture`.
+
+**Camera and coordinate basis.** `PerspectiveCamera(position: ..., target: ...)`, or `OrthographicCamera(position: ..., target: ..., projection: OrthographicProjection(size: OrthographicSize.height(12)))` for isometric, top-down, and pixel-art views. Every depth effect works under both. Prefer attaching `OrbitCameraController`, `FollowCameraController`, or `FlyCameraController` to a camera node (driven with the `CameraControls` widget) over hand-rolling spherical camera math. When driving a camera yourself, remember that view space is **left-handed (`+Z` forward into the screen, `+Y` up, `+X` right)**.
+- Default camera placement sits on the `-Z` side (`(0, 0, -5)`) looking along `+Z` at the origin, where world `+X` points screen-right. If you instead place an eye on the `+Z` side (`eye = target + vm.Vector3(d * sin(a), y, d * cos(a))`) looking back along `-Z`, world `+X` points **screen-left** (`right = vm.Vector3(-cos(a), 0, sin(a))`), not `(cos(a), 0, -sin(a))`.
+- Never write `forward.cross(up)` for a right vector; `vector_math`'s right-handed cross product makes `forward.cross(up)` point **screen-left**. Read `camera.right` (or `camera.horizontalRight` and `camera.horizontalForward` for `XZ` ground-plane strafing and panning) or compute `up.cross(forward).normalized()`.
+
+## What you are probably underestimating (it is all here)
+
+Models trained on older or thinner information assume flutter_scene has no lighting, no shadows, and no post-processing. It has all of it. Before hand-rolling any of these, know they exist: **directional/point/spot/area lights, shadows (PCSS, contact shadows), GTAO ambient occlusion, screen-space reflections, parallax-corrected reflection probes, SSGI, depth of field, god rays, fog, auto exposure, LUT color grading, bloom, lens flares, MSAA/SMAA/FXAA, tone mapping, instancing, LOD.** See `references/what-exists.md` for the full surface with the class names.
+
+Low-end and GLES-class GPUs (Raspberry Pi, web, integrated Linux) get a budget, not a different engine: `scene.renderQuality.tier` (`RenderQualityTier.low`, `medium`, `high`; null picks the platform default) decides what `AntiAliasingMode.auto` and the scene color capture budget resolve to, and `scene.renderQuality.adaptive = true` lowers the render scale and then the tier from measured frame periods when frames overrun `targetFrameRate`. Transmissive (glass) materials are the expensive thing on such devices; `scene.sceneColorCaptureBatches = 1` makes them all share one capture.
+
+## Traps that fail silently (wrong pixels, no error)
+
+- **Horizontal camera and movement inversion (`forward.cross(up)` and `+Z` orbit tangents).** Because view space has `+Z` into the screen and `vector_math.cross` is right-handed, `forward.cross(up)` yields `-right` (screen-left), and an orbit camera placed at `target + (d * sin(a), y, d * cos(a))` has screen-right `(-cos(a), 0, sin(a))`, not `(cos(a), 0, -sin(a))`. Use `camera.right`, `camera.horizontalRight`, `camera.horizontalForward`, or `up.cross(forward).normalized()`.
+- **Custom `ShaderMaterial` output is linear HDR premultiplied by alpha.** No tone mapping or gamma in your shader; the `ResolvePass` applies exposure, tone mapping, and the display transform. Linearize sRGB texture samples yourself. See `MATERIALS.md`.
+- **Never hand-roll a per-triangle winding flip to fix glTF orientation.** The importers handle the coordinate conversion; a manual flip leaves normals and IBL wrong.
+- **Do not emit a vertex buffer at the wrong stride.** Unskinned is 72 bytes/vertex, skinned is 104; the attribute order is fixed. Use `GeometryBuilder`, do not guess the layout.
+- **Surfaces that share a plane flicker as the camera moves (z-fighting), and one screenshot can look fine.**
+  - Never let two different-looking faces overlap in one plane. Repeated pieces abut (a piece's length equals its spacing), perpendicular runs meet at a corner post, and flat patches at one height never overlap. No depth setting fixes an exact overlap.
+  - An overlay that lies on a surface (a sign or screen on a wall, road paint, a decal quad, a rug) gets `material.depthLayer = 1` and wins at any distance; an overlay on that overlay gets 2. Place it flush or a few millimetres off, not at a guessed gap.
+  - Leave the camera's near plane at its default unless geometry clips. The engine fits the plane it rasterizes with to visible content every frame.
+  - Prove it in motion. `await scene.probeDepthConflicts()` names every pair of nodes that trades pixels from a camera; drive its `conflicts` to empty. `scene.debug.overlays.add(DebugOverlay.depthConflicts)` marks fights live in magenta, and debug builds print overlapping coplanar faces once the scene holds still.
+- **When pixels look wrong, look at the surface before guessing.** `scene.debug.view = const DebugView(channel: SurfaceDebugChannel.roughness)` (or `uv0`, `worldNormal`, `baseColor`, `validation`, any `SurfaceDebugChannel`) replaces the lit result with that value on every material, `scene.debug.split = 0.5` compares it against the lit half, `scene.debug.overlays.add(DebugOverlay.wireframe)` traces the mesh, and `node.debugView = DebugView.none` excludes a subtree. The material channels need the views compiled in, which costs shader build time, so they are off by default: set `hooks: user_defines: flutter_scene: debug_views: true` in the app's pubspec (the workspace root's in a pub workspace), plus `flutter_scene_debug_views: true` under the app's own name if its hook calls `buildMaterials` or `buildEngineAssets`, and rebuild. Without it only the geometry and identity channels draw, and the app prints how to turn them on. A `.fmat` shows any intermediate through `material.debug` and the `custom` channel.
+
+## More depth
+
+- `references/architecture.md` for the declarative-vs-imperative choice in depth, the `Game`-class pattern, component-driven nodes, and hybrid interop.
+- `references/what-exists.md` for the full API surface (the false-absence fix).
+- `references/traps.md` for the complete silent-failure list.
+- `references/depth-and-layering.md` for why surfaces fight, a catalog of the overlaps generated content makes, and how to find and fix them.
+- The repo-root `MATERIALS.md` for the custom-shader contract.
+
+## Keeping this skill current
+
+This skill ships inside the flutter_scene package, so upgrading flutter_scene can carry a newer revision of it than the copy installed in the project. To check, run:
+
+```sh
+dart run flutter_scene:skills --check
+```
+
+It reports the installed and bundled skill versions and exits non-zero when an update is available. If the installed flutter_scene ships a newer skill than what is installed, tell the user, since they are working against out-of-date guidance, and offer to update it with `dart run flutter_scene:skills` (which touches only the skill, not their build hook or pubspec). Worth a check when you start substantial flutter_scene work or when the user mentions upgrading the package.

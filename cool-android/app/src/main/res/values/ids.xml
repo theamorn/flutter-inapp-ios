@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="flutter_container" type="id" />
+    <item name="flutter_container_game" type="id" />
+    <item name="flutter_container_scene" type="id" />
+</resources>

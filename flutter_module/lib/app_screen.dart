@@ -215,9 +215,9 @@ class _AppScreenState extends State<AppScreen> with TickerProviderStateMixin {
             margin: const EdgeInsets.symmetric(horizontal: 8.0),
             padding: const EdgeInsets.symmetric(horizontal: 12.0),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8.0),
-              border: Border.all(color: Colors.white.withOpacity(0.3)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<int>(
@@ -257,8 +257,8 @@ class _AppScreenState extends State<AppScreen> with TickerProviderStateMixin {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          Colors.blue.withOpacity(0.8 * intensity),
-                          Colors.teal.withOpacity(0.6 * intensity),
+                          Colors.blue.withValues(alpha: 0.8 * intensity),
+                          Colors.teal.withValues(alpha: 0.6 * intensity),
                         ],
                         stops: [
                           (math.sin(_waveController.value * 2 * math.pi) * 0.1 +
@@ -516,8 +516,8 @@ class _AppScreenState extends State<AppScreen> with TickerProviderStateMixin {
                         end: Alignment.bottomCenter,
                         colors: [
                           Colors.transparent,
-                          Colors.black.withOpacity(
-                              0.05 * intensity), // Reduced to see background
+                          Colors.black.withValues(
+                              alpha: 0.05 * intensity), // Reduced to see background
                         ],
                       ),
                     )
@@ -674,7 +674,7 @@ class _AppScreenState extends State<AppScreen> with TickerProviderStateMixin {
         color: _animationLevel < 2 ? Colors.white : null,
         border: _animationLevel >= 3
             ? Border.all(
-                color: Colors.white.withOpacity(0.2 +
+                color: Colors.white.withValues(alpha: 0.2 +
                     math.sin(animationValue * 4 * math.pi) * (0.1 * intensity)),
                 width: 1 + (_animationLevel * 0.2),
               )
@@ -841,7 +841,7 @@ class _AppScreenState extends State<AppScreen> with TickerProviderStateMixin {
               ? [
                   Shadow(
                     blurRadius: 3,
-                    color: Colors.cyan.withOpacity(0.5 * intensity),
+                    color: Colors.cyan.withValues(alpha: 0.5 * intensity),
                     offset: const Offset(0.5, 0.5),
                   ),
                 ]
@@ -917,7 +917,7 @@ class _AppScreenState extends State<AppScreen> with TickerProviderStateMixin {
               child: ShaderMask(
                 shaderCallback: (bounds) {
                   return LinearGradient(
-                    colors: [Colors.red, Colors.red.withOpacity(0.5)],
+                    colors: [Colors.red, Colors.red.withValues(alpha: 0.5)],
                   ).createShader(bounds);
                 },
                 child: Text(
@@ -936,7 +936,7 @@ class _AppScreenState extends State<AppScreen> with TickerProviderStateMixin {
               child: ShaderMask(
                 shaderCallback: (bounds) {
                   return LinearGradient(
-                    colors: [Colors.green, Colors.green.withOpacity(0.5)],
+                    colors: [Colors.green, Colors.green.withValues(alpha: 0.5)],
                   ).createShader(bounds);
                 },
                 child: Text(
@@ -976,7 +976,7 @@ class _AppScreenState extends State<AppScreen> with TickerProviderStateMixin {
                   shadows: [
                     Shadow(
                       blurRadius: 5,
-                      color: Colors.cyan.withOpacity(0.8),
+                      color: Colors.cyan.withValues(alpha: 0.8),
                       offset: const Offset(1, 1),
                     ),
                   ],
@@ -1016,7 +1016,7 @@ class _AppScreenState extends State<AppScreen> with TickerProviderStateMixin {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.blue.withOpacity(0.6),
+                    color: Colors.blue.withValues(alpha: 0.6),
                     blurRadius: 10,
                     spreadRadius: 1,
                   ),
@@ -1062,13 +1062,13 @@ class _AppScreenState extends State<AppScreen> with TickerProviderStateMixin {
               borderRadius: BorderRadius.circular(20),
               gradient: LinearGradient(
                 colors: [
-                  Colors.blue.withOpacity(0.9),
-                  Colors.cyan.withOpacity(0.7),
+                  Colors.blue.withValues(alpha: 0.9),
+                  Colors.cyan.withValues(alpha: 0.7),
                 ],
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.blue.withOpacity(0.4),
+                  color: Colors.blue.withValues(alpha: 0.4),
                   blurRadius: 8,
                   spreadRadius: 1,
                 ),
@@ -1098,7 +1098,7 @@ class _AppScreenState extends State<AppScreen> with TickerProviderStateMixin {
       Colors.pink,
       Colors.indigo,
     ];
-    return colors[index % colors.length].withOpacity(opacity);
+    return colors[index % colors.length].withValues(alpha: opacity);
   }
 
   void _triggerRippleEffect(int index) {
@@ -1128,8 +1128,8 @@ class _AppScreenState extends State<AppScreen> with TickerProviderStateMixin {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Colors.blue.withOpacity(0.9),
-              Colors.purple.withOpacity(0.7),
+              Colors.blue.withValues(alpha: 0.9),
+              Colors.purple.withValues(alpha: 0.7),
             ],
           ),
         ),
@@ -1159,7 +1159,7 @@ class _AppScreenState extends State<AppScreen> with TickerProviderStateMixin {
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white.withOpacity(0.2),
+                  backgroundColor: Colors.white.withValues(alpha: 0.2),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -1256,7 +1256,7 @@ class ParticleSystemPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     for (final particle in particles) {
       final paint = Paint()
-        ..color = particle.color.withOpacity(particle.life)
+        ..color = particle.color.withValues(alpha: particle.life)
         ..style = PaintingStyle.fill;
 
       canvas.drawCircle(
@@ -1267,7 +1267,7 @@ class ParticleSystemPainter extends CustomPainter {
 
       // Add glow effect
       final glowPaint = Paint()
-        ..color = particle.color.withOpacity(particle.life * 0.3)
+        ..color = particle.color.withValues(alpha: particle.life * 0.3)
         ..style = PaintingStyle.fill;
 
       canvas.drawCircle(
@@ -1299,7 +1299,7 @@ class ExplosionPainter extends CustomPainter {
       final ringOpacity = opacity * (1.0 - i * 0.2);
 
       final paint = Paint()
-        ..color = explosion.color.withOpacity(ringOpacity)
+        ..color = explosion.color.withValues(alpha: ringOpacity)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 8.0 * (1.0 - i * 0.15);
 
@@ -1312,7 +1312,7 @@ class ExplosionPainter extends CustomPainter {
 
     // Inner bright core
     final corePaint = Paint()
-      ..color = Colors.white.withOpacity(opacity)
+      ..color = Colors.white.withValues(alpha: opacity)
       ..style = PaintingStyle.fill;
 
     canvas.drawCircle(
@@ -1334,7 +1334,7 @@ class MatrixRainPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.green.withOpacity(0.1)
+      ..color = Colors.green.withValues(alpha: 0.1)
       ..style = PaintingStyle.fill;
 
     // Create matrix-like falling characters
@@ -1345,7 +1345,7 @@ class MatrixRainPainter extends CustomPainter {
 
         if (charY > -20 && charY < size.height + 20) {
           final opacity = (1.0 - (charY / size.height).clamp(0.0, 1.0)) * 0.2;
-          paint.color = Colors.green.withOpacity(opacity);
+          paint.color = Colors.green.withValues(alpha: opacity);
 
           canvas.drawRect(
             Rect.fromLTWH(x.toDouble(), charY, 2, 10),
@@ -1434,7 +1434,7 @@ class _RippleEffectState extends State<RippleEffect>
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: Colors.blue.withOpacity(1 - _controller.value),
+                color: Colors.blue.withValues(alpha: 1 - _controller.value),
                 width: 3,
               ),
             ),

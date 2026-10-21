@@ -1,0 +1,239 @@
+package com.theamorn.hybriddemo
+
+import android.content.Context
+import android.os.Debug
+import android.os.Handler
+import android.os.Looper
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterEngineCache
+import io.flutter.embedding.engine.FlutterEngineGroup
+import io.flutter.embedding.engine.dart.DartExecutor
+import io.flutter.plugin.common.MethodChannel
+
+/**
+ * Owns the demo's single engine group and its lazily-created engines.
+ *
+ * This is the Android half of `cool-ios/cool-ios/AppEngines.swift` and is
+ * deliberately structured the same way, including the deferred spawn-cost
+ * measurement. Names come from `docs/hybrid-demo/ARCHITECTURE.md`; do not
+ * invent new ones — a mismatch here fails silently at runtime.
+ */
+object AppEngines {
+
+    const val ENGINE_GROUP_NAME = "hybrid-demo"
+
+    const val GAME_ROUTE = "/game"
+    const val GLASS_ROUTE = "/glass"
+    const val PRODUCT_ROUTE = "/product"
+    const val PROMO_ROUTE = "/promo"
+    const val REVIEWS_ROUTE = "/reviews"
+    const val SCENE_ROUTE = "/scene"
+    const val TELEMETRY_CHANNEL_NAME = "com.theamorn.hybrid/telemetry"
+    const val GAME_CHANNEL_NAME = "com.theamorn.hybrid/game"
+    const val PRODUCT_CHANNEL_NAME = "com.theamorn.hybrid/product"
+    const val PROMO_CHANNEL_NAME = "com.theamorn.hybrid/promo"
+    const val REVIEWS_CHANNEL_NAME = "com.theamorn.hybrid/reviews"
+
+    /** The Shop page's three Flutter views, each a bare `FlutterView` on its own engine. */
+    val SHOP_ROUTES = listOf(PRODUCT_ROUTE, PROMO_ROUTE, REVIEWS_ROUTE)
+
+    /**
+     * The HUD's name for the Shop engines' combined spawn cost. They start back
+     * to back, so a delta per engine would count the other two as well.
+     */
+    const val SHOP_SPAWN_LABEL = "Shop ×3"
+
+    /**
+     * The Flutter routes supported by the demo contract. Engines are created
+     * lazily on the tab's first appearance. `/glass` has no tab since Shop
+     * replaced it, but stays supported so the Glass tab can come back.
+     * `/product` and `/reviews` are views inside the Shop page, not tabs.
+     */
+    private val supportedRoutes = setOf(GAME_ROUTE, GLASS_ROUTE, PRODUCT_ROUTE, PROMO_ROUTE, REVIEWS_ROUTE, SCENE_ROUTE)
+
+    /** Returns the engine for [route] if already created, or null. */
+    fun getEngine(route: String): FlutterEngine? = engines[route]
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    private var group: FlutterEngineGroup? = null
+    private val engines = mutableMapOf<String, FlutterEngine>()
+    private val telemetryChannels = mutableMapOf<String, MethodChannel>()
+
+    /**
+     * Spawn memory is sampled on an engine's first telemetry batch, not when
+     * [FlutterEngineGroup.createAndRunEngine] returns. See [finalizeSpawnCost].
+     */
+    private data class PendingSpawn(
+        val baselineBytes: Long,
+        val durationMillis: Double,
+    )
+
+    private val pendingSpawns = mutableMapOf<String, PendingSpawn>()
+    private var pendingShopSpawn: PendingSpawn? = null
+
+    /** Cache key used with [FlutterEngineCache]; `FlutterFragment` looks it up by this. */
+    fun cacheKey(route: String): String = "hybrid-demo${route.replace("/", ".")}"
+
+    @Synchronized
+    fun engineForRoute(context: Context, route: String): FlutterEngine {
+        check(Looper.myLooper() == Looper.getMainLooper()) {
+            "Engines must be created on the main thread"
+        }
+        engines[route]?.let { return it }
+
+        require(route in supportedRoutes) { "Unsupported Flutter route: $route" }
+
+        val appContext = context.applicationContext
+        val engineGroup = group ?: FlutterEngineGroup(appContext).also { group = it }
+
+        // Shop engines are measured together by spawnShopEngines; a probe
+        // here would land inside that timing.
+        val measured = route !in SHOP_ROUTES
+        val memoryBefore = if (measured) MemoryProbe.footprintBytes() else 0L
+        val start = System.nanoTime()
+
+        val engine = engineGroup.createAndRunEngine(
+            appContext,
+            DartExecutor.DartEntrypoint.createDefault(),
+            route,
+        )
+
+        // This times the synchronous creation call, not time-to-first-frame.
+        // Memory is sampled at the first telemetry batch: a process-wide delta
+        // including concurrent allocations and initial assets, not isolated
+        // engine memory or a settled tab footprint.
+        val spawnMillis = (System.nanoTime() - start) / 1_000_000.0
+
+        if (measured) {
+            pendingSpawns[route] = PendingSpawn(
+                baselineBytes = memoryBefore,
+                durationMillis = spawnMillis,
+            )
+        }
+
+        attachTelemetryChannel(engine, route)
+        if (route == GAME_ROUTE) {
+            attachGameChannel(engine, appContext)
+        }
+        FlutterEngineCache.getInstance().put(cacheKey(route), engine)
+        engines[route] = engine
+        return engine
+    }
+
+    /**
+     * Spawns the Shop page's three engines as one measured step. The cost is
+     * closed on the first telemetry batch from any of them: `/reviews` draws
+     * nothing until Review Details opens, so waiting for all three would
+     * count whatever happens in between.
+     */
+    fun spawnShopEngines(context: Context) {
+        if (SHOP_ROUTES.all { it in engines }) return
+        val memoryBefore = MemoryProbe.footprintBytes()
+        val start = System.nanoTime()
+        SHOP_ROUTES.forEach { engineForRoute(context, it) }
+        pendingShopSpawn = PendingSpawn(
+            baselineBytes = memoryBefore,
+            durationMillis = (System.nanoTime() - start) / 1_000_000.0,
+        )
+    }
+
+    /**
+     * Closes out a deferred memory measurement on the first telemetry batch.
+     * A no-op for subsequent batches.
+     */
+    private fun finalizeSpawnCost(route: String) {
+        if (route in SHOP_ROUTES) {
+            val pending = pendingShopSpawn ?: return
+            pendingShopSpawn = null
+            PerformanceHudState.recordEngineSpawn(
+                route = SHOP_SPAWN_LABEL,
+                deltaBytes = MemoryProbe.footprintBytes() - pending.baselineBytes,
+                durationMillis = pending.durationMillis,
+            )
+            return
+        }
+        val pending = pendingSpawns.remove(route) ?: return
+        val delta = MemoryProbe.footprintBytes() - pending.baselineBytes
+        PerformanceHudState.recordEngineSpawn(
+            route = route,
+            deltaBytes = delta,
+            durationMillis = pending.durationMillis,
+        )
+    }
+
+    private fun attachGameChannel(engine: FlutterEngine, context: Context) {
+        val channel = MethodChannel(
+            engine.dartExecutor.binaryMessenger,
+            GAME_CHANNEL_NAME,
+        )
+        channel.setMethodCallHandler { call, result ->
+            if (call.method == "reportScore") {
+                val score = call.argument<Number>("score")?.toInt()
+                    ?: (call.arguments as? Number)?.toInt()
+                if (score != null) {
+                    mainHandler.post {
+                        GameScoreManager.updateScore(context, score)
+                    }
+                }
+                result.success(null)
+            } else {
+                result.notImplemented()
+            }
+        }
+    }
+
+    private fun attachTelemetryChannel(engine: FlutterEngine, route: String) {
+        val channel = MethodChannel(
+            engine.dartExecutor.binaryMessenger,
+            TELEMETRY_CHANNEL_NAME,
+        )
+        channel.setMethodCallHandler { call, result ->
+            if (call.method != "reportFrameTimings") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            val uiMillis = call.argument<Number>("uiMillis")?.toDouble()
+            val rasterMillis = call.argument<Number>("rasterMillis")?.toDouble()
+            val fps = call.argument<Number>("fps")?.toDouble()
+            if (uiMillis == null || rasterMillis == null || fps == null) {
+                result.error(
+                    "invalid_telemetry",
+                    "Expected uiMillis, rasterMillis, and fps numbers",
+                    null,
+                )
+                return@setMethodCallHandler
+            }
+
+            // The engine this channel belongs to is authoritative; a mismatched
+            // 'route' in the payload would mean the Dart side is misreporting.
+            mainHandler.post {
+                finalizeSpawnCost(route)
+                PerformanceHudState.recordFlutterSample(
+                    route = route,
+                    uiMillis = uiMillis,
+                    rasterMillis = rasterMillis,
+                    fps = fps,
+                )
+            }
+            result.success(null)
+        }
+        telemetryChannels[route] = channel
+    }
+}
+
+/**
+ * Process memory, measured natively. Never sourced from Flutter — if Flutter
+ * measured its own footprint the audience could reasonably call the meter rigged.
+ *
+ * iOS uses physical footprint; this host uses total PSS. These are distinct
+ * accounting methods and must not be presented as an identical metric.
+ */
+object MemoryProbe {
+    fun footprintBytes(): Long {
+        val info = Debug.MemoryInfo()
+        Debug.getMemoryInfo(info)
+        // Debug.MemoryInfo reports in kB.
+        return info.totalPss.toLong() * 1024L
+    }
+}

@@ -3,7 +3,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_module/rain_particle.dart';
 
-class FakeArea extends PositionComponent with HasGameRef<RainEffect> {
+class FakeArea extends PositionComponent with HasGameReference<RainEffect> {
   late ShapeHitbox hitbox;
   final _defaultColor = Colors.red;
   late Vector2 velocity;

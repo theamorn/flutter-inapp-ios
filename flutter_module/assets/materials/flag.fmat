@@ -1,0 +1,91 @@
+// A flag on a pole, flown by the shared wind (lib/render/wind.dart).
+//
+// The mesh is a flat grid in its own XY plane: x runs from the pole (0) to
+// the fly end (flag.x long), y from the top edge (0) down. The node sits at
+// the top of the pole. The vertex stage turns the fly to point downwind,
+// runs a travelling wave down it whose height grows from nothing at the
+// pole (the hoist stays pinned), and lets a weak wind drop the fly into a
+// sag. It rebuilds the normal from the wave's slope so the folds shade.
+//
+// The fragment paints the Thai flag (Trairanga): five horizontal stripes,
+// red, white, blue, white, red, the blue twice as tall (1:1:2:1:1), on a
+// 2:3 cloth.
+material {
+  name: "WindFlag",
+  shading_model: lit,
+  culling: none,
+  parameters: [
+    // xy = wind direction * speed (x, z), z = gust 0..1, w = clock (s).
+    { type: vec4, name: wind, default: [0.32, 0.14, 0.5, 0.0] },
+    // x = length along the fly.
+    { type: vec4, name: flag, default: [1.5, 0.0, 0.0, 0.0] },
+    // The official colours (#A51931 red, #F4F5F8 white, #2D2A4A blue),
+    // linear.
+    { type: vec4, name: color_a, default: [0.3763, 0.0097, 0.0307, 1.0] },
+    { type: vec4, name: color_b, default: [0.9047, 0.9131, 0.9387, 1.0] },
+    { type: vec4, name: color_c, default: [0.0262, 0.0232, 0.0685, 1.0] },
+  ],
+}
+
+vertex {
+  void Vertex(inout VertexInputs vertex) {
+    vec3 origin = (vertex.model_transform * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+    float scale = length(vertex.model_transform[0].xyz);
+    float fly_length = max(material_params.flag.x, 0.01);
+    // 0 at the pole, 1 at the fly end: every displacement scales with it.
+    float along = clamp(vertex.position.x / fly_length, 0.0, 1.0);
+
+    vec2 wind = material_params.wind.xy;
+    float speed = length(wind);
+    vec2 dir = speed > 0.0001 ? wind / speed : vec2(1.0, 0.0);
+    float gust = material_params.wind.z;
+    float time = material_params.wind.w;
+
+    // How straight out the flag flies: mostly out in a breeze, dipping in
+    // the lulls, straight out in a storm.
+    float lift = clamp(0.3 + speed * (0.7 + 0.5 * gust), 0.0, 1.0);
+    // A wave travelling from the pole to the fly end, faster in strong wind.
+    float k = 6.2832 * 1.5;
+    float omega = 6.0 + 8.0 * speed;
+    float phase = k * along - omega * time + vertex.position.y * 1.3;
+    float reach = 0.05 + 0.1 * speed;
+    float wave = (sin(phase) + 0.3 * sin(2.3 * phase + 1.1)) * reach * along;
+    // A limp flag hangs from the pole and its fly pulls in.
+    float sag = (1.0 - lift) * along * along * fly_length * 0.8;
+    float out_x = vertex.position.x * (1.0 - 0.4 * (1.0 - lift) * along);
+
+    vec3 fly = vec3(dir.x, 0.0, dir.y);
+    vec3 side = vec3(-dir.y, 0.0, dir.x);
+    vec3 local = fly * out_x + vec3(0.0, vertex.position.y - sag, 0.0) +
+                 side * wave * fly_length;
+    vertex.world_position = origin + local * scale;
+
+    // The surface tilts with the wave's slope along the fly.
+    float slope = (cos(phase) + 0.69 * cos(2.3 * phase + 1.1)) * k * reach * along +
+                  (sin(phase) + 0.3 * sin(2.3 * phase + 1.1)) * reach;
+    vertex.world_normal = normalize(side - fly * slope);
+  }
+}
+
+fragment {
+  // flutter_scene 0.24 defaults material fragments to mediump (half precision
+  // on Mali/Adreno/web). The stripe maths runs in float32.
+  precision highp float;
+
+  void Surface(inout MaterialInputs material) {
+    // uv.y runs 0 at the top edge to 1 at the bottom.
+    float y = GetUV0().y;
+    vec3 color = material_params.color_a.rgb;  // red, top and bottom
+    if (y > 1.0 / 6.0 && y < 5.0 / 6.0) {
+      color = material_params.color_b.rgb;    // white
+    }
+    if (y > 2.0 / 6.0 && y < 4.0 / 6.0) {
+      color = material_params.color_c.rgb;    // blue, double height
+    }
+    material.base_color = vec4(color, 1.0);
+    material.metallic = 0.0;
+    material.roughness = 0.85;
+    material.specular = 0.3;
+    material.occlusion = 1.0;
+  }
+}
